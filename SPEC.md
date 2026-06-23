@@ -209,7 +209,7 @@ toolchain; `prism_loc` builds clean under colcon in the `ros2_humble` env.
 ```bash
 cmake -S prism_loc/prism_loc_core -B build/core -DPRISM_LOC_CORE_BUILD_TESTS=ON
 cmake --build build/core -j
-ctest --test-dir build/core --output-on-failure
+( cd build/core && ctest --output-on-failure )   # cd-in form: portable across ctest versions
 ```
 
 **Full ROS 2 build (Humble via micromamba; clean env to avoid noetic leak):**

@@ -40,7 +40,7 @@ and PCL live only in the node package.
 ```bash
 # 1. Core algorithms — builds & tests with the plain system toolchain (no ROS):
 cmake -S prism_loc_core -B build/core -DPRISM_LOC_CORE_BUILD_TESTS=ON
-cmake --build build/core -j && ctest --test-dir build/core --output-on-failure
+cmake --build build/core -j && ( cd build/core && ctest --output-on-failure )
 
 # 2. Full ROS 2 Humble build (workspace):
 #    place this repo at <ws>/src/prism_loc, then:

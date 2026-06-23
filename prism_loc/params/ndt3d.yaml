@@ -1,0 +1,23 @@
+/**:
+  ros__parameters:
+    backend: "ndt3d"
+    global_frame: "map"
+    odom_frame: "odom"
+    base_frame: "base_link"
+    points_topic: "/points"
+    map_pcd_path: ""
+    ndt_resolution: 1.0
+    voxel_min_points: 5
+    max_points: 500
+    base_height: 0.0
+    min_particles: 500
+    max_particles: 2000
+    resample_threshold: 0.5
+    update_min_d: 0.2
+    update_min_a: 0.2
+    transform_tolerance: 0.1
+    alpha1: 0.2
+    alpha2: 0.2
+    alpha3: 0.2
+    alpha4: 0.2
+    set_initial_pose: false
