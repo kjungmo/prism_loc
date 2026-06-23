@@ -11,12 +11,21 @@ parameter; the rest of the interface — TF, pose, particle cloud, `/initialpose
 seeding — is identical and matches the `nav2_amcl` / `hdl_localization`
 conventions ROS users already know.
 
-## Why "prism"
+## Why "PRISM"
 
-A prism splits one beam of light into its components. `prism_loc` splits one
-estimator core into a 2D and a 3D observation path — grounded in **NDT-MCL**
-(Saarinen et al., IROS 2013), which showed a 3D NDT map can be the measurement
-model inside the very same particle filter that 2D AMCL uses.
+**PRISM** = **P**article-filter · **R**TK · **I**nertial · **S**can-matching — the
+four ingredients this stack fuses to localize against a prior map:
+
+- **P**article-filter — the Monte Carlo Localization core (`laser2d` / `ndt3d` backends).
+- **R**TK — RTK-GNSS absolute position fixes (the `fusion3d` backend).
+- **I**nertial — IMU-driven prediction in the error-state Kalman filter (`fusion3d`).
+- **S**can-matching — 2D likelihood-field and 3D NDT registration against the prior map.
+
+The name also nods to the optics: a prism splits one beam of light into its
+components, just as `prism_loc` splits one estimator core into multiple
+sensor/observation paths — grounded in **NDT-MCL** (Saarinen et al., IROS 2013),
+which showed a 3D NDT map can be the measurement model inside the very same
+particle filter that 2D AMCL uses.
 
 ## Architecture
 
