@@ -1,15 +1,15 @@
 # prism_loc
 
-**A pluggable Monte Carlo Localization tool for ROS 2 Humble — one particle
-filter, two LiDAR observation models (2D occupancy-grid likelihood field _or_ 3D
-NDT point cloud), one standard `map → odom` output.**
+**A pluggable LiDAR localization stack for ROS 2 Humble — three backends over a
+shared estimator family: 2D MCL, 3D NDT-MCL, and a 3D LiDAR + IMU + RTK-GNSS
+error-state fusion — all with one standard `map → odom` output.**
 
-`prism_loc` localizes a mobile robot inside a prior map using **either** a 2D
-LiDAR (`sensor_msgs/LaserScan` against a `nav_msgs/OccupancyGrid`) **or** a 3D
-LiDAR (`sensor_msgs/PointCloud2` against a `.pcd` map). Pick the backend with one
-parameter; the rest of the interface — TF, pose, particle cloud, `/initialpose`
-seeding — is identical and matches the `nav2_amcl` / `hdl_localization`
-conventions ROS users already know.
+`prism_loc` localizes a mobile robot inside a prior map from a **2D LiDAR**
+(`LaserScan` vs `OccupancyGrid`), a **3D LiDAR** (`PointCloud2` vs a `.pcd` map),
+or a **3D LiDAR fused with IMU and RTK-GNSS**. Pick a backend; the output contract
+— `map→odom` TF, pose with covariance, `/initialpose` seeding — follows the
+`nav2_amcl` / `hdl_localization` / `robot_localization` conventions ROS users
+already know.
 
 ## Why "PRISM"
 
@@ -29,54 +29,68 @@ particle filter that 2D AMCL uses.
 
 ## Architecture
 
-```
-            ┌──────────────── prism_loc_core (no ROS, no PCL — Eigen only) ───────────────┐
-            │  OdometryMotionModel ──► ParticleFilter ◄── MeasurementModel (interface)     │
-            │                              │ KLD resample        ├── Laser2DLikelihoodField │
-            │                              ▼                     └── Ndt3DModel             │
-            │                       pose + 6×6 covariance                                   │
-            └────────────────────────────────┬───────────────────────────────────────────┘
-                                              │
-                    prism_loc (ROS 2 node) ───┘  subs: /scan|/points, /map|map.pcd, /initialpose, TF
-                                                  pubs: /tf (map→odom), ~/pose, ~/particle_cloud
-```
+Two estimator cores share one job — track pose against a prior map — and are both
+pure C++17 + Eigen, unit-tested with gtest **without ROS**. rclcpp and PCL live
+only in the two ROS node packages.
 
-The core is pure C++17 + Eigen and unit-tested with gtest **without ROS**. ROS
-and PCL live only in the node package.
+```
+estimator cores  (pure C++17 + Eigen, no ROS/PCL, gtest-tested):
+
+  prism_loc_core — Particle filter (MCL)        prism_loc_fusion — Error-state KF (ESKF)
+    OdometryMotionModel ─► ParticleFilter         IMU predict ─► 15-state ESKF
+      KLD resample  ├─ Laser2DLikelihoodField                  ◄─ NDT 6-DoF pose update
+                    └─ Ndt3DModel                              ◄─ RTK-GNSS position update
+    └─► pose + 6×6 covariance                     └─► pose + velocity (+ WGS84 LLA→ENU)
+
+ROS 2 nodes  (rclcpp / tf2 / PCL here only):
+
+  prism_loc                backend = laser2d | ndt3d
+  prism_loc_fusion_ros     backend = fusion3d
+    in :  /scan | /points | /imu | /gnss(NavSatFix) ,  /map | map.pcd ,  /initialpose ,  TF odom→base
+    out:  /tf (map→odom) ,  ~/pose ,  ~/particle_cloud | ~/odometry
+```
 
 ## Quick start
 
 ```bash
-# 1. Core algorithms — builds & tests with the plain system toolchain (no ROS):
-cmake -S prism_loc_core -B build/core -DPRISM_LOC_CORE_BUILD_TESTS=ON
-cmake --build build/core -j && ( cd build/core && ctest --output-on-failure )
+# 1. Estimator cores — build & test with the plain system toolchain (no ROS):
+cmake -S prism_loc_core   -B build/core   -DPRISM_LOC_CORE_BUILD_TESTS=ON
+cmake -S prism_loc_fusion -B build/fusion -DPRISM_LOC_FUSION_BUILD_TESTS=ON
+cmake --build build/core   -j && ( cd build/core   && ctest --output-on-failure )
+cmake --build build/fusion -j && ( cd build/fusion && ctest --output-on-failure )
 
 # 2. Full ROS 2 Humble build (workspace):
 #    place this repo at <ws>/src/prism_loc, then:
 colcon build --symlink-install
-colcon test --packages-select prism_loc_core prism_loc
+colcon test --packages-select prism_loc_core prism_loc prism_loc_fusion prism_loc_fusion_ros
 
-# 3. Run (2D LiDAR):
+# 3. Run — 2D LiDAR (MCL):
 ros2 launch prism_loc laser2d.launch.py map:=/path/to/map.yaml
-#    Run (3D LiDAR):
+#    3D LiDAR (NDT-MCL):
 ros2 launch prism_loc ndt3d.launch.py map_pcd_path:=/path/to/map.pcd
-#    Then click "2D Pose Estimate" in RViz to seed the filter.
+#    3D LiDAR + IMU + RTK-GNSS (ESKF fusion):
+ros2 launch prism_loc_fusion_ros fusion3d.launch.py map_pcd_path:=/path/to/map.pcd
+#    laser2d/ndt3d: click "2D Pose Estimate" in RViz to seed; fusion3d
+#    auto-initializes from the first RTK fix (or use /initialpose).
 ```
 
 ## Interface
 
-| | Input | Output |
-|---|---|---|
-| **laser2d** | `/scan`, `/map`, `/initialpose`, TF `odom→base` | `/tf` `map→odom`, `~/pose`, `~/particle_cloud` |
-| **ndt3d** | `/points`, `map.pcd`, `/initialpose`, TF `odom→base` | same |
+| Backend | Package | Input | Output |
+|---|---|---|---|
+| **laser2d** | `prism_loc` | `/scan`, `/map`, `/initialpose`, TF `odom→base` | `/tf` `map→odom`, `~/pose`, `~/particle_cloud` |
+| **ndt3d** | `prism_loc` | `/points`, `map.pcd`, `/initialpose`, TF `odom→base` | same |
+| **fusion3d** | `prism_loc_fusion_ros` | `/points`, `/imu`, `/gnss` (NavSatFix), `map.pcd`, `/initialpose` | `/tf` `map→odom`, `~/pose`, `~/odometry` |
 
 See [`SPEC.md`](SPEC.md) for the full design and
 [`docs/superpowers/plans/`](docs/superpowers/plans/) for the implementation plan.
 
 ## Status
 
-v0.1 — 2D likelihood-field MCL and 3D NDT-MCL backends, planar (x, y, yaw)
-estimation. Global/kidnapped-robot recovery and full 6-DoF are roadmap items.
+v0.1 — three backends: 2D likelihood-field MCL and 3D NDT-MCL (planar x, y, yaw),
+plus a 3D LiDAR + IMU + RTK-GNSS error-state Kalman fusion (`fusion3d`) with full
+6-DoF state and IMU-bias estimation. Global/kidnapped-robot recovery and tight
+LiDAR-IMU time-offset estimation are roadmap items.
 
 ## License
 
