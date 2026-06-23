@@ -4,6 +4,11 @@
 shared estimator family: 2D MCL, 3D NDT-MCL, and a 3D LiDAR + IMU + RTK-GNSS
 error-state fusion — all with one standard `map → odom` output.**
 
+## 💛 Sponsor
+If prism_loc saves you time, consider [sponsoring](https://github.com/sponsors/kjungmo).
+Sponsorship funds maintenance, new features, and faster issue response. Backers are
+listed below — thank you.
+
 `prism_loc` localizes a mobile robot inside a prior map from a **2D LiDAR**
 (`LaserScan` vs `OccupancyGrid`), a **3D LiDAR** (`PointCloud2` vs a `.pcd` map),
 or a **3D LiDAR fused with IMU and RTK-GNSS**. Pick a backend; the output contract
