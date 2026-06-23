@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>prism_loc_fusion</name>
+  <version>0.1.0</version>
+  <description>Pure C++/Eigen error-state Kalman filter + geodetic core for prism_loc fusion (no ROS, no PCL).</description>
+  <maintainer email="kangjmo91@gmail.com">Kang Jung Mo</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>eigen</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

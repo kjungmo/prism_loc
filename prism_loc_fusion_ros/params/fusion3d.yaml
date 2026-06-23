@@ -1,0 +1,29 @@
+/**:
+  ros__parameters:
+    global_frame: "map"
+    odom_frame: "odom"
+    base_frame: "base_link"
+    imu_topic: "/imu"
+    points_topic: "/points"
+    gnss_topic: "/gnss"
+    map_pcd_path: ""
+    ndt_resolution: 1.0
+    ndt_step_size: 0.1
+    ndt_epsilon: 0.01
+    ndt_max_iter: 30
+    ndt_max_fitness: 2.0
+    points_voxel_leaf: 0.5
+    pose_pos_std: 0.1
+    pose_rot_std: 0.05
+    sigma_acc: 0.01
+    sigma_gyro: 0.001
+    sigma_acc_bias: 0.0001
+    sigma_gyro_bias: 0.00001
+    use_datum: false
+    datum_lat: 0.0
+    datum_lon: 0.0
+    datum_alt: 0.0
+    gnss_min_status: 0
+    gnss_max_pos_cov: 25.0
+    initial_yaw: 0.0
+    transform_tolerance: 0.1
