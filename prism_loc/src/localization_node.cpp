@@ -48,6 +48,16 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("z_rand", 0.5);
     declare_parameter<double>("sigma_hit", 0.2);
     declare_parameter<double>("likelihood_max_dist", 2.0);
+    try_global_localization_ = declare_parameter<bool>("try_global_localization", false);
+    bbs_params_.linear_window = declare_parameter<double>("bbs_linear_window", 10.0);
+    bbs_params_.angular_step = declare_parameter<double>("bbs_angular_step", 0.0175);
+    bbs_params_.max_depth = declare_parameter<int>("bbs_max_depth", 6);
+    bbs_params_.min_score_fraction = declare_parameter<double>("bbs_min_score_fraction", 0.4);
+    bbs_params_.sigma_hit = get_parameter_or("sigma_hit", 0.2);
+    global_loc_srv_ = create_service<std_srvs::srv::Empty>(
+        "~/global_localization",
+        std::bind(&LocalizationNode::onGlobalLocalization, this,
+                  std::placeholders::_1, std::placeholders::_2));
     const auto map_qos = rclcpp::QoS(1).transient_local().reliable();
     map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
         declare_parameter<std::string>("map_topic", "/map"), map_qos,
@@ -96,6 +106,13 @@ void LocalizationNode::onMap(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) 
   lp.sigma_hit = get_parameter_or("sigma_hit", 0.2);
   lp.max_dist = get_parameter_or("likelihood_max_dist", 2.0);
   laser_model_ = std::make_shared<prism_loc_core::Laser2DLikelihoodField>(grid, lp);
+  if (try_global_localization_) {
+    bbs_matcher_ = std::make_shared<prism_loc_core::BranchAndBoundMatcher>(grid, bbs_params_);
+    bbs_center_ = prism_loc_core::Pose2D{
+        grid.origin_x + 0.5 * grid.width * grid.resolution,
+        grid.origin_y + 0.5 * grid.height * grid.resolution, 0.0};
+    RCLCPP_INFO(get_logger(), "laser2d: BBS global-localization matcher ready");
+  }
   map_ready_ = true;
   RCLCPP_INFO(get_logger(), "laser2d: map received (%dx%d)", grid.width, grid.height);
 }
@@ -125,10 +142,30 @@ bool LocalizationNode::lookupSensor(const std::string& sensor_frame, Pose2D& sen
 
 void LocalizationNode::onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
-  if (!map_ready_ || !laser_model_ || !filter_init_) return;
+  if (!map_ready_ || !laser_model_) return;
   Pose2D sib;
   if (!lookupSensor(msg->header.frame_id, sib)) return;
-  laser_model_->setScan(fromLaserScan(*msg, sib));
+  const auto scan = fromLaserScan(*msg, sib);
+
+  if (bbs_matcher_ && (relocalize_requested_ || (!filter_init_ && try_global_localization_))) {
+    const prism_loc_core::BbsResult r = bbs_matcher_->match(scan, bbs_center_);
+    if (r.valid) {
+      const int n = static_cast<int>(pf_->particles().size());
+      pf_->initializeGaussian(r.pose, Pose2D{0.2, 0.2, 0.1}, n > 0 ? n : 2000);
+      filter_init_ = true;
+      force_update_ = true;
+      have_last_odom_ = false;
+      relocalize_requested_ = false;
+      RCLCPP_INFO(get_logger(), "global localization: seeded at (%.2f, %.2f, %.2f) score %.1f",
+                  r.pose.x, r.pose.y, r.pose.yaw, r.score);
+    } else {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                           "global localization: no confident pose this scan");
+    }
+  }
+
+  if (!filter_init_) return;
+  laser_model_->setScan(scan);
   runUpdate(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
 }
 
@@ -152,6 +189,14 @@ void LocalizationNode::onInitialPose(
   pf_->initializeGaussian(mean, Pose2D{sx, sy, sa}, std::max(n, 500));
   filter_init_ = true; force_update_ = true; have_last_odom_ = false;
   RCLCPP_INFO(get_logger(), "initialpose: (%.2f, %.2f, %.2f)", mean.x, mean.y, mean.yaw);
+}
+
+void LocalizationNode::onGlobalLocalization(
+    const std::shared_ptr<std_srvs::srv::Empty::Request>,
+    std::shared_ptr<std_srvs::srv::Empty::Response>) {
+  std::lock_guard<std::mutex> lk(mutex_);
+  relocalize_requested_ = true;
+  RCLCPP_INFO(get_logger(), "global localization requested via service");
 }
 
 void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {

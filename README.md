@@ -89,8 +89,11 @@ See [`SPEC.md`](SPEC.md) for the full design and
 
 v0.1 — three backends: 2D likelihood-field MCL and 3D NDT-MCL (planar x, y, yaw),
 plus a 3D LiDAR + IMU + RTK-GNSS error-state Kalman fusion (`fusion3d`) with full
-6-DoF state and IMU-bias estimation. Global/kidnapped-robot recovery and tight
-LiDAR-IMU time-offset estimation are roadmap items.
+6-DoF state and IMU-bias estimation. The `laser2d` backend **self-initializes via
+branch-and-bound (BBS) global localization** — recovering pose from a single scan
+with no `/initialpose` (param `try_global_localization`, on-demand service
+`~/global_localization`). 3D global localization and tight LiDAR-IMU time-offset
+estimation are roadmap items.
 
 ## License
 

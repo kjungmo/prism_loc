@@ -25,3 +25,8 @@
     initial_pose_x: 0.0
     initial_pose_y: 0.0
     initial_pose_yaw: 0.0
+    try_global_localization: false
+    bbs_linear_window: 10.0
+    bbs_angular_step: 0.0175
+    bbs_max_depth: 6
+    bbs_min_score_fraction: 0.4

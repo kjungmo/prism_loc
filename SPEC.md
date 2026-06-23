@@ -119,8 +119,10 @@ covariance → 6×6 (fill `x,y,yaw`; large constant variance on `z,roll,pitch`).
 ### 3.6 Global / initial pose
 - `/initialpose`: re-seed particles ~ Gaussian around the given pose+covariance.
 - If no initial pose and `set_initial_pose` param given, seed from params.
-- Kidnapped-robot global recovery (Scan Context / BBS) is **out of scope v1**
-  (documented; cited as future work).
+- **laser2d global localization (implemented):** branch-and-bound (BBS) correlative
+  scan matching (Hess et al., ICRA 2016) recovers pose from a single scan against the
+  occupancy grid — param `try_global_localization`, service `~/global_localization`
+  (`std_srvs/Empty`). 3D global recovery (Scan Context / 3D-BBS) remains future work.
 
 ---
 

@@ -18,6 +18,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io)
@@ -27,7 +28,7 @@ add_definitions(${PCL_DEFINITIONS})
 
 set(deps
   prism_loc_core rclcpp rclcpp_components tf2 tf2_ros tf2_geometry_msgs
-  sensor_msgs nav_msgs geometry_msgs std_msgs nav2_msgs pcl_conversions)
+  sensor_msgs nav_msgs geometry_msgs std_msgs std_srvs nav2_msgs pcl_conversions)
 
 add_library(prism_loc_node SHARED
   src/localization_node.cpp

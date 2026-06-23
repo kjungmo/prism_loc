@@ -20,6 +20,8 @@
 #include "prism_loc_core/measurement_model.hpp"
 #include "prism_loc_core/occupancy_grid.hpp"
 #include "prism_loc_core/ndt_map.hpp"
+#include <std_srvs/srv/empty.hpp>
+#include "prism_loc_core/bbs.hpp"
 
 namespace prism_loc {
 
@@ -55,6 +57,14 @@ class LocalizationNode : public rclcpp::Node {
   std::shared_ptr<prism_loc_core::Laser2DLikelihoodField> laser_model_;
   std::shared_ptr<prism_loc_core::Ndt3DModel> ndt_model_;
   std::shared_ptr<prism_loc_core::NdtMap> ndt_map_;
+  std::shared_ptr<prism_loc_core::BranchAndBoundMatcher> bbs_matcher_;
+  prism_loc_core::Pose2D bbs_center_;
+  bool try_global_localization_{false};
+  bool relocalize_requested_{false};
+  prism_loc_core::BbsParams bbs_params_;
+  rclcpp::Service<std_srvs::srv::Empty>::SharedPtr global_loc_srv_;
+  void onGlobalLocalization(const std::shared_ptr<std_srvs::srv::Empty::Request>,
+                            std::shared_ptr<std_srvs::srv::Empty::Response>);
 
   bool map_ready_{false}, filter_init_{false}, force_update_{false};
   bool have_last_odom_{false}, have_map_odom_{false};
