@@ -1,5 +1,7 @@
 # prism_loc
 
+[![CI](https://github.com/kjungmo/prism_loc/actions/workflows/ci.yml/badge.svg)](https://github.com/kjungmo/prism_loc/actions/workflows/ci.yml) [![License](https://img.shields.io/github/license/kjungmo/prism_loc?color=blue)](LICENSE) ![ROS 2 Humble](https://img.shields.io/badge/ROS_2-Humble-22314E?logo=ros&logoColor=white) [![Sponsor](https://img.shields.io/github/sponsors/kjungmo?logo=githubsponsors&color=ea4aaa)](https://github.com/sponsors/kjungmo)
+
 **A pluggable LiDAR localization stack for ROS 2 Humble — three backends over a
 shared estimator family: 2D MCL, 3D NDT-MCL, and a 3D LiDAR + IMU + RTK-GNSS
 error-state fusion — all with one standard `map → odom` output.**

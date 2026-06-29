@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  core-tests:
+    name: core unit tests (no ROS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake g++ libeigen3-dev libgtest-dev
+
+      - name: prism_loc_core — build & test
+        run: |
+          cmake -S prism_loc_core -B build/core -DPRISM_LOC_CORE_BUILD_TESTS=ON
+          cmake --build build/core -j
+          ( cd build/core && ctest --output-on-failure )
+
+      - name: prism_loc_fusion — build & test
+        run: |
+          cmake -S prism_loc_fusion -B build/fusion -DPRISM_LOC_FUSION_BUILD_TESTS=ON
+          cmake --build build/fusion -j
+          ( cd build/fusion && ctest --output-on-failure )
