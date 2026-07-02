@@ -39,7 +39,7 @@ ament_target_dependencies(fusion_node_main rclcpp)
 install(TARGETS fusion_node ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 install(TARGETS fusion_node_main DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
-install(DIRECTORY launch params DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY launch params rviz DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
