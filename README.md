@@ -188,6 +188,14 @@ with no `/initialpose` (param `try_global_localization`, on-demand service
 `~/global_localization`). 3D global localization and tight LiDAR-IMU time-offset
 estimation are roadmap items.
 
+## Paper
+
+A systems-paper draft describing the architecture — *PRISM-Loc: Three LiDAR
+Localization Backends Behind One ROS 2 Contract, with Middleware-Free Estimator
+Cores* — lives in [`docs/paper/`](docs/paper/) (LaTeX sources +
+[`main.pdf`](docs/paper/main.pdf)). If prism_loc is useful in your research,
+please cite it via [`CITATION.cff`](CITATION.cff).
+
 ## License
 
 Apache-2.0.

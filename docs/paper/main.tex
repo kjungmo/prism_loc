@@ -1,0 +1,57 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref} % keep last
+
+\newcommand{\prismloc}{\textsc{prism\_loc}}
+
+\begin{document}
+
+\title{PRISM-Loc: Three LiDAR Localization Backends Behind One
+ROS~2 Contract, with Middleware-Free Estimator Cores}
+
+\author{\IEEEauthorblockN{Jung Mo Kang}
+\IEEEauthorblockA{kangjmo91@gmail.com}}
+
+\maketitle
+
+\begin{abstract}
+Map-based LiDAR localization for mobile robots is solved in fragments:
+a 2D scanner calls for an AMCL-style particle filter over an occupancy
+grid, a 3D LiDAR for an NDT-based tracker over a point-cloud map, and
+an inertial- or GNSS-aided platform for a Kalman fusion node---each
+with its own topics, parameters, initialization ritual, and recovery
+behavior. We present \prismloc{}, an open-source ROS~2 localization
+stack that places three known estimator families behind one node
+contract: \texttt{laser2d}, a likelihood-field Monte Carlo localizer;
+\texttt{ndt3d}, an NDT-MCL backend that reuses the same particle filter
+with a Gaussian-voxel measurement model; and \texttt{fusion3d}, a
+15-state error-state Kalman filter fusing LiDAR, IMU, and RTK-GNSS.
+Every backend publishes the same \texttt{map}$\to$\texttt{odom}
+transform and pose with covariance and accepts the same
+\texttt{/initialpose} seeding, so the sensor suite selects a backend at
+launch time rather than a separate software stack. All filter
+mathematics reside in middleware-free C++17 cores that depend only on
+Eigen and are exercised by deterministic, seeded unit and integration
+tests with no ROS runtime; the \texttt{laser2d} backend additionally
+recovers from the kidnapped-robot condition by deterministic
+branch-and-bound scan matching. We claim no new estimator theory: the
+contribution is architectural, delivered as a usability-focused
+open-source release.
+\end{abstract}
+
+\input{sections/intro}
+\input{related_work}
+\input{sections/architecture}
+\input{sections/cores}
+\input{sections/ros}
+\input{sections/validation}
+\input{sections/limitations}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,93 @@
+\section{Related Work}\label{sec:related}
+
+\textbf{Monte Carlo localization.}
+Particle-filter localization was introduced by Dellaert et
+al.~\cite{dellaert1999montecarlo} and Fox et
+al.~\cite{fox1999efficient}, who represent the pose posterior as a
+weighted sample set updated by motion-model prediction,
+sensor-likelihood weighting, and resampling, and who demonstrated
+global localization from a uniform prior on real robots. Thrun et
+al.~\cite{thrun2001robust} later hardened MCL against accurate sensors
+and the kidnapped-robot problem via Mixture-MCL's dual sampler. The
+particle-filter core in \prismloc{} is a direct descendant of
+this line of work and of its \texttt{nav2\_amcl} lineage; we contribute
+no new filter theory. What differs is factoring: the same
+predict--weight--resample core is shared, unchanged, between a 2D
+likelihood-field backend and a 3D NDT backend, and recovery from
+localization failure is delegated to a deterministic branch-and-bound
+search (Section~\ref{sec:global}) rather than the stochastic
+random-injection or dual-sampling mechanisms these papers employ.
+
+\textbf{NDT representations and NDT-based measurement models.}
+Biber and Stra{\ss}er~\cite{biber2003ndt} introduced the Normal
+Distributions Transform, modeling a scan as per-cell Gaussians and
+reducing registration to Newton optimization of a smooth score;
+Magnusson et al.~\cite{magnusson2007scan} generalized the
+representation to 3D voxel grids for field deployment on mining
+vehicles. Both use NDT for deterministic scan-to-scan or scan-to-map
+registration that requires a reasonable initial guess.
+\prismloc's \texttt{ndt3d} backend adopts the standard
+Gaussian-voxel representation but repurposes the NDT score as a
+per-particle likelihood inside the shared MCL core (i.e., NDT-MCL
+rather than NDT registration), which trades the quadratic convergence
+of Newton-based alignment for the multi-hypothesis robustness of the
+particle filter, and lets the 2D and 3D backends differ only in their
+measurement model.
+
+\textbf{LiDAR-inertial and GNSS fusion.}
+Sol\`a's tutorial~\cite{sola2017quaternion} is the mathematical basis
+of \prismloc's fusion backend: the nominal/error-state
+decomposition, local angular-error parameterization, and
+predict--correct--inject--reset cycle are implemented essentially as
+derived there. On the systems side, Moore and
+Stouch's \texttt{robot\_localization}~\cite{moore2014generalized}
+established the pattern of a generalized, configurable EKF/UKF fusion
+node for ROS, and Wan et al.~\cite{wan2018robust} demonstrated an
+industrial ESKF fusing GNSS-RTK, LiDAR, and IMU at centimeter accuracy
+for the Baidu Apollo fleet, albeit as a closed system tied to
+proprietary intensity/altitude maps. Tightly-coupled LiDAR-inertial
+odometry such as FAST-LIO~\cite{xu2021fastlio}, and applied 3D
+map-based tracking systems such as Koide et
+al.~\cite{koide2019portable}, are complementary: they produce
+ego-motion and maps, whereas \prismloc{} localizes within a
+prior map. Relative to these, our \texttt{fusion3d} backend claims no
+estimator novelty; it packages a textbook ESKF as a ROS-free core
+behind the same ROS~2 contract as the two MCL backends, so that
+odometry-only, LiDAR-only, and GNSS-aided configurations are
+deployment choices rather than separate stacks.
+
+\textbf{Global (kidnapped-robot) localization.}
+Olson~\cite{olson2009correlative} formulated 2D scan matching as
+exhaustive correlative search over a rasterized log-likelihood table
+with coarse-to-fine multi-resolution pruning, and Hess et
+al.~\cite{hess2016realtime} bounded that search with branch-and-bound
+over a precomputed grid pyramid to run loop closure in real time
+inside Cartographer. \prismloc{} borrows exactly this
+branch-and-bound-over-likelihood-pyramid primitive but applies it in a
+narrower setting: one-shot relocalization against a known static map,
+with no submaps or pose graph to maintain. This replaces the heuristic
+recovery mechanisms of classical
+MCL~\cite{fox1999efficient,thrun2001robust} with a deterministic
+search whose result re-seeds the particle filter.
+
+\textbf{Robot software systems.}
+Nav2~\cite{macenski2020marathon} treats localization as an external,
+swappable component (stock AMCL or SLAM Toolbox), and its marathon
+deployment attributes a leading share of recovery triggers to
+localization-confidence loss in feature-poor corridors. The ROS~2
+maintainers' survey~\cite{macenski2023survey} makes the gap explicit:
+it catalogs AMCL's shortcomings and sketches, as unbuilt future work,
+a modular framework for composing 2D and 3D localization systems from
+swappable components. As framed in Section~\ref{sec:intro}, \prismloc{}
+answers with engineering rather than a new algorithm: three known
+estimator families (likelihood-field MCL, NDT-MCL, ESKF fusion) are
+placed behind one ROS~2 topic and TF contract, with each estimator
+implemented as a ROS-free library that is unit-testable without a
+middleware runtime --- a property that \texttt{robot\_localization}'s
+otherwise modular design~\cite{moore2014generalized} did not
+prioritize. The accuracy evaluation planned in
+Section~\ref{sec:limitations} will follow the trajectory-error
+conventions (ATE/RPE) standardized by the TUM RGB-D
+benchmark~\cite{sturm2012benchmark}, applied to per-backend
+\texttt{map}$\to$\texttt{odom} estimates rather than visual SLAM
+output.

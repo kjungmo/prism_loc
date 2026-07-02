@@ -1,0 +1,83 @@
+\section{Introduction}\label{sec:intro}
+
+Localizing a mobile robot against a prior map is, on paper, a solved
+problem, but in practice it is solved in fragments. A team fielding a 2D
+LiDAR reaches for \texttt{nav2\_amcl}, a particle filter that tracks a
+planar pose against an occupancy grid and nothing else. A team with a 3D
+LiDAR reaches instead for an \texttt{hdl\_localization}-style tracker
+built around 3D NDT registration. A team that must fuse inertial and
+satellite measurements reaches for a \texttt{robot\_localization}-style
+node~\cite{moore2014generalized}, which composes an EKF over odometry,
+IMU, and GNSS but treats the map-relative LiDAR measurement as someone
+else's problem. Each of these tools carries its own topic interface,
+parameter vocabulary, initialization ritual, and recovery story, so a
+practitioner who moves from a 2D platform to a 3D one, or who adds a
+GNSS receiver, re-integrates from scratch. The ROS~2 maintainers'
+localization survey~\cite{macenski2023survey} names exactly this gap
+and sketches, as unbuilt future work, a modular framework of swappable
+2D and 3D localization components behind a common interface
+(Section~\ref{sec:related} details this and the surrounding prior
+work). The cost of the gap is not merely inconvenience: the Nav2
+marathon deployment~\cite{macenski2020marathon} attributes a leading
+share of its autonomy-recovery triggers to loss of localization
+confidence, so how a stack initializes, degrades, and recovers is a
+first-class deployment concern rather than a detail.
+
+\prismloc{} is an engineering response to that gap. It packages three
+map-based LiDAR localization backends behind one ROS~2 node contract:
+\texttt{laser2d}, a 2D likelihood-field Monte Carlo localizer against an
+occupancy grid; \texttt{ndt3d}, a 3D NDT-MCL backend that reuses the
+same particle filter with a voxel-Gaussian measurement model over a
+prior point cloud, sampling the planar $(x, y, \theta)$ pose; and
+\texttt{fusion3d}, a 15-state error-state Kalman filter (ESKF) that fuses
+3D LiDAR, IMU, and RTK-GNSS with IMU-bias estimation. All three present the
+identical interface --- a \texttt{map}$\to$\texttt{odom} transform, a pose
+with $6\times6$ covariance, and \texttt{/initialpose} seeding --- so
+that choosing between a 2D scan, a 3D cloud, and an inertial/GNSS-aided
+configuration is a launch-time decision rather than a change of stack.
+The two MCL backends share a single pure-C++17 estimator core (motion
+model, particle filter, KLD-adaptive resampling, pose estimate), and the
+fusion backend is a second such core; in both cases the algorithmic code
+depends only on Eigen and is unit-tested with no ROS or PCL present.
+When \texttt{laser2d} is started with no initial pose, it recovers one
+from a single scan by deterministic branch-and-bound (BBS) correlative
+scan matching over the occupancy grid, and re-seeds the particle filter
+from that result. We claim no new estimator theory: likelihood-field
+MCL, NDT-MCL, ESKF fusion, and BBS scan matching are all established.
+The contribution is architectural --- three known estimator families
+placed behind one contract, factored so their cores are deterministically
+testable off-robot --- and it is delivered as usable open-source
+software.
+
+Concretely, this paper contributes:
+\begin{enumerate}
+  \item A \textbf{unified, pluggable localization architecture} in which
+    three estimator families (2D likelihood-field MCL, 3D NDT-MCL, and
+    LiDAR+IMU+RTK-GNSS ESKF fusion) present one ROS~2
+    \texttt{map}$\to$\texttt{odom} contract, so the sensor suite selects
+    a backend rather than a separate stack.
+  \item \textbf{ROS-free estimator cores} that hold all filter
+    mathematics behind an Eigen-only, PCL-free, rclcpp-free boundary,
+    making every algorithmic claim exercisable by deterministic,
+    seeded-RNG unit and integration tests that run without a middleware
+    runtime.
+  \item A \textbf{deterministic global relocalization} path for
+    \texttt{laser2d}: branch-and-bound correlative scan matching solves
+    the kidnapped-robot problem from one scan and re-seeds the MCL
+    posterior, replacing stochastic random-injection recovery with a
+    repeatable search.
+  \item An \textbf{open-source release engineered for usability},
+    including fail-fast configuration validation, startup watchdog
+    diagnostics that name the input that has gone silent, and a
+    single-source parameter reference kept next to the code that reads
+    it.
+\end{enumerate}
+
+Section~\ref{sec:related} situates \prismloc{} against prior
+localization and fusion work. Section~\ref{sec:architecture} describes
+the shared contract and the core/ROS boundary; Section~\ref{sec:cores}
+details the estimator cores and Section~\ref{sec:ros} the ROS~2 nodes.
+Section~\ref{sec:validation} presents the ROS-free testing and CI
+strategy that stands in for on-robot benchmarks in this
+software-description paper, and Sections~\ref{sec:limitations}
+and~\ref{sec:conclusion} discuss limitations and conclude.

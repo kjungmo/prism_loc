@@ -1,0 +1,122 @@
+\section{System Architecture}\label{sec:architecture}
+
+\prismloc{} is organized as two layers realized by four packages
+(Fig.~\ref{fig:layers}). The lower layer holds the estimator cores:
+\texttt{prism\_loc\_core}, which implements the Monte Carlo
+localization (MCL) family, and \texttt{prism\_loc\_fusion}, which
+implements the error-state Kalman filter (ESKF). Both are plain
+C++17 libraries whose only third-party dependency is Eigen; each
+\texttt{CMakeLists.txt} calls \texttt{find\_package(Eigen3 REQUIRED)}
+and links \texttt{Eigen3::Eigen} alone, with no reference to
+\texttt{rclcpp}, \texttt{tf2}, or PCL. The upper layer holds the ROS~2
+node packages: \texttt{prism\_loc} (the \texttt{laser2d} and
+\texttt{ndt3d} backends) and \texttt{prism\_loc\_fusion\_ros} (the
+\texttt{fusion3d} backend). These packages, and only these, depend on
+\texttt{rclcpp}, the \texttt{tf2} stack, the ROS message packages, and
+PCL. Each core is consumed by its node package through the ordinary
+ament \texttt{find\_package} mechanism, so the dependency direction is
+strictly upward: the cores never link against the middleware.
+
+\begin{figure}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{|l|}
+\hline
+\textbf{Estimator cores} --- C++17 + Eigen, no ROS/PCL, gtest \\
+\hline
+\texttt{prism\_loc\_core} (MCL):\\
+\quad OdometryMotionModel $\rightarrow$ ParticleFilter\\
+\quad\quad $\vdash$ Laser2DLikelihoodField\\
+\quad\quad $\vdash$ Ndt3DModel\\
+\quad $\rightarrow$ Pose2D $+$ $6{\times}6$ covariance\\
+\texttt{prism\_loc\_fusion} (ESKF):\\
+\quad IMU predict $\rightarrow$ 15-state ESKF\\
+\quad\quad $\dashv$ NDT 6-DoF pose update\\
+\quad\quad $\dashv$ RTK-GNSS position update (WGS84 $\rightarrow$ ENU)\\
+\hline
+\multicolumn{1}{c}{}\\[-6pt]
+\hline
+\textbf{ROS~2 nodes} --- rclcpp / tf2 / PCL only here \\
+\hline
+\texttt{prism\_loc}\hfill \texttt{backend = laser2d | ndt3d}\\
+\texttt{prism\_loc\_fusion\_ros}\hfill \texttt{backend = fusion3d}\\
+\quad adapters: laser / pointcloud / ndt\_registration\\
+\hline
+in:~\texttt{/scan|/points|/imu|/gnss}, map, \texttt{/initialpose}, TF\\
+out:~\texttt{/tf} (\texttt{map}$\rightarrow$\texttt{odom}), \texttt{\char`~/pose},
+\texttt{\char`~/particle\_cloud|\char`~/odometry}\\
+\hline
+\end{tabular}
+\caption{The two-layer split. Estimator cores (bottom) are
+middleware-free libraries; the ROS~2 nodes (top) select a backend at
+runtime and bridge messages to core types through adapters. The
+dependency arrow points only upward.}
+\label{fig:layers}
+\end{figure}
+
+\textbf{Why the split.} Isolating the estimators from the middleware
+buys three properties. First, unit-testability without a running
+graph: each core builds and tests with a plain system toolchain and
+gtest, so its numerical behavior is exercised with no ROS installation,
+no node, and no message plumbing. The \texttt{CMakeLists.txt} of each
+core wires tests in dual mode --- through ament when a ROS workspace is
+present, and through bare CTest plus system gtest otherwise --- and this
+ROS-free path is the one continuous integration builds. The detailed
+testing story is deferred to Section~\ref{sec:validation}. Second,
+determinism: all sampling routes through a single seeded
+\texttt{std::mt19937\_64} wrapper (default seed \texttt{42}), so a
+motion-prediction, weighting, or resampling step is reproducible bit
+for bit across runs, which is what makes the core tests assertable
+rather than merely statistical. Third, one output contract shared by
+all three backends. Regardless of backend, a node publishes the
+\texttt{map}$\rightarrow$\texttt{odom} transform on \texttt{/tf}, a
+\texttt{PoseWithCovarianceStamped} on \texttt{\char`~/pose}, and
+accepts a \texttt{PoseWithCovarianceStamped} on \texttt{/initialpose}
+for seeding; the MCL nodes additionally publish a particle cloud while
+the fusion node publishes an \texttt{Odometry} message carrying pose
+and velocity. Because the contract is fixed, choosing between the
+likelihood-field MCL, NDT-MCL, and ESKF estimators is a runtime
+decision: \texttt{prism\_loc} reads a \texttt{backend} string parameter
+(\texttt{"laser2d"} by default) and branches on it when constructing
+its measurement model and when applying the correction step, and
+\texttt{prism\_loc\_fusion\_ros} supplies the \texttt{fusion3d}
+estimator behind the identical topic and TF interface. As stated in
+Section~\ref{sec:related}, this factoring --- three known estimator
+families behind one ROS~2 contract --- is the architectural
+contribution; the estimators themselves are textbook.
+
+\textbf{Core interfaces.} The MCL core expresses the shared
+predict--weight--resample loop against a small set of value types.
+A \texttt{Pose2D} carries the planar pose $(x, y, \theta)$; a \texttt{Particle}
+pairs a pose with a weight; and the two backends differ only through a
+\texttt{MeasurementModel} abstraction whose single virtual method
+returns the log-likelihood of an observation given a candidate pose.
+\texttt{Laser2DLikelihoodField} (a 2D scan against an occupancy-grid
+likelihood field) and \texttt{Ndt3DModel} (a 3D cloud against a
+Gaussian-voxel NDT map) are its two implementations, and the same
+\texttt{ParticleFilter} and \texttt{OdometryMotionModel} drive both.
+The fusion core exposes an \texttt{Eskf} class over a 15-dimensional
+error state with three entry points --- an IMU-driven
+\texttt{predict}, a 6-DoF \texttt{updatePose} fed by NDT registration,
+and a 3-DoF \texttt{updatePosition} fed by an absolute position fix ---
+alongside a geodetic helper that converts WGS84 latitude/longitude/
+altitude to a local ENU frame. Section~\ref{sec:cores} details these
+estimators.
+
+\textbf{Adapters.} The node layer bridges ROS message types to the
+middleware-free core types through thin adapters, keeping the cores
+ignorant of message definitions. In \texttt{prism\_loc}, a laser
+adapter converts a \texttt{LaserScan} to the core's \texttt{LaserScan2D}
+(honoring range overrides) and an \texttt{OccupancyGrid} to the core
+grid map, and a pointcloud adapter converts a \texttt{PointCloud2}, and
+a \texttt{.pcd} map file, into the \texttt{std::vector<Eigen::Vector3d>}
+the NDT map ingests; both also convert quaternion-bearing
+\texttt{Transform} and \texttt{Pose} messages to \texttt{Pose2D} by
+extracting yaw. In \texttt{prism\_loc\_fusion\_ros}, an
+\texttt{ndt\_registration} adapter wraps PCL's NDT to align an incoming
+cloud against the prior-map cloud and returns the resulting
+\texttt{Isometry3d} pose, which becomes the ESKF's 6-DoF measurement.
+PCL therefore appears only inside these adapters, never in the cores.
+The node-layer responsibilities --- TF lookups, topic wiring, and
+runtime diagnostics --- are described in Section~\ref{sec:ros}.
