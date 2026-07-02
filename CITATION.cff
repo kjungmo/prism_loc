@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use prism_loc in your research, please cite it as below."
+title: "prism_loc: a pluggable LiDAR localization stack for ROS 2"
+authors:
+  - family-names: Kang
+    given-names: Jung Mo
+    email: kangjmo91@gmail.com
+license: Apache-2.0
+repository-code: "https://github.com/kjungmo/prism_loc"
+preferred-citation:
+  type: unpublished
+  title: "PRISM-Loc: Three LiDAR Localization Backends Behind One ROS 2 Contract, with Middleware-Free Estimator Cores"
+  authors:
+    - family-names: Kang
+      given-names: Jung Mo
+      email: kangjmo91@gmail.com
+  year: 2026
+  notes: "Draft manuscript; LaTeX sources and PDF under docs/paper/ in the repository"

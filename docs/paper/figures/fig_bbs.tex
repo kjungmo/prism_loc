@@ -1,0 +1,90 @@
+% fig_bbs.tex --- BBS global relocalization (kidnapped robot) on SYNTHETIC data.
+% Data: docs/paper/data/bbs_relocalization.csv, produced by
+% experiments/bbs_relocalization.cpp, which runs the real
+% prism_loc_core::BranchAndBoundMatcher (bbs.cpp) with the laser2d.yaml bbs_*
+% defaults over synthetic ray-cast scans. Every number below comes from that CSV.
+% Requires in preamble: \usepackage{pgfplots}\pgfplotsset{compat=1.17}
+\pgfplotsset{
+  % Row filter: keep a point only if column #1 equals #2 (used to split
+  % successes from failures without duplicating the data file).
+  discard if not/.style 2 args={
+    x filter/.code={%
+      \edef\tempa{\thisrow{#1}}\edef\tempb{#2}%
+      \ifx\tempa\tempb\else\def\pgfmathresult{}\fi
+    }
+  }
+}
+\begin{figure}[t]
+  \centering
+  \footnotesize
+  \begin{tikzpicture}
+    \begin{axis}[
+        width=\linewidth,
+        height=0.66\linewidth,
+        xmin=0, xmax=1.0,
+        ymode=log,
+        ymin=0.002, ymax=8,
+        xlabel={BBS score fraction $s / n_{\mathrm{beam}}$ (unitless)},
+        ylabel={Position error (m)},
+        xtick={0,0.2,0.4,0.6,0.8,1.0},
+        ytick={0.01,0.1,1},
+        yticklabels={$0.01$,$0.1$,$1$},
+        tick label style={font=\footnotesize},
+        label style={font=\footnotesize},
+        legend style={font=\footnotesize, at={(0.985,0.97)}, anchor=north east,
+                      draw=black!40, fill=white, fill opacity=0.85,
+                      text opacity=1, row sep=1pt},
+        legend cell align=left,
+        axis on top,
+        grid=major,
+        grid style={gray!20},
+      ]
+      % --- acceptance threshold: bbs_min_score_fraction = 0.40 (vertical line) ---
+      \addplot[black, dashed, line width=0.9pt, forget plot]
+        coordinates {(0.4,0.002) (0.4,8)};
+      \node[anchor=west, font=\footnotesize, align=left, text=black!75]
+        at (axis cs:0.42,3.2)
+        {acceptance\\threshold $0.40$};
+
+      % --- position success bound (0.5 m), horizontal reference ---
+      \addplot[black!55, dotted, line width=0.8pt, forget plot]
+        coordinates {(0,0.5) (1.0,0.5)};
+
+      % --- successes: pos err < 0.5 m AND yaw err < 10 deg (open circles) ---
+      \addplot[only marks, mark=o, mark size=1.6pt, draw=black, line width=0.5pt,
+               discard if not={success}{1}]
+        table [col sep=comma, x=score_frac, y=pos_err_m]
+        {figures/../data/bbs_relocalization.csv};
+      \addlegendentry{success}
+
+      % --- failures (filled triangles) ---
+      \addplot[only marks, mark=triangle*, mark size=2.6pt, draw=black, fill=black,
+               discard if not={success}{0}]
+        table [col sep=comma, x=score_frac, y=pos_err_m]
+        {figures/../data/bbs_relocalization.csv};
+      \addlegendentry{failure}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Branch-and-bound (BBS) global relocalization for a kidnapped robot on a
+    \emph{synthetic} occupancy grid. From an asymmetric $6\,\mathrm{m}\times6\,\mathrm{m}$
+    room (two interior wall stubs break the four-fold symmetry, the same world as the
+    \texttt{Bbs} unit test), $N=100$ true poses are drawn uniformly over free space with
+    uniform yaw (fixed seed). For each pose a single 180-beam scan is produced by
+    grid-march ray casting (\texttt{test\_helpers.hpp}) and corrupted with synthetic
+    clutter---each beam is, with a per-query probability drawn uniformly in $[0,0.8]$,
+    replaced by a spurious range---to span an easy-to-hard difficulty range. The real
+    \texttt{prism\_loc\_core::BranchAndBoundMatcher} (\texttt{bbs.cpp}) then searches the
+    whole map with the \texttt{laser2d.yaml} \texttt{bbs\_*} defaults
+    ($\pm10\,$m linear, $\pm\pi$ yaw at $1^{\circ}$ steps, \texttt{max\_depth}$=6$,
+    \texttt{max\_beams}$=120$). Each marker is one query: position error versus BBS score
+    fraction (raw score over used beams); the dashed line is the acceptance threshold
+    \texttt{bbs\_min\_score\_fraction}$=0.40$. A query counts as a \emph{success} when
+    position error $<0.5\,$m \emph{and} yaw error $<10^{\circ}$. The score cleanly
+    separates outcomes: all three failures score below $0.40$ (with $>3\,$m error), and
+    every match at or above the threshold is correct, so the threshold yields
+    \emph{zero false accepts} over the run (the $19$ correct fixes it rejects are its
+    conservative margin). Success rate is $97/100=97\%$; median full-map query latency is
+    $37.7\,$ms (single-threaded, machine-dependent); median position error $0.037\,$m and
+    median yaw error $0.48^{\circ}$.}
+  \label{fig:bbs}
+\end{figure}

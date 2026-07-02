@@ -1,0 +1,88 @@
+\appendix[Reproducibility]\label{sec:repro}
+
+Every number and figure in Section~\ref{sec:synth} regenerates from the
+repository alone; this appendix consolidates the recipe.
+
+\textbf{Environment.}
+The experiment drivers and the core test suites need only a C++17
+compiler and the Eigen~3 headers (Debian/Ubuntu packages \texttt{g++}
+and \texttt{libeigen3-dev}); the unit tests of Section~\ref{sec:tests}
+additionally use GoogleTest (\texttt{libgtest-dev}). ROS~2 Humble is
+required only for the two node packages; continuous integration builds
+those in a \texttt{ros:humble} container
+(\texttt{.github/workflows/ci.yml}).
+
+\textbf{Building and running the drivers.}
+The three drivers compile the estimator cores directly from source---no
+CMake, no ROS. From the repository root:
+
+{\footnotesize
+\begin{verbatim}
+g++ -O2 -std=c++17 -I prism_loc_core/include \
+    -I prism_loc_core/test \
+    -I /usr/include/eigen3 \
+    prism_loc_core/src/*.cpp \
+    experiments/mcl_tracking.cpp -o /tmp/exp_mcl
+/tmp/exp_mcl
+
+g++ -O2 -std=c++17 -I prism_loc_core/include \
+    -I prism_loc_core/test \
+    -I /usr/include/eigen3 \
+    prism_loc_core/src/*.cpp \
+    experiments/bbs_relocalization.cpp \
+    -o /tmp/exp_bbs
+/tmp/exp_bbs
+
+g++ -O2 -std=c++17 \
+    -I prism_loc_fusion/include \
+    -I /usr/include/eigen3 \
+    prism_loc_fusion/src/*.cpp \
+    experiments/eskf_fusion.cpp -o /tmp/exp_eskf
+/tmp/exp_eskf > docs/paper/data/eskf_track.csv
+\end{verbatim}
+}
+
+\noindent
+All randomness derives from fixed compile-time seeds
+(Table~\ref{tab:repro}), so every CSV column is bit-for-bit
+reproducible, with the single exception of the wall-clock
+\texttt{time\_ms} latency column of the BBS experiment, which is
+machine-dependent.
+
+\begin{table}[t]
+\centering
+\caption{Experiment drivers, fixed seeds, and committed artifacts.
+Drivers live under \texttt{experiments/}; CSVs under
+\texttt{docs/paper/data/}.}
+\label{tab:repro}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Driver (\texttt{.cpp}) & Seed(s) & Figure(s) & CSV(s) \\
+\midrule
+\texttt{mcl\_tracking} & 101, 202, 303 & \ref{fig:mcl}, \ref{fig:kld}
+  & \texttt{mcl\_tracking}, \\
+ & & & \texttt{mcl\_particles} \\
+\texttt{bbs\_relocalization} & 20240607 & \ref{fig:bbs}
+  & \texttt{bbs\_relocalization} \\
+\texttt{eskf\_fusion} & 20240517 & \ref{fig:eskf}
+  & \texttt{eskf\_track} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Parameters.}
+The drivers mirror the shipped defaults. Every ROS~2 parameter and its
+in-code default is documented in \texttt{PARAMS.md} at the repository
+root; the deployed overrides are the YAML files
+\texttt{prism\_loc/params/laser2d.yaml},
+\texttt{prism\_loc/params/ndt3d.yaml}, and
+\texttt{prism\_loc\_fusion\_ros/params/fusion3d.yaml}.
+
+\textbf{Number tracing.}
+The committed CSVs under \texttt{docs/paper/data/} are the artifacts of
+record. The guard script \texttt{docs/paper/check\_numbers.py}
+recomputes every headline statistic quoted in Section~\ref{sec:synth}
+from those CSVs and exits nonzero if any quoted number no longer
+matches, so the paper's statistics cannot silently drift from the data.

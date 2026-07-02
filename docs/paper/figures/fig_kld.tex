@@ -1,0 +1,62 @@
+% fig_kld.tex --- KLD-adaptive particle count over the MCL run (SYNTHETIC data).
+% Data: docs/paper/data/mcl_particles.csv, produced by experiments/mcl_tracking.cpp
+% (same run as fig_mcl). Every number below comes from that CSV. Requires in preamble:
+%   \usepackage{pgfplots}\pgfplotsset{compat=1.17}
+\begin{figure}[t]
+  \centering
+  \footnotesize
+  \begin{tikzpicture}
+    \begin{axis}[
+        width=\linewidth,
+        height=0.55\linewidth,
+        xmin=0, xmax=65,
+        ymin=0, ymax=2200,
+        xlabel={Time (s)},
+        ylabel={Particle count},
+        xtick={0,10,20,30,40,50,60},
+        ytick={0,500,1000,1500,2000},
+        tick label style={font=\footnotesize},
+        label style={font=\footnotesize},
+        legend style={font=\footnotesize, at={(0.98,0.60)}, anchor=east,
+                      draw=black!40, fill=white, fill opacity=0.85,
+                      text opacity=1, row sep=0.5pt},
+        legend cell align=left,
+        axis on top,
+        grid=major,
+        grid style={gray!20},
+      ]
+      % --- parameter bounds from laser2d.yaml (min_particles / max_particles) ---
+      \addplot[black!55, dash dot, line width=0.8pt, forget plot]
+        coordinates {(0,2000) (65,2000)};
+      \node[anchor=south east, font=\footnotesize, text=black!60]
+        at (axis cs:64.5,2010) {\texttt{max\_particles}=2000};
+      \addplot[black!55, dash dot, line width=0.8pt, forget plot]
+        coordinates {(0,500) (65,500)};
+      \node[anchor=north east, font=\footnotesize, text=black!60]
+        at (axis cs:64.5,490) {\texttt{min\_particles}=500};
+
+      % --- KLD-adapted particle count, 3 fixed seeds (thin lines) ---
+      \addplot[black, solid,  line width=0.5pt]
+        table [col sep=comma, x=t, y=n_s0] {figures/../data/mcl_particles.csv};
+      \addlegendentry{seed 101}
+      \addplot[black, dashed, line width=0.5pt]
+        table [col sep=comma, x=t, y=n_s1] {figures/../data/mcl_particles.csv};
+      \addlegendentry{seed 202}
+      \addplot[black, dotted, line width=0.7pt]
+        table [col sep=comma, x=t, y=n_s2] {figures/../data/mcl_particles.csv};
+      \addlegendentry{seed 303}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{KLD-adaptive resampling sizes the particle set to the current
+    uncertainty (\emph{synthetic} data; same run as Fig.~\ref{fig:mcl}, values from
+    the CSV written by \texttt{experiments/mcl\_tracking.cpp}). The dash-dotted lines
+    mark the \texttt{laser2d.yaml} bounds \texttt{min\_particles}=500 and
+    \texttt{max\_particles}=2000. Seeded with a broad prior, the filter starts at the
+    2000-particle ceiling; once the first laser corrections concentrate the posterior
+    the KLD bound (Fox) shrinks the set to the 500-particle floor, where it stays for
+    the remainder of the closed-loop run across all three fixed seeds. Steady-state
+    tracking therefore costs $4\times$ fewer likelihood evaluations per update than the
+    fixed worst-case ceiling, with no loss of the accuracy shown in
+    Fig.~\ref{fig:mcl}.}
+  \label{fig:kld}
+\end{figure}
