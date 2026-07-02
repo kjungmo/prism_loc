@@ -18,6 +18,9 @@ target_include_directories(prism_loc_fusion PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_link_libraries(prism_loc_fusion PUBLIC Eigen3::Eigen)
 target_compile_features(prism_loc_fusion PUBLIC cxx_std_17)
+# The ROS node package links this static archive into its shared node
+# library, which requires position-independent code.
+set_target_properties(prism_loc_fusion PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 option(PRISM_LOC_FUSION_BUILD_TESTS "Build prism_loc_fusion tests" OFF)
 # Default BUILD_TESTING ON so the core unit tests are configured under a plain
