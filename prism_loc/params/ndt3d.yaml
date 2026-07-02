@@ -1,23 +1,27 @@
 /**:
   ros__parameters:
-    backend: "ndt3d"
-    global_frame: "map"
-    odom_frame: "odom"
-    base_frame: "base_link"
-    points_topic: "/points"
-    map_pcd_path: ""
-    ndt_resolution: 1.0
-    voxel_min_points: 5
-    max_points: 500
-    base_height: 0.0
-    min_particles: 500
-    max_particles: 2000
-    resample_threshold: 0.5
-    update_min_d: 0.2
-    update_min_a: 0.2
-    transform_tolerance: 0.1
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    set_initial_pose: false
+    backend: "ndt3d"                  # str: localization backend selector ("laser2d" | "ndt3d")
+    global_frame: "map"               # str: fixed map frame that map->odom is broadcast in
+    odom_frame: "odom"                # str: odometry frame (child of map in the TF tree)
+    base_frame: "base_link"           # str: robot body frame the pose estimate refers to
+    points_topic: "/points"           # str: PointCloud2 input topic (subscribed BEST_EFFORT)
+    map_pcd_path: ""                  # str: absolute path to the .pcd map (REQUIRED; empty aborts startup)
+    ndt_resolution: 1.0               # m: NDT voxel (cell) edge length for the map
+    voxel_min_points: 5               # count: min points per voxel to form a valid NDT cell
+    max_points: 500                   # count: scan points subsampled per measurement update
+    base_height: 0.0                  # m: assumed sensor/base height above the map ground plane
+    min_particles: 500                # count: lower bound on the particle set size
+    max_particles: 2000               # count: upper bound on the particle set size
+    resample_threshold: 0.5           # fraction: resample when Neff < threshold * N
+    kld_err: 0.05                     # fraction: KLD max error bound between true/estimated distribution
+    kld_z: 2.33                       # unitless: upper standard-normal quantile for KLD (~0.99)
+    kld_bin_xy: 0.5                   # m: KLD histogram bin size in x and y
+    kld_bin_yaw: 0.17                 # rad: KLD histogram bin size in yaw (~10 deg)
+    update_min_d: 0.2                 # m: min translation before a filter update runs
+    update_min_a: 0.2                 # rad: min rotation before a filter update runs
+    transform_tolerance: 0.1          # s: future-dating added to the map->odom TF stamp
+    alpha1: 0.2                       # unitless: odometry noise, rotation from rotation
+    alpha2: 0.2                       # unitless: odometry noise, rotation from translation
+    alpha3: 0.2                       # unitless: odometry noise, translation from translation
+    alpha4: 0.2                       # unitless: odometry noise, translation from rotation
+    set_initial_pose: false           # bool: seed a Gaussian at initial_pose_* on startup

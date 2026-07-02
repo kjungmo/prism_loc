@@ -1,0 +1,144 @@
+\section{ROS 2 Integration and Interface Contract}\label{sec:ros}
+
+The estimator cores of Section~\ref{sec:cores} carry no middleware
+dependency; they are made deployable by thin ROS~2 node packages
+(\texttt{prism\_loc} for the \texttt{laser2d} and \texttt{ndt3d} MCL
+backends, \texttt{prism\_loc\_fusion\_ros} for the \texttt{fusion3d}
+ESKF backend) whose job is to translate messages, TF, and parameters
+into core calls and back. We treat this boundary as a first-class
+interface rather than glue code, following the conventions that
+\texttt{robot\_localization}~\cite{moore2014generalized} and
+\texttt{nav2\_amcl} within Nav2~\cite{macenski2020marathon}
+established for drop-in localization: a REP-105 frame contract, a
+\texttt{map}$\to$\texttt{odom} TF output, and \texttt{/initialpose}
+seeding. A robot already configured for AMCL can therefore switch
+backends by changing a launch file, not its TF tree or its consumers.
+
+\subsection{Frames and \texttt{map}$\to$\texttt{odom} composition}
+All three backends honor the REP-105 frame chain
+\texttt{map}$\to$\texttt{odom}$\to$\texttt{base\_link}, exposed as the
+\texttt{global\_frame}, \texttt{odom\_frame}, and \texttt{base\_frame}
+parameters. Each backend estimates the robot body in the map,
+$T_{\mathrm{map,base}}$, but---so as not to fight the odometry source
+that owns \texttt{odom}$\to$\texttt{base\_link}---it broadcasts only
+the correction transform $T_{\mathrm{map,odom}}$. Writing $\oplus$ for
+pose composition and $(\cdot)^{-1}$ for inversion, the node computes
+\begin{equation}
+  T_{\mathrm{map,odom}} \;=\;
+  T_{\mathrm{map,base}} \oplus T_{\mathrm{odom,base}}^{-1},
+  \label{eq:mapodom}
+\end{equation}
+where $T_{\mathrm{odom,base}}$ is read from TF at the measurement
+stamp. Equation~\eqref{eq:mapodom} guarantees the round-trip identity
+$T_{\mathrm{map,odom}} \oplus T_{\mathrm{odom,base}} =
+T_{\mathrm{map,base}}$, so downstream consumers recover the intended
+body pose; both the planar core
+(\texttt{compose}/\texttt{inverse} on $SE(2)$) and the fusion node
+(\texttt{map\_base}$\cdot$\texttt{odom\_base}$^{-1}$ on $SE(3)$
+Isometries) implement it, and each is checked by a ROS-free unit test
+asserting the round trip to $10^{-9}$. If \texttt{odom}$\to$\texttt{base\_link}
+is momentarily unavailable, the fusion node degrades gracefully to
+publishing \texttt{map}$\to$\texttt{base\_link} directly rather than
+emitting a wrong transform. The broadcast stamp is future-dated by
+\texttt{transform\_tolerance} (default $0.1$\,s) to bound
+extrapolation on the consumer side.
+
+\subsection{Topic contract and QoS}
+Table~\ref{tab:contract} lists the per-backend contract. Inputs and
+outputs are uniform across backends wherever the sensing allows: every
+backend outputs the same \texttt{map}$\to$\texttt{odom} TF and a
+\texttt{PoseWithCovarianceStamped} on \texttt{\textasciitilde/pose},
+and every backend accepts \texttt{/initialpose}. QoS profiles match
+each publisher's expected semantics rather than using defaults: sensor
+streams (\texttt{LaserScan}, \texttt{PointCloud2}, \texttt{Imu},
+\texttt{NavSatFix}) are subscribed with \texttt{SensorDataQoS}
+(best-effort, volatile), while the occupancy-grid map is subscribed
+\texttt{transient\_local} and \texttt{reliable} so that the single
+latched grid published once by \texttt{map\_server} is delivered even
+though the subscriber joins later. A mismatch here is a common and
+silent failure mode for new ROS users; fixing the profiles at the
+interface removes it.
+
+\begin{table}[t]
+\centering
+\caption{Per-backend topic contract. All backends additionally
+subscribe \texttt{/initialpose} and the TF
+\texttt{odom}$\to$\texttt{base\_link}, and broadcast
+\texttt{map}$\to$\texttt{odom}.}
+\label{tab:contract}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Backend & Inputs & Outputs \\
+\midrule
+\texttt{laser2d} & \texttt{/scan}, \texttt{/map} & \texttt{\textasciitilde/pose}, \\
+ & (\texttt{OccupancyGrid}) & \texttt{\textasciitilde/particle\_cloud} \\[2pt]
+\texttt{ndt3d} & \texttt{/points}, \texttt{.pcd} & \texttt{\textasciitilde/pose}, \\
+ & (file) & \texttt{\textasciitilde/particle\_cloud} \\[2pt]
+\texttt{fusion3d} & \texttt{/points}, \texttt{/imu}, & \texttt{\textasciitilde/pose}, \\
+ & \texttt{/gnss} (\texttt{NavSatFix}), \texttt{.pcd} & \texttt{\textasciitilde/odometry} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Initialization paths}
+The interface offers one manual and one automatic seeding path per
+backend. Manually, all backends accept a
+\texttt{PoseWithCovarianceStamped} on \texttt{/initialpose} (the RViz
+``2D Pose Estimate'' tool): the MCL backends spread a Gaussian particle
+cloud at the supplied mean and covariance, and the fusion backend loads
+the pose as its initial nominal state. Automatically, the two backends
+differ because their sensing differs. The \texttt{laser2d} backend can
+self-recover with no prior pose by running the branch-and-bound search
+of Section~\ref{sec:global} (\texttt{try\_global\_localization}, or the
+on-demand \texttt{\textasciitilde/global\_localization} service), which
+re-seeds the filter from a single scan. The \texttt{fusion3d} backend
+auto-initializes once it has both an attitude estimate---roll and pitch
+recovered from the IMU specific-force vector, heading from
+\texttt{initial\_yaw}---and a position fix from the first accepted GNSS
+message, converted from WGS-84 to a local ENU frame; \texttt{/initialpose}
+overrides this when GNSS is unavailable.
+
+\subsection{Parameter surface}
+Every tunable is a declared ROS~2 parameter with an in-code default,
+documented in a single source of truth (\texttt{PARAMS.md}) generated
+from the \texttt{declare\_parameter} calls. The surface deliberately
+exposes the core's control knobs rather than hiding them: the
+KLD-sampling bounds (\texttt{kld\_err}, \texttt{kld\_z}, and the
+histogram bin sizes), the likelihood-field and laser-range parameters
+(\texttt{z\_hit}, \texttt{sigma\_hit}, \texttt{laser\_min\_range},
+\texttt{laser\_max\_range}), the branch-and-bound search window and
+depth (\texttt{bbs\_linear\_window}, \texttt{bbs\_angular\_step},
+\texttt{bbs\_max\_depth}, \texttt{bbs\_min\_score\_fraction}), and the
+ESKF process noise and GNSS gates (\texttt{sigma\_acc},
+\texttt{gnss\_min\_status}, \texttt{gnss\_max\_pos\_cov}). Because the
+cores are configured purely through plain structs, each parameter maps
+to exactly one field, and the shipped YAML files override only the
+subset a deployment typically changes.
+
+\subsection{Runtime diagnostics}
+A localization node that silently does nothing is the dominant
+first-run frustration; this release invests in making every stalled
+precondition observable and self-explaining. Four mechanisms cooperate.
+(i)~\emph{Fail-fast on a missing mandatory map}: the \texttt{ndt3d} and
+\texttt{fusion3d} nodes abort construction with an actionable
+\texttt{std::runtime\_error} if \texttt{map\_pcd\_path} is empty or
+fails to load, rather than idling forever. (ii)~\emph{Throttled
+waiting-state warnings}: whenever a callback cannot yet act---no map,
+no initial pose, no filter initialization---it emits a rate-limited
+\texttt{WARN} that names both the unmet precondition and the remedy
+(e.g.\ ``waiting for an initial pose---publish to \texttt{/initialpose}
+\ldots or enable \texttt{try\_global\_localization}''). (iii)~A
+\emph{$10$\,s startup watchdog} reports, for each mandatory
+input that has produced no message, the topic name and its live
+publisher count (via \texttt{count\_publishers}), disambiguating ``no
+publisher'' from ``publisher present but QoS-incompatible''; it cancels
+itself once all inputs are seen. (iv)~\emph{Quantified rejection
+logging}: the GNSS gate logs each rejected fix with the measured value
+against the threshold it violated---status below \texttt{gnss\_min\_status},
+NaN coordinates, or position variance above \texttt{gnss\_max\_pos\_cov}
+---and the NDT update likewise reports non-convergence and fitness
+versus \texttt{ndt\_max\_fitness}. These diagnostics carry no algorithmic
+weight; they exist so that a misconfiguration is diagnosable from the
+console log alone, consistent with the operational transparency Nav2
+found necessary for long-term autonomy~\cite{macenski2020marathon}.

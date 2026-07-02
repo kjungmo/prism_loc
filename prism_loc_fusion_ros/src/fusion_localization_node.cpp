@@ -2,7 +2,9 @@
 #include "prism_loc_fusion_ros/tf_util.hpp"
 #include "prism_loc_fusion/so3.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <stdexcept>
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -53,12 +55,20 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
       declare_parameter<double>("ndt_epsilon", 0.01),
       declare_parameter<int>("ndt_max_iter", 30));
   pcl::PointCloud<pcl::PointXYZ>::Ptr map(new pcl::PointCloud<pcl::PointXYZ>());
-  if (pcd.empty() || pcl::io::loadPCDFile<pcl::PointXYZ>(pcd, *map) < 0 || map->empty()) {
-    RCLCPP_ERROR(get_logger(), "fusion3d: failed to load PCD map: %s", pcd.c_str());
-  } else {
-    ndt_->setTarget(map);
-    RCLCPP_INFO(get_logger(), "fusion3d: NDT map loaded (%zu pts)", map->size());
+  if (pcd.empty()) {
+    RCLCPP_ERROR(get_logger(), "fusion3d: map_pcd_path is empty");
+    throw std::runtime_error(
+        "fusion3d: map_pcd_path is empty - set map_pcd_path to a valid .pcd map file "
+        "(e.g. ros2 launch ... map_pcd_path:=/abs/path/to/map.pcd)");
   }
+  if (pcl::io::loadPCDFile<pcl::PointXYZ>(pcd, *map) < 0 || map->empty()) {
+    RCLCPP_ERROR(get_logger(), "fusion3d: failed to load PCD map: %s", pcd.c_str());
+    throw std::runtime_error(
+        "fusion3d: could not load a non-empty PCD map from '" + pcd +
+        "' - check the file exists, is readable, and is a valid non-empty point cloud");
+  }
+  ndt_->setTarget(map);
+  RCLCPP_INFO(get_logger(), "fusion3d: NDT map loaded (%zu pts)", map->size());
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -66,18 +76,50 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   pose_pub_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("~/pose", 10);
   odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("~/odometry", 10);
 
+  imu_topic_ = declare_parameter<std::string>("imu_topic", "/imu");
+  points_topic_ = declare_parameter<std::string>("points_topic", "/points");
+  gnss_topic_ = declare_parameter<std::string>("gnss_topic", "/gnss");
+  // IMU/points/GNSS drivers commonly publish BEST_EFFORT, so match with SensorDataQoS.
   imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
-      declare_parameter<std::string>("imu_topic", "/imu"), rclcpp::SensorDataQoS(),
+      imu_topic_, rclcpp::SensorDataQoS(),
       std::bind(&FusionLocalizationNode::onImu, this, std::placeholders::_1));
   points_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-      declare_parameter<std::string>("points_topic", "/points"), rclcpp::SensorDataQoS(),
+      points_topic_, rclcpp::SensorDataQoS(),
       std::bind(&FusionLocalizationNode::onPoints, this, std::placeholders::_1));
   gnss_sub_ = create_subscription<sensor_msgs::msg::NavSatFix>(
-      declare_parameter<std::string>("gnss_topic", "/gnss"), rclcpp::SensorDataQoS(),
+      gnss_topic_, rclcpp::SensorDataQoS(),
       std::bind(&FusionLocalizationNode::onGnss, this, std::placeholders::_1));
   initpose_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "/initialpose", 10, std::bind(&FusionLocalizationNode::onInitialPose, this, std::placeholders::_1));
+  // Startup watchdog: warn every 10 s about required inputs that have gone silent.
+  watchdog_timer_ = create_wall_timer(std::chrono::seconds(10),
+                                      std::bind(&FusionLocalizationNode::onWatchdog, this));
   RCLCPP_INFO(get_logger(), "prism_loc_fusion (fusion3d) up");
+}
+
+void FusionLocalizationNode::onWatchdog() {
+  std::lock_guard<std::mutex> lk(mutex_);
+  bool all_seen = true;
+  if (!imu_seen_) {
+    all_seen = false;
+    RCLCPP_WARN(get_logger(),
+                "no messages on %s (%zu publishers) - check imu_topic and the IMU driver",
+                imu_topic_.c_str(), count_publishers(imu_topic_));
+  }
+  if (!points_seen_) {
+    all_seen = false;
+    RCLCPP_WARN(get_logger(),
+                "no messages on %s (%zu publishers) - check points_topic and the LiDAR driver",
+                points_topic_.c_str(), count_publishers(points_topic_));
+  }
+  if (!gnss_seen_) {
+    all_seen = false;
+    RCLCPP_WARN(get_logger(),
+                "no messages on %s (%zu publishers) - check gnss_topic and the GNSS driver, "
+                "or use /initialpose instead of GNSS for the initial fix",
+                gnss_topic_.c_str(), count_publishers(gnss_topic_));
+  }
+  if (all_seen) watchdog_timer_->cancel();
 }
 
 bool FusionLocalizationNode::tryInitialize() {
@@ -100,6 +142,7 @@ bool FusionLocalizationNode::tryInitialize() {
 
 void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
+  imu_seen_ = true;
   const Eigen::Vector3d acc(msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z);
   const Eigen::Vector3d gyro(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z);
   if (!have_attitude_) { init_attitude_ = attitudeFromAccel(acc, initial_yaw_); have_attitude_ = true; }
@@ -115,7 +158,20 @@ void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
 
 void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
-  if (!filter_init_ || !ndt_ || !ndt_->hasTarget()) return;
+  points_seen_ = true;
+  if (!ndt_ || !ndt_->hasTarget()) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onPoints: NDT target map not set - map_pcd_path failed to load; "
+                         "check map_pcd_path");
+    return;
+  }
+  if (!filter_init_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onPoints: waiting for filter initialization - need IMU attitude and a "
+                         "position fix (GNSS or /initialpose); check imu_topic/gnss_topic or "
+                         "publish to /initialpose");
+    return;
+  }
   pcl::PointCloud<pcl::PointXYZ>::Ptr raw(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::fromROSMsg(*msg, *raw);
   if (raw->empty()) return;
@@ -143,9 +199,25 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
 
 void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
-  if (msg->status.status < gnss_min_status_) return;
-  if (std::isnan(msg->latitude) || std::isnan(msg->longitude)) return;
-  if (msg->position_covariance[0] > gnss_max_pos_cov_) return;
+  gnss_seen_ = true;
+  if (msg->status.status < gnss_min_status_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onGnss: fix rejected - status %d < gnss_min_status %d",
+                         static_cast<int>(msg->status.status), gnss_min_status_);
+    return;
+  }
+  if (std::isnan(msg->latitude) || std::isnan(msg->longitude)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onGnss: fix rejected - NaN latitude/longitude (lat=%.6f lon=%.6f)",
+                         msg->latitude, msg->longitude);
+    return;
+  }
+  if (msg->position_covariance[0] > gnss_max_pos_cov_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onGnss: fix rejected - position covariance %.2f > gnss_max_pos_cov %.2f",
+                         msg->position_covariance[0], gnss_max_pos_cov_);
+    return;
+  }
   const prism_loc_fusion::GeoPoint gp{msg->latitude, msg->longitude, msg->altitude};
   if (!geo_.hasDatum()) geo_.setDatum(gp);
   const Eigen::Vector3d enu = geo_.toEnu(gp);

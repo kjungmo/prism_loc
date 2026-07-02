@@ -36,6 +36,11 @@ Both produce the **identical output contract** (below). This is not a hack: it i
 NDT-MCL sitting next to likelihood-field MCL, sharing the particle filter,
 motion model, KLD-adaptive resampling, and pose/covariance estimation.
 
+This document covers the two particle-filter backends (`laser2d`, `ndt3d`) only;
+the third backend, `fusion3d` — a 3D LiDAR + IMU + RTK-GNSS error-state Kalman
+filter (ESKF) that produces the same `map → odom` output contract — is specified
+separately in [`SPEC_fusion.md`](SPEC_fusion.md).
+
 ---
 
 ## 2. I/O contract (the "commonly used" ROS 2 localization interface)
@@ -164,17 +169,12 @@ prism_loc/                              # ROS 2 Humble node
 
 ## 5. Parameters (ROS params, namespaced)
 
-Common: `backend` (`laser2d`|`ndt3d`), `global_frame`(map), `odom_frame`(odom),
-`base_frame`(base_link), `min_particles`(500), `max_particles`(2000),
-`update_min_d`(0.2 m), `update_min_a`(0.2 rad), `resample_threshold`(0.5),
-`transform_tolerance`(0.1 s), `tf_broadcast`(true), `alpha1..alpha4`(0.2),
-`set_initial_pose`/`initial_pose_{x,y,yaw}`.
-
-laser2d: `scan_topic`(/scan), `max_beams`(60), `z_hit`(0.5), `z_rand`(0.5),
-`sigma_hit`(0.2 m), `laser_max_range`(100), `laser_min_range`(0).
-
-ndt3d: `points_topic`(/points), `map_pcd_path`, `ndt_resolution`(1.0 m),
-`max_points`(500), `voxel_min_points`(5), `points_voxel_leaf`(0.5 m, downsample).
+Parameters are documented once, kept next to the code that reads them, and not
+duplicated here — **[`PARAMS.md`](PARAMS.md) is the single source of truth** for
+every `laser2d`/`ndt3d`/`fusion3d` parameter, its default, and its meaning
+(including `laser_max_range`/`laser_min_range`, which are implemented and
+enforced by the `laser2d` observation model). See `PARAMS.md` before editing a
+`params/*.yaml` file or adding a new parameter.
 
 ---
 
@@ -209,19 +209,17 @@ toolchain; `prism_loc` builds clean under colcon in the `ros2_humble` env.
 
 **Core only (no ROS):**
 ```bash
-cmake -S prism_loc/prism_loc_core -B build/core -DPRISM_LOC_CORE_BUILD_TESTS=ON
+cmake -S prism_loc_core -B build/core -DPRISM_LOC_CORE_BUILD_TESTS=ON
 cmake --build build/core -j
 ( cd build/core && ctest --output-on-failure )   # cd-in form: portable across ctest versions
 ```
 
-**Full ROS 2 build (Humble via micromamba; clean env to avoid noetic leak):**
+**Full ROS 2 build (Humble; run from a standard ROS 2 workspace with this repo
+under `<ws>/src/prism_loc`):**
 ```bash
-env -u ROS_DISTRO -u ROS_VERSION -u ROS_PACKAGE_PATH \
-  /home/cona/.local/bin/micromamba run -n ros2_humble bash -c '
-    cd /home/cona/kangj/prism_loc_ws &&
-    colcon build --symlink-install &&
-    colcon test --packages-select prism_loc_core prism_loc &&
-    colcon test-result --verbose'
+colcon build --symlink-install
+colcon test --packages-select prism_loc_core prism_loc prism_loc_fusion prism_loc_fusion_ros
+colcon test-result --verbose
 ```
 
 **Run (laser2d):**

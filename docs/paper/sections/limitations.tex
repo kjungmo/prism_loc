@@ -1,0 +1,78 @@
+\section{Limitations and Future Work}\label{sec:limitations}
+
+\prismloc{} is an architecture paper, and its scope is deliberately
+bounded. We state the current boundaries plainly so that they read as a
+roadmap rather than as hidden assumptions.
+
+\textbf{Planar state in the MCL backends.} Both particle-filter
+backends estimate a planar pose $(x, y, \theta)$: the shared core
+represents each particle as an $SE(2)$ element, and the \texttt{ndt3d}
+backend evaluates its per-particle likelihood against a full 3D
+Gaussian-voxel map from that planar pose at a fixed base height. This
+suits wheeled robots on locally flat floors but does not track roll,
+pitch, or vertical motion. Full $SE(3)$ state exists only in the
+\texttt{fusion3d} backend, whose $15$-dimensional error state carries
+position, velocity, orientation, and IMU biases. Extending the MCL core
+to a $6$-DoF particle state, or coupling the planar filter to an
+external attitude source, is future work.
+
+\textbf{2D-only global relocalization.} The branch-and-bound search
+used for kidnapped-robot recovery (Section~\ref{sec:global}) operates on
+a rasterized 2D occupancy pyramid and returns an $SE(2)$ pose. There is
+no analogous 3D global localization for the \texttt{ndt3d} or
+\texttt{fusion3d} backends; those currently rely on an operator-supplied
+initial pose (via \texttt{/initialpose}) and local tracking. A 3D
+branch-and-bound or learned place-recognition front end is on the
+roadmap.
+
+\textbf{No online sensor time-offset estimation.} The
+\texttt{fusion3d} ESKF propagates on IMU samples and corrects with
+LiDAR-NDT and GNSS measurements at their stamped times, but it does not
+estimate the temporal offset between the LiDAR/GNSS clocks and the IMU
+clock, nor does it self-calibrate the LiDAR--IMU extrinsic; both are
+treated as known inputs. Jointly estimating time offset and extrinsics
+would improve robustness under poorly synchronized hardware.
+
+\textbf{Loosely-coupled LiDAR update.} In \texttt{fusion3d}, PCL NDT
+registers each live cloud to the prior map to produce a $6$-DoF pose
+\emph{measurement}, which the ESKF then fuses as a loosely-coupled
+update. This keeps the ROS-free filter core independent of the
+registration engine, but it forgoes the accuracy of tightly-coupled
+formulations that fold raw scan residuals directly into the filter
+Jacobian, as in FAST-LIO~\cite{xu2021fastlio}. The loose coupling is an
+architectural choice favoring modularity and testability over
+last-percent accuracy.
+
+\textbf{Single static map.} All three backends assume one prior map of
+a static world, loaded once at startup; they neither update the map
+online nor reason about moving obstacles or long-term scene change.
+Map maintenance and change detection are out of scope for the present
+system.
+
+\textbf{No field-accuracy evaluation yet.} The validation reported in
+Section~\ref{sec:validation} is deterministic, ROS-free unit and
+integration testing plus continuous integration; it establishes that
+each estimator core behaves as specified, but it is not a quantitative
+accuracy study. We have not yet measured trajectory error on physical
+or public datasets. Planned work is an evaluation reporting absolute and
+relative trajectory error (ATE/RPE) per the TUM RGB-D
+conventions~\cite{sturm2012benchmark} on public datasets, applied to the
+per-backend \texttt{map}$\to$\texttt{odom} estimates. Until then we make
+no accuracy claims.
+
+\section{Conclusion}\label{sec:conclusion}
+
+We presented \prismloc, a LiDAR localization stack whose contribution is
+architectural rather than algorithmic: three known estimator families
+--- likelihood-field MCL, NDT-MCL, and an error-state Kalman filter that
+fuses LiDAR, IMU, and RTK-GNSS --- are placed behind a single ROS~2
+topic and TF contract, so that a 2D LiDAR, a 3D LiDAR, or a
+sensor-fused configuration is a deployment choice rather than a separate
+software stack. Each estimator is implemented as a pure C++ core with no
+dependence on the middleware runtime, making the filters unit-testable
+without ROS and letting the two MCL backends share one
+predict--weight--resample core that differs only in its measurement
+model. We claim no new filter theory; the novelty is the factoring that
+makes these families interchangeable and independently testable behind a
+familiar interface. \prismloc{} is released under the Apache-2.0 license
+at \url{https://github.com/kjungmo/prism_loc}.

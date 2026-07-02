@@ -24,10 +24,12 @@ class FusionLocalizationNode : public rclcpp::Node {
   void onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr msg);
   void onInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  void onWatchdog();
   bool tryInitialize();
   void publish(const rclcpp::Time& stamp);
 
   std::string global_frame_, odom_frame_, base_frame_;
+  std::string imu_topic_, points_topic_, gnss_topic_;
   double ndt_max_fitness_, points_voxel_leaf_, transform_tolerance_;
   double pose_pos_std_, pose_rot_std_, gnss_max_pos_cov_, initial_yaw_{0.0};
   int gnss_min_status_{0};
@@ -37,6 +39,9 @@ class FusionLocalizationNode : public rclcpp::Node {
   std::unique_ptr<NdtRegistration> ndt_;
 
   bool filter_init_{false}, have_attitude_{false}, have_position_{false}, last_imu_valid_{false};
+  // Startup watchdog: track whether each required input has been seen at least once.
+  bool imu_seen_{false}, points_seen_{false}, gnss_seen_{false};
+  rclcpp::TimerBase::SharedPtr watchdog_timer_;
   rclcpp::Time last_imu_time_;
   Eigen::Quaterniond init_attitude_{Eigen::Quaterniond::Identity()};
   Eigen::Vector3d init_position_{Eigen::Vector3d::Zero()};

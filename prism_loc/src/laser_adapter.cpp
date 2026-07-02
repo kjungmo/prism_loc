@@ -1,4 +1,5 @@
 #include "prism_loc/localization_node.hpp"
+#include <algorithm>
 #include <cmath>
 namespace prism_loc {
 
@@ -27,13 +28,22 @@ prism_loc_core::GridMap fromOccupancyGrid(const nav_msgs::msg::OccupancyGrid& ms
 }
 
 prism_loc_core::LaserScan2D fromLaserScan(const sensor_msgs::msg::LaserScan& msg,
-                                          const prism_loc_core::Pose2D& sensor_in_base) {
+                                          const prism_loc_core::Pose2D& sensor_in_base,
+                                          double laser_min_range,
+                                          double laser_max_range) {
   prism_loc_core::LaserScan2D s;
   s.ranges = msg.ranges;
   s.angle_min = msg.angle_min;
   s.angle_increment = msg.angle_increment;
-  s.range_min = msg.range_min;
-  s.range_max = msg.range_max;
+  // laser_min_range / laser_max_range == 0.0 means "use the scan message's own
+  // range_min / range_max". A positive override clamps (tightens) the accepted
+  // beam window; it never widens beyond what the sensor reports.
+  s.range_min = laser_min_range > 0.0
+                    ? std::max(static_cast<double>(msg.range_min), laser_min_range)
+                    : msg.range_min;
+  s.range_max = laser_max_range > 0.0
+                    ? std::min(static_cast<double>(msg.range_max), laser_max_range)
+                    : msg.range_max;
   s.sensor_in_base = sensor_in_base;
   return s;
 }

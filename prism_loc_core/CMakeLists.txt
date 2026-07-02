@@ -24,6 +24,9 @@ target_include_directories(prism_loc_core PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_link_libraries(prism_loc_core PUBLIC Eigen3::Eigen)
 target_compile_features(prism_loc_core PUBLIC cxx_std_17)
+# The ROS node packages link this static archive into their shared node
+# libraries, which requires position-independent code.
+set_target_properties(prism_loc_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 option(PRISM_LOC_CORE_BUILD_TESTS "Build prism_loc_core tests" OFF)
 

@@ -1,32 +1,40 @@
 /**:
   ros__parameters:
-    backend: "laser2d"
-    global_frame: "map"
-    odom_frame: "odom"
-    base_frame: "base_link"
-    scan_topic: "/scan"
-    map_topic: "/map"
-    min_particles: 500
-    max_particles: 2000
-    resample_threshold: 0.5
-    update_min_d: 0.2
-    update_min_a: 0.2
-    transform_tolerance: 0.1
-    alpha1: 0.2
-    alpha2: 0.2
-    alpha3: 0.2
-    alpha4: 0.2
-    max_beams: 60
-    z_hit: 0.5
-    z_rand: 0.5
-    sigma_hit: 0.2
-    likelihood_max_dist: 2.0
-    set_initial_pose: false
-    initial_pose_x: 0.0
-    initial_pose_y: 0.0
-    initial_pose_yaw: 0.0
-    try_global_localization: false
-    bbs_linear_window: 10.0
-    bbs_angular_step: 0.0175
-    bbs_max_depth: 6
-    bbs_min_score_fraction: 0.4
+    backend: "laser2d"                # str: localization backend selector ("laser2d" | "ndt3d")
+    global_frame: "map"               # str: fixed map frame that map->odom is broadcast in
+    odom_frame: "odom"                # str: odometry frame (child of map in the TF tree)
+    base_frame: "base_link"           # str: robot body frame the pose estimate refers to
+    scan_topic: "/scan"               # str: LaserScan input topic (subscribed BEST_EFFORT)
+    map_topic: "/map"                 # str: OccupancyGrid map topic (transient_local latched)
+    min_particles: 500                # count: lower bound on the particle set size
+    max_particles: 2000               # count: upper bound on the particle set size
+    resample_threshold: 0.5           # fraction: resample when Neff < threshold * N
+    kld_err: 0.05                     # fraction: KLD max error bound between true/estimated distribution
+    kld_z: 2.33                       # unitless: upper standard-normal quantile for KLD (~0.99)
+    kld_bin_xy: 0.5                   # m: KLD histogram bin size in x and y
+    kld_bin_yaw: 0.17                 # rad: KLD histogram bin size in yaw (~10 deg)
+    update_min_d: 0.2                 # m: min translation before a filter update runs
+    update_min_a: 0.2                 # rad: min rotation before a filter update runs
+    transform_tolerance: 0.1          # s: future-dating added to the map->odom TF stamp
+    alpha1: 0.2                       # unitless: odometry noise, rotation from rotation
+    alpha2: 0.2                       # unitless: odometry noise, rotation from translation
+    alpha3: 0.2                       # unitless: odometry noise, translation from translation
+    alpha4: 0.2                       # unitless: odometry noise, translation from rotation
+    max_beams: 60                     # count: laser beams subsampled per likelihood evaluation
+    z_hit: 0.5                        # weight: likelihood-field mixture weight for a true hit
+    z_rand: 0.5                       # weight: likelihood-field mixture weight for random noise
+    sigma_hit: 0.2                    # m: std-dev of the Gaussian around obstacles in the field
+    likelihood_max_dist: 2.0          # m: max distance the likelihood field is computed out to
+    laser_min_range: 0.0             # m: min accepted beam range (0.0 = use LaserScan.range_min)
+    laser_max_range: 0.0             # m: max accepted beam range (0.0 = use LaserScan.range_max)
+    set_initial_pose: false           # bool: seed a Gaussian at initial_pose_* on startup
+    initial_pose_x: 0.0               # m: initial pose x (used when set_initial_pose is true)
+    initial_pose_y: 0.0               # m: initial pose y (used when set_initial_pose is true)
+    initial_pose_yaw: 0.0             # rad: initial pose yaw (used when set_initial_pose is true)
+    try_global_localization: false    # bool: run BBS global localization until first converged fix
+    bbs_linear_window: 10.0           # m: +/- translation search window around the map center
+    bbs_angular_window: 3.14159265    # rad: +/- yaw search window (default M_PI = full circle)
+    bbs_angular_step: 0.0175          # rad: yaw search resolution (~1 deg)
+    bbs_max_depth: 6                  # count: branch-and-bound pyramid levels
+    bbs_max_beams: 120                # count: laser beams subsampled for BBS scoring
+    bbs_min_score_fraction: 0.4       # fraction: min score/used-beams for a BBS match to be valid

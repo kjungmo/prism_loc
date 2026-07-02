@@ -1,5 +1,7 @@
 #include "prism_loc/localization_node.hpp"
+#include <chrono>
 #include <cmath>
+#include <stdexcept>
 #include <tf2/time.h>
 #include <tf2/LinearMath/Quaternion.h>
 namespace prism_loc {
@@ -20,6 +22,11 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
   pp.min_particles = declare_parameter<int>("min_particles", 500);
   pp.max_particles = declare_parameter<int>("max_particles", 2000);
   pp.resample_threshold = declare_parameter<double>("resample_threshold", 0.5);
+  // KLD-sampling controls (defaults mirror ParticleFilterParams in prism_loc_core).
+  pp.kld_err = declare_parameter<double>("kld_err", 0.05);
+  pp.kld_z = declare_parameter<double>("kld_z", 2.33);
+  pp.kld_bin_xy = declare_parameter<double>("kld_bin_xy", 0.5);
+  pp.kld_bin_yaw = declare_parameter<double>("kld_bin_yaw", 0.17);
 
   prism_loc_core::MotionParams mp;
   mp.alpha1 = declare_parameter<double>("alpha1", 0.2);
@@ -48,41 +55,59 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("z_rand", 0.5);
     declare_parameter<double>("sigma_hit", 0.2);
     declare_parameter<double>("likelihood_max_dist", 2.0);
+    laser_min_range_ = declare_parameter<double>("laser_min_range", 0.0);
+    laser_max_range_ = declare_parameter<double>("laser_max_range", 0.0);
     try_global_localization_ = declare_parameter<bool>("try_global_localization", false);
     bbs_params_.linear_window = declare_parameter<double>("bbs_linear_window", 10.0);
+    bbs_params_.angular_window = declare_parameter<double>("bbs_angular_window", M_PI);
     bbs_params_.angular_step = declare_parameter<double>("bbs_angular_step", 0.0175);
     bbs_params_.max_depth = declare_parameter<int>("bbs_max_depth", 6);
+    bbs_params_.max_beams = declare_parameter<int>("bbs_max_beams", 120);
     bbs_params_.min_score_fraction = declare_parameter<double>("bbs_min_score_fraction", 0.4);
     bbs_params_.sigma_hit = get_parameter_or("sigma_hit", 0.2);
     global_loc_srv_ = create_service<std_srvs::srv::Empty>(
         "~/global_localization",
         std::bind(&LocalizationNode::onGlobalLocalization, this,
                   std::placeholders::_1, std::placeholders::_2));
+    map_topic_ = declare_parameter<std::string>("map_topic", "/map");
+    scan_topic_ = declare_parameter<std::string>("scan_topic", "/scan");
+    // /map must stay transient_local+reliable to latch a one-shot map from map_server.
     const auto map_qos = rclcpp::QoS(1).transient_local().reliable();
     map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(
-        declare_parameter<std::string>("map_topic", "/map"), map_qos,
+        map_topic_, map_qos,
         std::bind(&LocalizationNode::onMap, this, std::placeholders::_1));
+    // Sensor scans commonly arrive BEST_EFFORT, so match with SensorDataQoS.
     scan_sub_ = create_subscription<sensor_msgs::msg::LaserScan>(
-        declare_parameter<std::string>("scan_topic", "/scan"), rclcpp::SensorDataQoS(),
+        scan_topic_, rclcpp::SensorDataQoS(),
         std::bind(&LocalizationNode::onScan, this, std::placeholders::_1));
   } else {  // ndt3d
     const std::string pcd = declare_parameter<std::string>("map_pcd_path", "");
     const double res = declare_parameter<double>("ndt_resolution", 1.0);
     const int minpts = declare_parameter<int>("voxel_min_points", 5);
+    if (pcd.empty()) {
+      RCLCPP_ERROR(get_logger(), "ndt3d: map_pcd_path is empty");
+      throw std::runtime_error(
+          "ndt3d: map_pcd_path is empty - set map_pcd_path to a valid .pcd map file "
+          "(e.g. ros2 launch ... map_pcd_path:=/abs/path/to/map.pcd)");
+    }
     auto pts = loadPcd(pcd);
     if (pts.empty()) {
       RCLCPP_ERROR(get_logger(), "ndt3d: failed to load PCD or empty: %s", pcd.c_str());
-    } else {
-      ndt_map_ = std::make_shared<prism_loc_core::NdtMap>(pts, res, minpts);
-      prism_loc_core::NdtParams np;
-      np.max_points = declare_parameter<int>("max_points", 500);
-      np.base_height = declare_parameter<double>("base_height", 0.0);
-      ndt_model_ = std::make_shared<prism_loc_core::Ndt3DModel>(ndt_map_, np);
-      map_ready_ = true;
-      RCLCPP_INFO(get_logger(), "ndt3d: NDT map built (%zu voxels)", ndt_map_->numVoxels());
+      throw std::runtime_error(
+          "ndt3d: could not load a non-empty PCD map from '" + pcd +
+          "' - check the file exists, is readable, and is a valid non-empty point cloud");
     }
+    ndt_map_ = std::make_shared<prism_loc_core::NdtMap>(pts, res, minpts);
+    prism_loc_core::NdtParams np;
+    np.max_points = declare_parameter<int>("max_points", 500);
+    np.base_height = declare_parameter<double>("base_height", 0.0);
+    ndt_model_ = std::make_shared<prism_loc_core::Ndt3DModel>(ndt_map_, np);
+    map_ready_ = true;
+    RCLCPP_INFO(get_logger(), "ndt3d: NDT map built (%zu voxels)", ndt_map_->numVoxels());
+    points_topic_ = declare_parameter<std::string>("points_topic", "/points");
+    // Sensor point clouds commonly arrive BEST_EFFORT, so match with SensorDataQoS.
     points_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-        declare_parameter<std::string>("points_topic", "/points"), rclcpp::SensorDataQoS(),
+        points_topic_, rclcpp::SensorDataQoS(),
         std::bind(&LocalizationNode::onPoints, this, std::placeholders::_1));
   }
 
@@ -93,11 +118,43 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     pf_->initializeGaussian(ip, Pose2D{0.5, 0.5, 0.25}, pp.max_particles / 2);
     filter_init_ = true; force_update_ = true;
   }
+  // Startup watchdog: warn every 10 s about required inputs that have gone silent.
+  watchdog_timer_ = create_wall_timer(std::chrono::seconds(10),
+                                      std::bind(&LocalizationNode::onWatchdog, this));
   RCLCPP_INFO(get_logger(), "prism_loc up: backend=%s", backend_.c_str());
+}
+
+void LocalizationNode::onWatchdog() {
+  std::lock_guard<std::mutex> lk(mutex_);
+  bool all_seen = true;
+  if (backend_ == "laser2d") {
+    if (!map_seen_) {
+      all_seen = false;
+      RCLCPP_WARN(get_logger(),
+                  "no messages on %s (%zu publishers) - check map_topic and that a map "
+                  "server is publishing an OccupancyGrid (transient_local)",
+                  map_topic_.c_str(), count_publishers(map_topic_));
+    }
+    if (!scan_seen_) {
+      all_seen = false;
+      RCLCPP_WARN(get_logger(),
+                  "no messages on %s (%zu publishers) - check scan_topic and the sensor driver",
+                  scan_topic_.c_str(), count_publishers(scan_topic_));
+    }
+  } else {
+    if (!points_seen_) {
+      all_seen = false;
+      RCLCPP_WARN(get_logger(),
+                  "no messages on %s (%zu publishers) - check points_topic and the sensor driver",
+                  points_topic_.c_str(), count_publishers(points_topic_));
+    }
+  }
+  if (all_seen) watchdog_timer_->cancel();
 }
 
 void LocalizationNode::onMap(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
+  map_seen_ = true;
   auto grid = fromOccupancyGrid(*msg);
   prism_loc_core::LaserParams lp;
   lp.max_beams = get_parameter_or("max_beams", 60);
@@ -142,10 +199,17 @@ bool LocalizationNode::lookupSensor(const std::string& sensor_frame, Pose2D& sen
 
 void LocalizationNode::onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
-  if (!map_ready_ || !laser_model_) return;
+  scan_seen_ = true;
+  if (!map_ready_ || !laser_model_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onScan: waiting for a map on '%s' - none received yet; start a map "
+                         "server or check map_topic",
+                         map_topic_.c_str());
+    return;
+  }
   Pose2D sib;
   if (!lookupSensor(msg->header.frame_id, sib)) return;
-  const auto scan = fromLaserScan(*msg, sib);
+  const auto scan = fromLaserScan(*msg, sib, laser_min_range_, laser_max_range_);
 
   if (bbs_matcher_ && (relocalize_requested_ || (!filter_init_ && try_global_localization_))) {
     const prism_loc_core::BbsResult r = bbs_matcher_->match(scan, bbs_center_);
@@ -164,14 +228,32 @@ void LocalizationNode::onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg) 
     }
   }
 
-  if (!filter_init_) return;
+  if (!filter_init_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onScan: waiting for an initial pose - publish to /initialpose "
+                         "(RViz '2D Pose Estimate'), or enable try_global_localization / call "
+                         "the ~/global_localization service to relocalize");
+    return;
+  }
   laser_model_->setScan(scan);
   runUpdate(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
 }
 
 void LocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
-  if (!map_ready_ || !ndt_model_ || !filter_init_) return;
+  points_seen_ = true;
+  if (!map_ready_ || !ndt_model_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onPoints: NDT map not ready - map_pcd_path failed to load; "
+                         "check map_pcd_path");
+    return;
+  }
+  if (!filter_init_) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                         "onPoints: waiting for an initial pose - publish to /initialpose, "
+                         "or set set_initial_pose:=true with initial_pose_x/y/yaw");
+    return;
+  }
   Pose2D sib;
   if (!lookupSensor(msg->header.frame_id, sib)) return;
   ndt_model_->setCloud(fromPointCloud2(*msg), sib);

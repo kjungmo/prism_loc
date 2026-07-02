@@ -1,0 +1,140 @@
+\section{Estimator Cores}\label{sec:cores}
+
+This section describes the three estimator families that \prismloc\ places
+behind a single ROS~2 contract. All three are implemented as ROS-free C++
+libraries: the two Monte Carlo localization (MCL) backends and the global
+relocalizer live in \texttt{prism\_loc\_core}, and the fusion filter lives in
+\texttt{prism\_loc\_fusion}. Consistent with the architectural framing of
+Section~\ref{sec:architecture}, the contribution here is factoring, not new
+estimation theory: we reuse textbook constructions and report only what the
+code implements.
+
+\subsection{Shared Monte Carlo Localization Core}
+
+The two 2D and 3D pose-tracking backends share one particle filter. Following
+Thrun-style MCL, the pose posterior at time $t$ is a weighted sample set
+$\{(x_t^{[i]}, w_t^{[i]})\}_{i=1}^{N}$ over the planar pose
+$x_t = (x, y, \theta)$ (\texttt{Pose2D}), updated by the standard
+predict--weight--resample recursion. Only the measurement model differs between
+backends, so the entire filter is written against an abstract interface rather
+than any specific sensor.
+
+\paragraph{Motion model} \texttt{OdometryMotionModel} implements the
+sampling-based odometry model. Each control $u_t$ is decomposed into a first
+rotation, a translation, and a second rotation
+$(\delta_{r1}, \delta_{t}, \delta_{r2})$ from consecutive odometry poses, and
+each particle is advanced by the noise-corrupted increment
+\begin{align}
+\hat{\delta}_{r1} &= \delta_{r1} - \varepsilon(\alpha_1 \delta_{r1}^2 + \alpha_2 \delta_{t}^2), \nonumber\\
+\hat{\delta}_{t}  &= \delta_{t}  - \varepsilon(\alpha_3 \delta_{t}^2 + \alpha_4(\delta_{r1}^2 + \delta_{r2}^2)), \nonumber\\
+\hat{\delta}_{r2} &= \delta_{r2} - \varepsilon(\alpha_1 \delta_{r2}^2 + \alpha_2 \delta_{t}^2),
+\end{align}
+where $\varepsilon(\sigma^2)$ draws zero-mean Gaussian noise with the given
+variance and $\alpha_{1\text{--}4}$ (\texttt{MotionParams}) are the usual
+rotation/translation noise coefficients. A pure-rotation guard sets
+$\delta_{r1}=0$ when the translation is below $10^{-3}$~m to avoid an ill-defined
+heading.
+
+\paragraph{Particle filter} \texttt{ParticleFilter} weights each particle by the
+measurement model's log-likelihood, subtracting the per-step maximum before
+exponentiation for numerical stability, then normalizing. Resampling is
+triggered only when the effective sample size
+$N_\mathrm{eff} = (\sum_i w^{[i]})^2 / \sum_i (w^{[i]})^2$ drops below
+\texttt{resample\_threshold} times $N$, and is KLD-adaptive~\cite{fox2003kld}:
+samples are drawn proportional to weight until the count reaches the
+Kullback--Leibler bound
+\begin{equation}
+M_x = \frac{k-1}{2\,\varepsilon_\mathrm{kld}}
+      \left(1 - \frac{2}{9(k-1)} + \sqrt{\tfrac{2}{9(k-1)}}\,z_{1-\delta}\right)^{3},
+\end{equation}
+where $k$ is the number of occupied histogram bins seen so far. Bins are formed
+by discretizing $(x,y)$ at \texttt{kld\_bin\_xy} and $\theta$ at
+\texttt{kld\_bin\_yaw}; the sample count is clamped to
+$[\texttt{min\_particles}, \texttt{max\_particles}]$, and $z_{1-\delta}$
+(\texttt{kld\_z}) and $\varepsilon_\mathrm{kld}$ (\texttt{kld\_err}) are the
+standard-normal quantile and error bound. The pose estimate is the weighted mean
+of $(x,y)$ and the circular mean of $\theta$; the reported $6\times6$ covariance
+carries the planar terms and marks $z$, roll, and pitch as unobserved.
+
+\paragraph{Measurement models} A backend supplies a \texttt{MeasurementModel},
+whose sole method returns the unnormalized log-likelihood of the current
+observation given a candidate pose. Two are provided.
+\texttt{Laser2DLikelihoodField} is a Thrun-style likelihood-field model for 2D
+scans~\cite{thrun2001robust}: an occupancy grid is preprocessed into a
+\texttt{LikelihoodField} that stores, per cell, the Euclidean distance $d$ to the
+nearest occupied cell (computed once by a separable distance transform), and each
+subsampled beam endpoint contributes
+$\log\!\big(z_\mathrm{hit}\,e^{-d^2/2\sigma_\mathrm{hit}^2} + z_\mathrm{rand}/z_\mathrm{max}\big)$,
+with \texttt{z\_hit}, \texttt{z\_rand}, \texttt{sigma\_hit}, and
+\texttt{max\_beams} as parameters. \texttt{Ndt3DModel} reuses the identical
+filter but scores a 3D point cloud against a Normal Distributions Transform
+map~\cite{biber2003ndt,magnusson2007scan}. The prior map is voxelized into
+per-voxel Gaussians $(\mu_v, \Sigma_v)$ (\texttt{NdtMap}, with small eigenvalues
+inflated to a fraction of the largest for numerical conditioning), and the
+per-particle likelihood accumulates
+$\log\!\big(s(p) + s_\mathrm{floor}\big)$ over cloud points $p$, where
+$s(p) = \exp\!\big(-\tfrac{1}{2}(p-\mu_v)^\top \Sigma_v^{-1}(p-\mu_v)\big)$ and
+empty voxels score zero. The planar particle state $(x,y,\theta)$ is lifted to a
+3D transform at a fixed base height, so the 3D backend estimates the same
+$(x,y,\theta)$ as the 2D one. This is the NDT-as-measurement-model (NDT-MCL)
+idea: the NDT score usually optimized by Newton registration is instead read out
+as a particle likelihood, so the two backends differ only in this class.
+
+\subsection{Branch-and-Bound Global Localization}\label{sec:global}
+
+Recovery from a lost or kidnapped estimate is handled by a deterministic
+correlative scan matcher, \texttt{BranchAndBoundMatcher}, following Olson's
+multi-resolution correlative search~\cite{olson2009correlative} and the
+branch-and-bound formulation of Hess et al.~\cite{hess2016realtime}. At
+construction the likelihood field is converted into a probability grid
+$p = e^{-d^2/2\sigma_\mathrm{hit}^2}$, and a max-pooling pyramid of
+\texttt{max\_depth}$+1$ levels is precomputed, where level $h$ stores the maximum
+over a $2^h\times2^h$ cell block. A search then proceeds over discretized poses:
+translations within \texttt{linear\_window} and rotations spanning
+\texttt{angular\_window} at \texttt{angular\_step} resolution. Coarse nodes are
+expanded best-first and pruned whenever their pyramid-derived upper bound cannot
+exceed the best exact (leaf) score found so far, which keeps the bound
+admissible and the returned pose globally optimal over the discretization. The
+result is accepted only when its score reaches \texttt{min\_score\_fraction} of
+the number of beams used; an accepted pose re-seeds the particle filter, whereas
+a rejected one leaves the current estimate untouched. Unlike the stochastic
+random-injection recovery of classical MCL, this search is deterministic and
+therefore directly reproducible in a unit test.
+
+\subsection{Error-State Kalman Filter Fusion}
+
+The fusion backend, \texttt{Eskf}, is a 15-state error-state Kalman filter that
+follows Sol\`a's quaternion formulation~\cite{sola2017quaternion}. The nominal
+state (\texttt{NominalState}) carries position $p$, velocity $v$, orientation
+quaternion $q$, accelerometer bias $b_a$, and gyroscope bias $b_g$; the error
+state $\delta x \in \mathbb{R}^{15}$ collects
+$(\delta p, \delta v, \delta\theta, \delta b_a, \delta b_g)$ with a local
+angular error $\delta\theta$. On each IMU sample the nominal state is integrated
+in closed form,
+\begin{equation}
+p \mathrel{+}= v\,\Delta t + \tfrac{1}{2} a_w \Delta t^2,\quad
+v \mathrel{+}= a_w \Delta t,\quad
+q \leftarrow q \otimes \mathrm{Exp}(\omega\,\Delta t),
+\end{equation}
+where $a_w = R(q)(a_m - b_a) + g$ and $\omega = \omega_m - b_g$ are the
+bias-corrected, gravity-compensated measurements, and $\mathrm{Exp}(\cdot)$ is
+the $SO(3)$ exponential (\texttt{so3.hpp}). The error covariance is propagated
+with the discrete transition $F$ and additive process noise $Q$ built from the
+IMU noise parameters,
+\begin{equation}
+P \leftarrow F\,P\,F^\top + Q .
+\end{equation}
+Two measurement updates share the standard Kalman gain
+$K = P H^\top (H P H^\top + R)^{-1}$, $\delta x = K\,y$,
+$P \leftarrow (I - KH)P$: \texttt{updatePose} applies a 6-DoF NDT pose
+observation whose residual stacks the position error and the local orientation
+error $\log(q^{-1} q_\mathrm{meas})$, while \texttt{updatePosition} applies a
+3-DoF GNSS position observation. GNSS fixes are mapped from geodetic
+coordinates into a local ENU frame through a WGS-84 LLA$\rightarrow$ECEF$\rightarrow$ENU
+conversion about a fixed datum (\texttt{GeodeticConverter}). After each update
+the estimated error is injected into the nominal state --- additively for the
+vector components and multiplicatively, $q \leftarrow q \otimes
+\mathrm{Exp}(\delta\theta)$, for the orientation --- and the error state is reset
+to zero. Because the filter takes plain vectors and quaternions rather than ROS
+messages, the entire predict--correct--inject--reset cycle is exercised in ROS-free unit
+tests.

@@ -1,0 +1,65 @@
+\section{Implementation and Validation}\label{sec:validation}
+
+\prismloc{} is validated at the level of \emph{correctness}, not
+field accuracy. Because every estimator is a ROS-free library
+(Section~\ref{sec:cores}), each can be exercised by an ordinary
+C++ unit test with no middleware runtime, no simulator, and no
+recorded bags. The suite comprises 44 GoogleTest cases across four
+packages: 25 in the shared \texttt{prism\_loc\_core} (the two MCL
+backends and global recovery), 13 in \texttt{prism\_loc\_fusion} (the
+ESKF), 4 in the \texttt{prism\_loc} ROS node's adapter layer, and 2 in
+\texttt{prism\_loc\_fusion\_ros}.
+
+\textbf{What the cores are pinned to.}
+The core tests target the components most likely to regress silently.
+The odometry motion model is checked both deterministically
+(zero-command and pure-translation cases) and statistically (the mean
+of noisy samples approximates the commanded motion). Measurement models
+are checked for the monotonicity property they must satisfy to be usable
+as a likelihood: the ground-truth pose must out-score a displaced one,
+for both the 2D likelihood field and the 3D NDT voxel score. The
+particle-filter mechanics---low-variance resampling concentrating on a
+heavy particle, and the weighted-mean estimate---are tested directly, as
+are the occupancy-grid and NDT-map primitives (world/map round-trips,
+out-of-bounds handling, likelihood-field distances, and voxel-mean
+recovery). Global recovery is exercised by having branch-and-bound
+recover the correct global pose from a single scan---the kidnapped-robot
+scenario---and reject an empty scan. Two integration tests close the
+loop end to end, driving the full predict--weight--resample cycle until
+the estimate converges to ground truth for the \texttt{laser2d} and
+\texttt{ndt3d} backends respectively.
+
+\textbf{Fusion and math.}
+The ESKF is pinned for both convergence and consistency: a static IMU
+leaves the state at rest, constant acceleration reproduces the expected
+kinematics, and position and pose updates pull the state toward the
+measurement; an integration test tracks a moving target from a
+deliberately wrong initial guess. Supporting identities are verified
+independently---$SO(3)$ exponential/logarithm round-trips and the
+skew/cross-product relation, geodetic ENU round-trips against a datum,
+and the \texttt{map}$\to$\texttt{odom} TF composition arithmetic used to
+publish the correction transform.
+
+\textbf{Determinism.}
+Every stochastic path draws from a single seedable generator exposed as
+the ROS parameter \texttt{seed} (default \texttt{42}). The RNG tests
+assert that equal seeds reproduce identical sequences and that distinct
+seeds differ, so the statistical assertions above are reproducible run
+to run rather than flaky.
+
+\textbf{Continuous integration.}
+Two CI jobs guard the contract from both sides. A \emph{core} job builds
+\texttt{prism\_loc\_core} and \texttt{prism\_loc\_fusion} with plain
+CMake and runs \texttt{ctest}, requiring only a compiler and Eigen---no
+ROS---which keeps the cores honestly middleware-independent. A separate
+\emph{ROS} job builds inside a \texttt{ros:humble} container, resolves
+dependencies with \texttt{rosdep}, and runs \texttt{colcon build} and
+\texttt{colcon test} across all four packages, so the ROS~2 wrapping is
+tested against a real distribution.
+
+\textbf{Scope.}
+This validation establishes that the estimators are individually correct
+and that all three sit behind one working ROS~2 contract; it is
+deliberately not an accuracy benchmark. The planned quantitative field
+evaluation is discussed with the other roadmap items in
+Section~\ref{sec:limitations}.

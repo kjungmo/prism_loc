@@ -28,3 +28,39 @@ jobs:
           cmake -S prism_loc_fusion -B build/fusion -DPRISM_LOC_FUSION_BUILD_TESTS=ON
           cmake --build build/fusion -j
           ( cd build/fusion && ctest --output-on-failure )
+
+  ros-build:
+    name: ROS 2 Humble build & test
+    runs-on: ubuntu-latest
+    container:
+      image: ros:humble
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src/prism_loc
+
+      - name: apt-get update
+        run: apt-get update
+
+      - name: rosdep update & install
+        run: |
+          rosdep update
+          rosdep install --from-paths src --ignore-src -r -y
+
+      - name: colcon build
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install --event-handlers console_direct+
+
+      - name: colcon test
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon test --packages-select prism_loc_core prism_loc prism_loc_fusion prism_loc_fusion_ros
+
+      - name: colcon test-result
+        shell: bash
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon test-result --verbose
