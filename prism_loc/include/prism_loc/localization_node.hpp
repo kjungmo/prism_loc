@@ -27,7 +27,9 @@ namespace prism_loc {
 
 prism_loc_core::GridMap fromOccupancyGrid(const nav_msgs::msg::OccupancyGrid& msg);
 prism_loc_core::LaserScan2D fromLaserScan(const sensor_msgs::msg::LaserScan& msg,
-                                          const prism_loc_core::Pose2D& sensor_in_base);
+                                          const prism_loc_core::Pose2D& sensor_in_base,
+                                          double laser_min_range = 0.0,
+                                          double laser_max_range = 0.0);
 std::vector<Eigen::Vector3d> fromPointCloud2(const sensor_msgs::msg::PointCloud2& msg);
 std::vector<Eigen::Vector3d> loadPcd(const std::string& path);
 prism_loc_core::Pose2D toPose2D(const geometry_msgs::msg::Transform& t);
@@ -42,13 +44,16 @@ class LocalizationNode : public rclcpp::Node {
   void onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg);
   void onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void onInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
+  void onWatchdog();
   void runUpdate(const rclcpp::Time& stamp);
   bool lookupOdom(const rclcpp::Time& stamp, prism_loc_core::Pose2D& odom_base);
   bool lookupSensor(const std::string& sensor_frame, prism_loc_core::Pose2D& sensor_in_base);
   void publish(const rclcpp::Time& stamp, const prism_loc_core::Pose2D& odom_base);
 
   std::string backend_, global_frame_, odom_frame_, base_frame_;
+  std::string scan_topic_, map_topic_, points_topic_;
   double update_min_d_{0.2}, update_min_a_{0.2}, transform_tolerance_{0.1};
+  double laser_min_range_{0.0}, laser_max_range_{0.0};
   bool tf_broadcast_{true};
 
   std::unique_ptr<prism_loc_core::Rng> rng_;
@@ -68,6 +73,9 @@ class LocalizationNode : public rclcpp::Node {
 
   bool map_ready_{false}, filter_init_{false}, force_update_{false};
   bool have_last_odom_{false}, have_map_odom_{false};
+  // Startup watchdog: track whether each required input has been seen at least once.
+  bool scan_seen_{false}, map_seen_{false}, points_seen_{false};
+  rclcpp::TimerBase::SharedPtr watchdog_timer_;
   prism_loc_core::Pose2D last_odom_, map_odom_;
   Eigen::Matrix<double, 6, 6> last_cov_ = Eigen::Matrix<double, 6, 6>::Zero();
 

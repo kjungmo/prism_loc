@@ -1,29 +1,29 @@
 /**:
   ros__parameters:
-    global_frame: "map"
-    odom_frame: "odom"
-    base_frame: "base_link"
-    imu_topic: "/imu"
-    points_topic: "/points"
-    gnss_topic: "/gnss"
-    map_pcd_path: ""
-    ndt_resolution: 1.0
-    ndt_step_size: 0.1
-    ndt_epsilon: 0.01
-    ndt_max_iter: 30
-    ndt_max_fitness: 2.0
-    points_voxel_leaf: 0.5
-    pose_pos_std: 0.1
-    pose_rot_std: 0.05
-    sigma_acc: 0.01
-    sigma_gyro: 0.001
-    sigma_acc_bias: 0.0001
-    sigma_gyro_bias: 0.00001
-    use_datum: false
-    datum_lat: 0.0
-    datum_lon: 0.0
-    datum_alt: 0.0
-    gnss_min_status: 0
-    gnss_max_pos_cov: 25.0
-    initial_yaw: 0.0
-    transform_tolerance: 0.1
+    global_frame: "map"               # str: fixed map frame that the fused pose is expressed in
+    odom_frame: "odom"                # str: odometry frame (child of map in the TF tree)
+    base_frame: "base_link"           # str: robot body frame the pose estimate refers to
+    imu_topic: "/imu"                 # str: sensor_msgs/Imu input topic (subscribed BEST_EFFORT)
+    points_topic: "/points"           # str: PointCloud2 input topic (subscribed BEST_EFFORT)
+    gnss_topic: "/gnss"               # str: sensor_msgs/NavSatFix input topic (subscribed BEST_EFFORT)
+    map_pcd_path: ""                  # str: absolute path to the .pcd map (REQUIRED; empty aborts startup)
+    ndt_resolution: 1.0               # m: NDT voxel (cell) edge length for the map
+    ndt_step_size: 0.1                # m: NDT line-search maximum step length
+    ndt_epsilon: 0.01                 # m: NDT convergence threshold on the transform delta
+    ndt_max_iter: 30                  # count: NDT max optimization iterations per align
+    ndt_max_fitness: 2.0              # score: reject NDT results whose fitness exceeds this
+    points_voxel_leaf: 0.5            # m: voxel-grid downsample leaf size for incoming scans
+    pose_pos_std: 0.1                 # m: assumed std-dev of the NDT position measurement
+    pose_rot_std: 0.05                # rad: assumed std-dev of the NDT orientation measurement
+    sigma_acc: 0.01                   # m/s^2: accelerometer white-noise std-dev (ESKF process)
+    sigma_gyro: 0.001                 # rad/s: gyroscope white-noise std-dev (ESKF process)
+    sigma_acc_bias: 0.0001            # m/s^3: accelerometer bias random-walk std-dev
+    sigma_gyro_bias: 0.00001          # rad/s^2: gyroscope bias random-walk std-dev
+    use_datum: false                  # bool: use a fixed ENU datum instead of the first GNSS fix
+    datum_lat: 0.0                    # deg: datum latitude (used when use_datum is true)
+    datum_lon: 0.0                    # deg: datum longitude (used when use_datum is true)
+    datum_alt: 0.0                    # m: datum altitude (used when use_datum is true)
+    gnss_min_status: 0                # enum: min NavSatFix.status.status accepted (>= this value)
+    gnss_max_pos_cov: 25.0            # m^2: reject GNSS fixes whose x position variance exceeds this
+    initial_yaw: 0.0                  # rad: assumed initial heading when seeding attitude from accel
+    transform_tolerance: 0.1          # s: future-dating added to the map->odom TF stamp
