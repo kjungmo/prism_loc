@@ -1,0 +1,14 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Ablation by clutter level.} The 100 BBS queries of \Cref{fig:bbs} split into thirds of the clutter range $[0,0.8]$ by the per-query \code{clutter\_frac} column; success as in \Cref{tab:bbs_eskf}, acceptance at $\rho=0.40$.}\label{tab:clutter}
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Clutter probability & Queries & Success & Accepted & Median pos.\ err.\ (m) & Median score fraction \\
+\midrule
+$[0,\,0.267)$ & 37 & 37 & 37 & 0.040 & 0.831 \\
+$[0.267,\,0.533)$ & 30 & 30 & 30 & 0.032 & 0.624 \\
+$[0.533,\,0.8]$ & 33 & 30 & 11 & 0.037 & 0.353 \\
+\bottomrule
+\end{tabular}
+\end{table}

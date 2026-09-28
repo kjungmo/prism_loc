@@ -1,0 +1,65 @@
+% mcl_tracking.tex -- laser2d MCL tracking error and KLD particle count (SYNTHETIC data).
+% Data: data/mcl_tracking.csv, data/mcl_particles.csv (copies of docs/paper/data/*,
+% produced by experiments/mcl_tracking.cpp). Every plotted value is read from the CSVs.
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[b]{0.52\linewidth}
+  \centering
+  \begin{tikzpicture}
+    \begin{groupplot}[
+        group style={group size=1 by 2, vertical sep=0.9cm},
+        scaled y ticks=false,
+        width=0.9\linewidth, height=0.47\linewidth,
+        xmin=0, xmax=65, xtick={0,10,20,30,40,50,60},
+        tick label style={font=\scriptsize}, label style={font=\scriptsize},
+        legend style={font=\scriptsize, at={(0.98,0.97)}, anchor=north east,
+                      draw=black!40, fill=white, fill opacity=0.85, text opacity=1,
+                      /tikz/every even column/.append style={column sep=4pt}},
+        legend columns=3, legend cell align=left,
+        axis on top, grid=major, grid style={gray!20},
+      ]
+      \nextgroupplot[ymin=0, ymax=0.55, ytick={0,0.1,0.2,0.3,0.4}, ylabel={Position error (m)}]
+      \addplot[black, solid, line width=0.5pt] table [col sep=comma, x=t, y=pos_err_s0] {data/mcl_tracking.csv};
+      \addlegendentry{seed 101}
+      \addplot[blue!70!black, dashed, line width=0.5pt] table [col sep=comma, x=t, y=pos_err_s1] {data/mcl_tracking.csv};
+      \addlegendentry{seed 202}
+      \addplot[orange!85!black, dotted, line width=0.8pt] table [col sep=comma, x=t, y=pos_err_s2] {data/mcl_tracking.csv};
+      \addlegendentry{seed 303}
+      \nextgroupplot[ymin=0, ymax=0.24, ytick={0,0.05,0.10,0.15,0.20}, yticklabel style={/pgf/number format/fixed, /pgf/number format/precision=2}, xlabel={Time (s)}, ylabel={Yaw error (rad)}]
+      \addplot[black, solid, line width=0.5pt] table [col sep=comma, x=t, y=yaw_err_s0] {data/mcl_tracking.csv};
+      \addplot[blue!70!black, dashed, line width=0.5pt] table [col sep=comma, x=t, y=yaw_err_s1] {data/mcl_tracking.csv};
+      \addplot[orange!85!black, dotted, line width=0.8pt] table [col sep=comma, x=t, y=yaw_err_s2] {data/mcl_tracking.csv};
+    \end{groupplot}
+  \end{tikzpicture}
+  \caption{Tracking error (three fixed seeds).}\label{fig:mcl:err}
+  \end{subfigure}\hfill
+  \begin{subfigure}[b]{0.45\linewidth}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        width=0.86\linewidth, height=0.95\linewidth,
+        xmin=0, xmax=65, ymin=0, ymax=2300,
+        xlabel={Time (s)}, ylabel={Particle count},
+        xtick={0,20,40,60}, ytick={0,500,1000,1500,2000},
+        tick label style={font=\scriptsize}, label style={font=\scriptsize},
+        legend style={font=\scriptsize, at={(0.97,0.62)}, anchor=east,
+                      draw=black!40, fill=white, fill opacity=0.85, text opacity=1},
+        legend cell align=left, axis on top, grid=major, grid style={gray!20},
+      ]
+      \addplot[black!55, dash dot, line width=0.8pt, forget plot] coordinates {(0,2000) (65,2000)};
+      \node[anchor=south east, font=\scriptsize, text=black!60] at (axis cs:64.5,2010) {\code{max\_particles}};
+      \addplot[black!55, dash dot, line width=0.8pt, forget plot] coordinates {(0,500) (65,500)};
+      \node[anchor=north east, font=\scriptsize, text=black!60] at (axis cs:64.5,490) {\code{min\_particles}};
+      \addplot[black, solid, line width=0.5pt] table [col sep=comma, x=t, y=n_s0] {data/mcl_particles.csv};
+      \addlegendentry{seed 101}
+      \addplot[blue!70!black, dashed, line width=0.5pt] table [col sep=comma, x=t, y=n_s1] {data/mcl_particles.csv};
+      \addlegendentry{seed 202}
+      \addplot[orange!85!black, dotted, line width=0.8pt] table [col sep=comma, x=t, y=n_s2] {data/mcl_particles.csv};
+      \addlegendentry{seed 303}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{KLD-adaptive particle count.}\label{fig:mcl:kld}
+  \end{subfigure}
+  \caption{\textbf{\code{laser2d} closed-loop tracking on synthetic data.} A simulated robot drives a closed oval loop (semi-axes 3.6\,m and 2.6\,m) for 65\,s at 10\,Hz in a 12\,m$\times$10\,m grid with two symmetry-breaking pillars; the real \code{ParticleFilter} with \code{Laser2DLikelihoodField} and KLD resampling is updated exactly as in \Cref{alg:mcl}. (a)~Starting from a broad prior, the filter converges within a few updates; across the three seeds the steady-state ($t\ge10$\,s) mean position error is 0.105\,m (max 0.29\,m) and the mean yaw error 0.032\,rad (max 0.18\,rad). (b)~The particle set starts at the 2000-particle ceiling and collapses to the 500-particle floor after the first post-convergence update, where it stays.}
+  \label{fig:mcl}
+\end{figure}

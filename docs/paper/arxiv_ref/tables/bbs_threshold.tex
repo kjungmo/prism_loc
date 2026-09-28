@@ -1,0 +1,14 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Ablation of the BBS acceptance threshold $\rho$} (\Cref{eq:bbsaccept}), recomputed post hoc from the score fractions in \code{data/bbs\_relocalization.csv}; no search is re-run. ``Rejected correct'' counts successful matches that the threshold would discard. The shipped default is $\rho=0.40$.}\label{tab:threshold}
+\small
+\begin{tabular}{@{}lcccccccc@{}}
+\toprule
+$\rho$ & 0.20 & 0.25 & 0.30 & 0.35 & \textbf{0.40} & 0.45 & 0.50 & 0.60 \\
+\midrule
+Accepted & 100 & 98 & 94 & 84 & 78 & 73 & 67 & 54 \\
+False accepts & 3 & 2 & 0 & 0 & 0 & 0 & 0 & 0 \\
+Rejected correct & 0 & 1 & 3 & 13 & 19 & 24 & 30 & 43 \\
+\bottomrule
+\end{tabular}
+\end{table}

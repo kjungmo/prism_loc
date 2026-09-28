@@ -1,0 +1,14 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Per-backend topic contract.} All backends additionally subscribe \code{/initialpose} and the TF \code{odom}$\to$\code{base\_link}, and broadcast \code{map}$\to$\code{odom} by \Cref{eq:mapodom} with the stamp future-dated by \code{transform\_tolerance} (default 0.1\,s).}\label{tab:contract}
+\small
+\begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+Backend & Estimator core & Inputs & Outputs \\
+\midrule
+\code{laser2d} & MCL + likelihood field (\Cref{eq:laser}) & \code{/scan}, \code{/map} (\code{OccupancyGrid}) & \code{\char`~/pose}, \code{\char`~/particle\_cloud} \\
+\code{ndt3d} & MCL + NDT score (\Cref{eq:ndt}) & \code{/points}, \code{.pcd} map file & \code{\char`~/pose}, \code{\char`~/particle\_cloud} \\
+\code{fusion3d} & 15-state ESKF (\Cref{eq:eskfpred,eq:eskfupd}) & \code{/points}, \code{/imu}, \code{/gnss} (\code{NavSatFix}), \code{.pcd} map file & \code{\char`~/pose}, \code{\char`~/odometry} \\
+\bottomrule
+\end{tabularx}
+\end{table}

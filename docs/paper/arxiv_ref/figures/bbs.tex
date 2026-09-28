@@ -1,0 +1,41 @@
+% bbs.tex -- BBS kidnapped-robot relocalization (SYNTHETIC data).
+% Data: data/bbs_relocalization.csv (copy of docs/paper/data/, produced by
+% experiments/bbs_relocalization.cpp). Every plotted value is read from the CSV.
+\pgfplotsset{
+  discard if not/.style 2 args={
+    x filter/.code={%
+      \edef\tempa{\thisrow{#1}}\edef\tempb{#2}%
+      \ifx\tempa\tempb\else\def\pgfmathresult{}\fi
+    }
+  }
+}
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+        width=0.66\linewidth, height=0.44\linewidth,
+        xmin=0, xmax=1.0, ymode=log, ymin=0.002, ymax=8,
+        xlabel={BBS score fraction $S_0^\star/|\mathcal{E}|$},
+        ylabel={Position error (m)},
+        xtick={0,0.2,0.4,0.6,0.8,1.0}, ytick={0.01,0.1,1}, yticklabels={$0.01$,$0.1$,$1$},
+        tick label style={font=\footnotesize}, label style={font=\footnotesize},
+        legend style={font=\footnotesize, at={(0.985,0.97)}, anchor=north east,
+                      draw=black!40, fill=white, fill opacity=0.85, text opacity=1},
+        legend cell align=left, axis on top, grid=major, grid style={gray!20},
+      ]
+      \addplot[black, dashed, line width=0.9pt, forget plot] coordinates {(0.4,0.002) (0.4,8)};
+      \node[anchor=west, font=\footnotesize, align=left, text=black!75] at (axis cs:0.42,2.6) {acceptance\\threshold $\rho=0.40$};
+      \addplot[black!55, dotted, line width=0.8pt, forget plot] coordinates {(0,0.5) (1.0,0.5)};
+      \addplot[only marks, mark=o, mark size=1.6pt, draw=blue!70!black, line width=0.5pt,
+               discard if not={success}{1}]
+        table [col sep=comma, x=score_frac, y=pos_err_m] {data/bbs_relocalization.csv};
+      \addlegendentry{success}
+      \addplot[only marks, mark=triangle*, mark size=2.6pt, draw=red!75!black, fill=red!75!black,
+               discard if not={success}{0}]
+        table [col sep=comma, x=score_frac, y=pos_err_m] {data/bbs_relocalization.csv};
+      \addlegendentry{failure}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{\textbf{Branch-and-bound relocalization of a kidnapped robot on synthetic data.} Each marker is one of $N=100$ queries in an asymmetric 6\,m$\times$6\,m room: position error versus the score fraction of \Cref{eq:bbsaccept}. Each 180-beam scan is corrupted with a per-query clutter probability drawn uniformly in $[0,0.8]$. Success means position error $<0.5$\,m (dotted) and yaw error $<10^\circ$. All three failures score below the default threshold (dashed), so every accepted match is correct (zero false accepts); 19 correct fixes are conservatively rejected.}
+  \label{fig:bbs}
+\end{figure}

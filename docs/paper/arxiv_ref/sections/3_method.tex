@@ -1,0 +1,180 @@
+\section{\sname: One Localization Contract over Three Middleware-Free Estimators}\label{sec:method}
+
+\sname{} separates \emph{what} a localization node promises its consumers from \emph{how} a pose is estimated. We first state the estimation problem and the output contract shared by all backends, then describe the two-layer architecture that realizes the contract (\Cref{sec:arch}), the shared particle-filter core (\Cref{sec:mcl}), its two measurement models (\Cref{sec:meas}), the branch-and-bound relocalizer (\Cref{sec:bbs}), the error-state fusion filter (\Cref{sec:eskf}), and the initialization and diagnostic layer (\Cref{sec:init}). Every equation below is transcribed from the C++ sources listed in \Cref{app:codemap}.
+
+\noindent\textbf{Problem Setup: One Contract, Interchangeable Estimators.}
+Let $m$ be a prior map (an occupancy grid or a point cloud), $\mathbf{u}_{1:t}$ the odometry or inertial inputs, and $\mathbf{z}_{1:t}$ the exteroceptive measurements (2D scans, 3D clouds, GNSS fixes). Each backend $b\in\mathcal{B}=\{\code{laser2d},\code{ndt3d},\code{fusion3d}\}$ approximates the Bayes-filter belief over the robot state $\mathbf{x}_t$ \citep{thrun2005probabilistic},
+\begin{equation}\label{eq:bayes}
+  \mathrm{bel}_b(\mathbf{x}_t) \;=\; \eta\, p_b(\mathbf{z}_t \mid \mathbf{x}_t, m) \int p_b(\mathbf{x}_t \mid \mathbf{u}_t, \mathbf{x}_{t-1})\, \mathrm{bel}_b(\mathbf{x}_{t-1})\, \mathrm{d}\mathbf{x}_{t-1},
+\end{equation}
+with a particle set for the two MCL backends and a Gaussian error state for \code{fusion3d}. Whatever the representation, a backend reports a point estimate $\hat{\mathbf{T}}_{\mathrm{map,base}}$ with a $6\times6$ covariance $\hat{\boldsymbol{\Sigma}}_t$ and, so as not to fight the odometry source that owns \code{odom}$\to$\code{base\_link}, broadcasts only the correction transform
+\begin{equation}\label{eq:mapodom}
+  \hat{\mathbf{T}}_{\mathrm{map,odom}} \;=\; \hat{\mathbf{T}}_{\mathrm{map,base}} \oplus \mathbf{T}_{\mathrm{odom,base}}^{-1},
+\end{equation}
+where $\oplus$ is pose composition and $\mathbf{T}_{\mathrm{odom,base}}$ is read from TF at the measurement stamp. \Cref{eq:mapodom} guarantees the round trip $\hat{\mathbf{T}}_{\mathrm{map,odom}}\oplus\mathbf{T}_{\mathrm{odom,base}}=\hat{\mathbf{T}}_{\mathrm{map,base}}$, which ROS-free unit tests assert to $10^{-9}$ on $SE(2)$ and $SE(3)$. The design objective is that the tuple (TF edge, pose topic, seeding topic) is identical for all $b\in\mathcal{B}$, so that the sensor suite, not the software stack, selects $b$.
+
+\subsection{Separating Estimators from Middleware: Two Layers, One Contract}\label{sec:arch}
+
+\sname{} is organized as two layers realized by four packages (\Cref{fig:overview}). The lower layer holds the estimator cores: \code{prism\_loc\_core} implements the MCL family and the relocalizer, and \code{prism\_loc\_fusion} implements the ESKF. Both are plain C++17 libraries whose only third-party dependency is Eigen; each \code{CMakeLists.txt} links \code{Eigen3::Eigen} alone, with no reference to \code{rclcpp}, \code{tf2}, or PCL. The upper layer holds the ROS~2 node packages \code{prism\_loc} (the \code{laser2d} and \code{ndt3d} backends, selected by a \code{backend} string parameter) and \code{prism\_loc\_fusion\_ros} (the \code{fusion3d} backend). Only these depend on the middleware, and the dependency direction is strictly upward.
+
+The split buys three properties. First, \emph{unit-testability without a running graph}: each core builds and tests with a plain toolchain and GoogleTest, and continuous integration exercises this ROS-free path directly. Second, \emph{determinism}: all sampling routes through a single seeded \code{std::mt19937\_64} wrapper (ROS parameter \code{seed}, default 42), so a prediction, weighting, or resampling step is reproducible bit for bit, which makes the core tests assertable rather than merely statistical. Third, \emph{one output contract} (\Cref{tab:contract}): every backend broadcasts \code{map}$\to$\code{odom} per \Cref{eq:mapodom}, publishes a \code{PoseWithCovarianceStamped} on \code{\char`~/pose}, and accepts \code{/initialpose}; the MCL nodes add a particle cloud and the fusion node an \code{Odometry} message. Thin adapters convert \code{LaserScan}, \code{OccupancyGrid}, \code{PointCloud2}, and \code{.pcd} files into core value types, and in \code{fusion3d} an adapter wraps PCL's NDT registration to turn a live cloud into a 6-DoF pose measurement, so PCL appears only inside adapters. QoS profiles follow publisher semantics: sensor streams are subscribed with \code{SensorDataQoS} (best-effort), while the occupancy grid is subscribed \code{transient\_local} and \code{reliable} so the single latched map from \code{map\_server} reaches a late-joining node.
+
+\input{tables/contract}
+
+\subsection{Sampling and Weighting Particles: One MCL Core for 2D and 3D}\label{sec:mcl}
+
+Both pose-tracking backends share one particle filter over the planar pose $\mathbf{x}=(x,y,\theta)$ (\code{Pose2D}), with belief $\{(\mathbf{x}^{[i]}_t,w^{[i]}_t)\}_{i=1}^{N_t}$. The recursion is the one wired in \code{localization\_node.cpp} and summarized in \Cref{alg:mcl}.
+
+\noindent\textbf{Motion Model.} \code{OdometryMotionModel} implements the sampling form of the odometry model \citep{thrun2005probabilistic}. Consecutive odometry poses are decomposed into $(\delta_{r1},\delta_t,\delta_{r2})$, with $\delta_{r1}=0$ whenever $\delta_t<10^{-3}$\,m (pure-rotation guard), and each particle is advanced by the noise-corrupted increment
+\begin{equation}\label{eq:motion}
+\begin{aligned}
+\hat{\delta}_{r1} &= \delta_{r1} - \varepsilon\big(\alpha_1 \delta_{r1}^2 + \alpha_2 \delta_{t}^2\big), \qquad
+\hat{\delta}_{r2} = \delta_{r2} - \varepsilon\big(\alpha_1 \delta_{r2}^2 + \alpha_2 \delta_{t}^2\big),\\
+\hat{\delta}_{t}  &= \delta_{t}  - \varepsilon\big(\alpha_3 \delta_{t}^2 + \alpha_4(\delta_{r1}^2 + \delta_{r2}^2)\big),
+\end{aligned}
+\end{equation}
+where $\varepsilon(\sigma^2)$ draws zero-mean Gaussian noise of variance $\sigma^2$ and $\alpha_{1..4}$ are the \code{alpha1}--\code{alpha4} parameters.
+
+\noindent\textbf{Weighting.} Given a measurement model with log-likelihood $\ell(\mathbf{x})$ (\Cref{sec:meas}), the \code{correct} step of \code{ParticleFilter} replaces each weight by
+\begin{equation}\label{eq:weights}
+  w^{[i]} \;=\; \frac{\exp\!\big(\ell(\mathbf{x}^{[i]})-\ell_{\max}\big)}{\sum_{j}\exp\!\big(\ell(\mathbf{x}^{[j]})-\ell_{\max}\big)}, \qquad \ell_{\max}=\max_j \ell(\mathbf{x}^{[j]}),
+\end{equation}
+subtracting the per-step maximum for numerical stability. The weights are overwritten rather than multiplied into the previous ones; this coincides with the standard recursion after every resampling step (which leaves uniform weights), and otherwise discards the previous step's weights, a simplification we note rather than hide.
+
+\noindent\textbf{KLD-Adaptive Resampling.} Resampling is triggered only when the effective sample size $N_{\mathrm{eff}}=(\sum_i w^{[i]})^2/\sum_i (w^{[i]})^2$ falls below $\tau N$ (\code{resample\_threshold} $\tau=0.5$). Samples are then drawn with probability proportional to weight and dropped into a histogram with bins of \code{kld\_bin\_xy} in $(x,y)$ and \code{kld\_bin\_yaw} in $\theta$. Following \citet{fox2003kld}, after $k>1$ distinct bins have been occupied the target sample count is
+\begin{equation}\label{eq:kld}
+  M_k \;=\; \frac{k-1}{2\,\epsilon_{\mathrm{kld}}}\left(1-\frac{2}{9(k-1)}+\sqrt{\frac{2}{9(k-1)}}\;z_{1-\delta}\right)^{3},
+\end{equation}
+and drawing stops once $n\ge\max(M_k,N_{\min})$ or $n=N_{\max}$, with $\epsilon_{\mathrm{kld}}$ (\code{kld\_err}), $z_{1-\delta}$ (\code{kld\_z}), and $[N_{\min},N_{\max}]$ (\code{min\_particles}, \code{max\_particles}) as parameters. The resampled set receives uniform weights.
+
+\noindent\textbf{Pose Estimate.} The reported pose is the weighted mean of $(x,y)$ with the circular mean of $\theta$,
+\begin{equation}\label{eq:estimate}
+  \hat{x}=\textstyle\sum_i w^{[i]}x^{[i]},\quad \hat{y}=\sum_i w^{[i]}y^{[i]},\quad \hat{\theta}=\operatorname{atan2}\!\big(\sum_i w^{[i]}\sin\theta^{[i]},\,\sum_i w^{[i]}\cos\theta^{[i]}\big),
+\end{equation}
+and the $6\times6$ covariance carries the weighted planar second moments in $(x,y)$ and $\theta$, while $z$, roll, and pitch are marked unobserved with variance $10^{6}$.
+
+\begin{algorithm}[t]
+\caption{One \code{laser2d}/\code{ndt3d} filter update, as wired in \code{localization\_node.cpp}}\label{alg:mcl}
+\KwIn{particle set $\mathcal{X}$; previous and current odometry poses $\mathbf{o}_{t-1},\mathbf{o}_t$; measurement model $\ell$; gates $d_{\min},a_{\min}$}
+\If{$\|\mathbf{o}_t-\mathbf{o}_{t-1}\|_{xy}\ge d_{\min}$ \textbf{or} $|\theta(\mathbf{o}_t)-\theta(\mathbf{o}_{t-1})|\ge a_{\min}$ \textbf{or} a re-seed forced an update}{
+  \For{$i\gets1$ \KwTo $|\mathcal{X}|$}{
+    $\mathbf{x}^{[i]}\gets$ sample \Cref{eq:motion} from $(\mathbf{o}_{t-1},\mathbf{o}_t)$ applied to $\mathbf{x}^{[i]}$\;
+  }
+  compute weights $w^{[i]}$ by \Cref{eq:weights}\;
+  \If{$N_{\mathrm{eff}}<\tau|\mathcal{X}|$}{
+    $\mathcal{X}\gets$ KLD-resample until $n\ge\max(M_k,N_{\min})$ (\Cref{eq:kld}) or $n=N_{\max}$\;
+  }
+  $\mathbf{o}_{t-1}\gets\mathbf{o}_t$\;
+}
+\KwOut{$(\hat{x},\hat{y},\hat{\theta})$ and covariance by \Cref{eq:estimate}; $\hat{\mathbf{T}}_{\mathrm{map,odom}}$ by \Cref{eq:mapodom}}
+\end{algorithm}
+
+\subsection{Scoring Observations: Likelihood-Field and NDT Measurement Models}\label{sec:meas}
+
+A backend differs from the other only through a \code{MeasurementModel}, whose single virtual method returns the unnormalized log-likelihood $\ell(\mathbf{x})$ of the current observation given a candidate base pose.
+
+\noindent\textbf{2D Likelihood Field.} \code{Laser2DLikelihoodField} is the likelihood-field model \citep{thrun2005probabilistic}. At construction the occupancy grid (cells with value $\ge50$ occupied) is converted into a field $d(\cdot)$ holding the Euclidean distance to the nearest occupied cell, computed exactly by the separable squared-distance transform of \citet{felzenszwalb2012distance} and clamped at \code{likelihood\_max\_dist}. For a scan with ranges $r_j$ at bearings $\phi_j$, the model visits every $s$-th beam, $s=\max(1,\lfloor n/\code{max\_beams}\rfloor)$, discards ranges outside $(r_{\min},r_{\max})$, and scores
+\begin{equation}\label{eq:laser}
+  \ell_{\mathrm{2D}}(\mathbf{x}) \;=\; \sum_{j\in\mathcal{J}} \log\max\!\Big(z_{\mathrm{hit}}\exp\!\big(-d(\mathbf{e}_j(\mathbf{x}))^2/2\sigma_{\mathrm{hit}}^2\big) + z_{\mathrm{rand}}/r_{\max},\; 10^{-12}\Big),
+\end{equation}
+where $\mathbf{e}_j(\mathbf{x})$ is the beam endpoint $r_j(\cos\phi_j,\sin\phi_j)$ transformed into the map through $\mathbf{x}$ composed with the sensor mounting pose.
+
+\noindent\textbf{3D NDT Score.} \code{Ndt3DModel} scores a 3D point cloud against a Normal Distributions Transform map \citep{biber2003ndt,magnusson2007scan}. \code{NdtMap} voxelizes the prior cloud at resolution \code{ndt\_resolution}; each voxel $v$ with at least \code{voxel\_min\_points} points stores its mean $\boldsymbol{\mu}_v$ and the inverse of its covariance after inflating every eigenvalue to at least $10^{-3}$ of the largest. With $\mathbf{T}(\mathbf{x})$ the 3D lift of the planar particle at the fixed height \code{base\_height} composed with the sensor pose, the per-particle score over a subsampled cloud $\mathcal{P}$ (at most \code{max\_points} points) is
+\begin{equation}\label{eq:ndt}
+  \ell_{\mathrm{3D}}(\mathbf{x}) \;=\; \sum_{\mathbf{p}\in\mathcal{P}} \log\!\Big(s\big(\mathbf{T}(\mathbf{x})\mathbf{p}\big) + s_{\mathrm{floor}}\Big),\qquad
+  s(\mathbf{q}) \;=\; \exp\!\Big(-\tfrac{1}{2}(\mathbf{q}-\boldsymbol{\mu}_{v(\mathbf{q})})^{\T}\boldsymbol{\Sigma}_{v(\mathbf{q})}^{-1}(\mathbf{q}-\boldsymbol{\mu}_{v(\mathbf{q})})\Big),
+\end{equation}
+with $s(\mathbf{q})=0$ when $\mathbf{q}$ falls in an empty voxel and $s_{\mathrm{floor}}=10^{-6}$. This is the NDT-as-measurement-model (NDT-MCL) idea: the score that Newton registration usually optimizes is read out as a particle likelihood, and the 3D backend estimates the same $(x,y,\theta)$ as the 2D one.
+
+\subsection{Relocalizing by Branch-and-Bound: Deterministic Kidnapped-Robot Recovery}\label{sec:bbs}
+
+Recovery from a lost or kidnapped estimate is handled by \code{BranchAndBoundMatcher}, a correlative scan matcher \citep{olson2009correlative} bounded by a max-pooled pyramid as in \citet{hess2016realtime}. At construction the likelihood field (clamped at $4\sigma_{\mathrm{hit}}$) is converted into a probability grid and a pyramid of $D+1$ levels (\code{bbs\_max\_depth} $D$),
+\begin{equation}\label{eq:pyramid}
+  P_0(c) = \exp\!\big(-d(c)^2/2\sigma_{\mathrm{hit}}^2\big),\qquad
+  P_h(c_x,c_y) = \max_{0\le a,b<2^h} P_0(c_x+a,\,c_y+b),
+\end{equation}
+where cells outside the grid count as zero; $P_h$ is built by doubling, $P_h(c)=\max\{P_{h-1}(c),P_{h-1}(c+2^{h-1}\mathbf{e}_x),P_{h-1}(c+2^{h-1}\mathbf{e}_y),P_{h-1}(c+2^{h-1}\mathbf{1})\}$. A search at center $\mathbf{c}$ (the map center in the node) enumerates rotations $\theta_k$ over $\pm$\code{bbs\_angular\_window} at \code{bbs\_angular\_step} and integer cell offsets $\mathbf{o}$ within $\pm L=\operatorname{round}(W/\mathrm{res})$ for linear window $W$. For rotation $\theta_k$, let $\mathbf{g}_j^{k}$ be the grid cell of the $j$-th subsampled endpoint ($j\in\mathcal{E}$, at most \code{bbs\_max\_beams}) at the center translation. A node at depth $h$ with anchor $\mathbf{o}$ covers the offsets $\mathbf{o}+[0,2^h)^2$ and is scored by
+\begin{equation}\label{eq:bbsscore}
+  S_h(k,\mathbf{o}) \;=\; \sum_{j\in\mathcal{E}} P_h\big(\kappa_h(\mathbf{g}_j^{k}+\mathbf{o})\big),
+\end{equation}
+where at $h=0$ out-of-grid cells contribute zero, and at $h\ge1$ a block that lies entirely outside the grid contributes zero while any other anchor is clamped into the grid by $\kappa_h$. Leaves ($h=0$) carry the exact correlative score.
+
+\begin{proposition}[Admissible bound]\label{prop:bbs}
+For every node $(k,\mathbf{o})$ at depth $h\ge1$ and every leaf offset $\mathbf{o}'\in\mathbf{o}+[0,2^h)^2$, $S_h(k,\mathbf{o})\ge S_0(k,\mathbf{o}')$.
+\end{proposition}
+\begin{proof}
+Fix an endpoint $j$ and let $\mathbf{c}=\mathbf{g}_j^k+\mathbf{o}$. If the block $\mathbf{c}+[0,2^h)^2$ lies entirely outside the grid, every leaf cell $\mathbf{g}_j^k+\mathbf{o}'$ is also outside and contributes zero, so both sides are $0$. Otherwise, when $\mathbf{c}$ is inside the grid $P_h(\mathbf{c})$ is by \Cref{eq:pyramid} the maximum of $P_0$ over the block, which contains the leaf cell. When a coordinate of $\mathbf{c}$ is negative, clamping it to $0$ yields a block $[0,2^h)$ in that coordinate that contains every in-grid cell of $[c,c+2^h)$, because $c<0$; out-of-grid leaf cells contribute $0\le P_h$. Hence each endpoint's term at depth $h$ upper-bounds its term at every leaf of the node, and summing over $j$ gives the claim. (Without the clamp, a coarse node whose corner falls off the map would under-count and could prune the optimum; the implementation comment in \code{bbs.cpp} records exactly this case.)
+\end{proof}
+
+\Cref{alg:bbs} expands nodes depth-first with children visited in decreasing order of their bound and prunes a subtree whenever its bound does not exceed the best leaf score found so far. By \Cref{prop:bbs} no pruned subtree can contain a strictly better leaf, so the returned pose attains the maximum of $S_0$ over the discretized search space. The match is accepted only when
+\begin{equation}\label{eq:bbsaccept}
+  S_0^\star \;\ge\; \rho\,|\mathcal{E}|,
+\end{equation}
+with $\rho$ = \code{bbs\_min\_score\_fraction} and $|\mathcal{E}|$ the number of valid endpoints used; an accepted pose re-seeds the particle filter with a Gaussian of standard deviation $(0.2\,\mathrm{m},0.2\,\mathrm{m},0.1\,\mathrm{rad})$, whereas a rejected one leaves the estimate untouched. The search is deterministic and therefore reproducible in a unit test.
+
+\begin{algorithm}[t]
+\caption{Branch-and-bound global relocalization (\code{bbs.cpp})}\label{alg:bbs}
+\KwIn{scan endpoints $\mathcal{E}$; pyramid $\{P_h\}_{h=0}^{D}$; rotations $\{\theta_k\}$; window $L$; acceptance fraction $\rho$}
+$\mathcal{C}\gets\{(k,\mathbf{o},D,S_D(k,\mathbf{o})) : \forall k,\ \mathbf{o}\in\{-L,-L+2^D,\dots\}^2,\ \mathbf{o}\le L\}$\;
+$S^\star\gets-1$\;
+\SetKwFunction{Br}{Branch}
+\SetKwProg{Fn}{Procedure}{}{}
+\Fn{\Br{$\mathcal{C}$}}{
+  sort $\mathcal{C}$ by bound, descending\;
+  \ForEach{$(k,\mathbf{o},h,U)\in\mathcal{C}$}{
+    \lIf{$U\le S^\star$}{\textbf{break} \tcp*[f]{admissible prune}}
+    \eIf{$h=0$}{
+      $S^\star\gets U$;\ \ $\mathbf{x}^\star\gets(\mathbf{c}+\mathrm{res}\cdot\mathbf{o},\ \theta_k)$\;
+    }{
+      \Br{$\{(k,\mathbf{o}+\boldsymbol{\delta},h-1,S_{h-1}(k,\mathbf{o}+\boldsymbol{\delta})) : \boldsymbol{\delta}\in\{0,2^{h-1}\}^2\}$}\;
+    }
+  }
+}
+\Br{$\mathcal{C}$}\;
+\KwOut{$\mathbf{x}^\star$, valid iff $S^\star\ge\rho|\mathcal{E}|$ (\Cref{eq:bbsaccept})}
+\end{algorithm}
+
+\subsection{Fusing IMU, LiDAR, and GNSS: A 15-State Error-State Kalman Filter}\label{sec:eskf}
+
+The \code{fusion3d} backend runs \code{Eskf}, which follows the quaternion error-state formulation of \citet{sola2017quaternion}. The nominal state carries position $\mathbf{p}$, velocity $\mathbf{v}$, orientation $\mathbf{q}$, and accelerometer and gyroscope biases $\mathbf{b}_a,\mathbf{b}_g$; the error state is $\delta\mathbf{x}=(\delta\mathbf{p},\delta\mathbf{v},\delta\boldsymbol{\theta},\delta\mathbf{b}_a,\delta\mathbf{b}_g)\in\mathbb{R}^{15}$ with a local angular error $\delta\boldsymbol{\theta}$.
+
+\noindent\textbf{Prediction.} On each IMU sample $(\mathbf{a}_m,\boldsymbol{\omega}_m)$ with period $\Delta t$, let $\mathbf{R}=\mathbf{R}(\mathbf{q})$, $\mathbf{a}=\mathbf{a}_m-\mathbf{b}_a$, $\boldsymbol{\omega}=\boldsymbol{\omega}_m-\mathbf{b}_g$, and $\mathbf{a}_w=\mathbf{R}\mathbf{a}+\mathbf{g}$ with $\mathbf{g}=(0,0,-9.81)$. The nominal state and error covariance evolve as
+\begin{equation}\label{eq:eskfpred}
+  \mathbf{p}\mathrel{+}=\mathbf{v}\Delta t+\tfrac12\mathbf{a}_w\Delta t^2,\quad
+  \mathbf{v}\mathrel{+}=\mathbf{a}_w\Delta t,\quad
+  \mathbf{q}\leftarrow\mathbf{q}\otimes\mathrm{Exp}(\boldsymbol{\omega}\Delta t),\qquad
+  \mathbf{P}\leftarrow\mathbf{F}\mathbf{P}\mathbf{F}^{\T}+\mathbf{Q},
+\end{equation}
+where $\mathrm{Exp}$ is the $SO(3)$ exponential, $\mathbf{F}$ is the $15\times15$ identity except for the blocks
+\begin{equation*}
+  \mathbf{F}_{pv}=\mathbf{I}\Delta t,\quad
+  \mathbf{F}_{v\theta}=-\mathbf{R}[\mathbf{a}]_\times\Delta t,\quad
+  \mathbf{F}_{vb_a}=-\mathbf{R}\Delta t,\quad
+  \mathbf{F}_{\theta\theta}=\mathbf{R}\{\mathrm{Exp}(\boldsymbol{\omega}\Delta t)\}^{\T},\quad
+  \mathbf{F}_{\theta b_g}=-\mathbf{I}\Delta t,
+\end{equation*}
+and the process noise
+\begin{equation*}
+  \mathbf{Q}=\operatorname{blkdiag}\big(\mathbf{0}_{3},\ \sigma_a^2\Delta t^2\mathbf{I}_3,\ \sigma_g^2\Delta t^2\mathbf{I}_3,\ \sigma_{b_a}^2\Delta t\,\mathbf{I}_3,\ \sigma_{b_g}^2\Delta t\,\mathbf{I}_3\big)
+\end{equation*}
+is built from \code{sigma\_acc}, \code{sigma\_gyro}, \code{sigma\_acc\_bias}, and \code{sigma\_gyro\_bias}; $\mathbf{R}\{\cdot\}$ denotes the rotation matrix of a quaternion.
+
+\noindent\textbf{Correction, Injection, Reset.} Two updates share the Kalman gain,
+\begin{equation}\label{eq:eskfupd}
+  \mathbf{K}=\mathbf{P}\mathbf{H}^{\T}(\mathbf{H}\mathbf{P}\mathbf{H}^{\T}+\mathbf{R}_z)^{-1},\qquad
+  \delta\hat{\mathbf{x}}=\mathbf{K}\mathbf{y},\qquad
+  \mathbf{P}\leftarrow(\mathbf{I}-\mathbf{K}\mathbf{H})\mathbf{P}.
+\end{equation}
+\code{updatePose} applies a 6-DoF pose from NDT registration with $\mathbf{H}$ selecting $(\delta\mathbf{p},\delta\boldsymbol{\theta})$ and residual $\mathbf{y}=\big(\mathbf{p}_m-\mathbf{p},\ \mathrm{Log}(\mathbf{q}^{-1}\otimes\mathbf{q}_m)\big)$, with $\mathbf{R}_z=\operatorname{diag}(\sigma_{\mathrm{pos}}^2\mathbf{I},\sigma_{\mathrm{rot}}^2\mathbf{I})$ (\code{pose\_pos\_std}, \code{pose\_rot\_std}); the node applies it only when PCL's NDT converged with fitness at most \code{ndt\_max\_fitness}. \code{updatePosition} applies a 3-DoF GNSS fix, converted from WGS-84 through ECEF to a local ENU frame about a datum (the first accepted fix unless \code{use\_datum} fixes one), with $\mathbf{H}$ selecting $\delta\mathbf{p}$ and $\mathbf{R}_z$ taken from the fix covariance (horizontal variances floored at $10^{-4}$, vertical at $1$). After each update the error is injected, additively for $\mathbf{p},\mathbf{v},\mathbf{b}_a,\mathbf{b}_g$ and as $\mathbf{q}\leftarrow\mathbf{q}\otimes\mathrm{Exp}(\delta\hat{\boldsymbol{\theta}})$ for orientation, and the error mean is reset to zero. The implementation uses the simple covariance update of \Cref{eq:eskfupd} and omits the reset Jacobian (it takes $\mathbf{G}=\mathbf{I}$), a common first-order simplification of the full formulation in \citet{sola2017quaternion}.
+
+\subsection{Initializing and Diagnosing: Making Every Precondition Observable}\label{sec:init}
+
+All backends accept a \code{PoseWithCovarianceStamped} on \code{/initialpose}: the MCL backends spread a Gaussian particle cloud at the supplied mean and covariance, and the fusion backend loads it as its nominal state. Automatically, \code{laser2d} runs \Cref{alg:bbs} before its first pose when \code{try\_global\_localization} is set, or on demand through the \code{\char`~/global\_localization} service (the matcher is constructed lazily at the first call). \code{fusion3d} auto-initializes once it holds both an attitude, roll and pitch from the first IMU specific force $\mathbf{f}$ and heading $\psi_0$ from \code{initial\_yaw},
+\begin{equation}\label{eq:attinit}
+  \phi_0=\operatorname{atan2}(f_y,f_z),\qquad
+  \vartheta_0=\operatorname{atan2}\!\big(-f_x,\sqrt{f_y^2+f_z^2}\big),\qquad
+  \mathbf{q}_0=\mathbf{R}_z(\psi_0)\,\mathbf{R}_y(\vartheta_0)\,\mathbf{R}_x(\phi_0),
+\end{equation}
+and a position from the first GNSS fix that passes the gate $\{\text{status}\ge s_{\min}\}\wedge\{\text{lat, lon not NaN}\}\wedge\{c_{xx}\le c_{\max}\}$ (\code{gnss\_min\_status}, \code{gnss\_max\_pos\_cov}).
+
+Because a localization node that silently does nothing is the dominant first-run frustration, four diagnostic mechanisms accompany the estimators: (i)~\code{ndt3d} and \code{fusion3d} abort construction with an actionable error when \code{map\_pcd\_path} is empty or fails to load; (ii)~every callback that cannot yet act emits a rate-limited warning naming the unmet precondition and the remedy; (iii)~a 10\,s startup watchdog reports each silent mandatory input together with its live publisher count, separating ``no publisher'' from ``publisher present but QoS-incompatible''; and (iv)~the GNSS gate and the NDT update log each rejection with the measured value against the violated threshold. Every tunable is a declared ROS~2 parameter documented one-to-one in \code{PARAMS.md} (\Cref{app:params}). These mechanisms carry no algorithmic weight; they exist so that a misconfiguration is diagnosable from the console log alone, consistent with the operational transparency Nav2 found necessary for long-term autonomy \citep{macenski2020marathon}.

@@ -1,0 +1,70 @@
+# NUMBERS.md — claim → artifact map for the arXiv package
+
+All data are synthetic, produced by the drivers in `experiments/` (fixed seeds).
+Paths are relative to the repository root; `data/` inside this package is a
+byte-identical copy of `docs/paper/data/` (checked by the guard).
+Guard: `python3 docs/paper/check_numbers.py` recomputes every number below
+from the CSVs and fails if the tex no longer quotes it.
+
+Conventions: "steady state" = rows with `t >= 10.0`; percentiles = linear
+interpolation (numpy default); BBS success = `pos_err_m < 0.5` and
+`|yaw_err_deg| < 10` (equals the `success` column).
+
+## MCL tracking — `docs/paper/data/mcl_tracking.csv` (seeds 101/202/303 = `_s0/_s1/_s2`)
+| Claim (where) | Value | Source |
+|---|---|---|
+| mean steady-state position error (abstract, intro, §4.2, Fig 2, Tab 2) | 0.105 m | mean of `pos_err_s{0,1,2}`, t>=10 |
+| max position error | 0.29 m | max of same |
+| mean yaw error | 0.032 rad (1.8°) | mean of `abs(yaw_err_s*)`, t>=10 |
+| max yaw error | 0.18 rad | max of same |
+| per-seed mean/max (Tab 2) | 0.113/0.269, 0.100/0.257, 0.102/0.288 m; yaw 0.034/0.120, 0.030/0.105, 0.033/0.184 rad | per column, t>=10 |
+| per-seed mean ± std (Tab 2, §4.2) | 0.105 ± 0.007 m; 0.032 ± 0.002 rad | mean/stdev of the three per-seed means |
+| 110 samples/seed, 330 pooled (Tab 2) | 110, 330 | row count t>=10 |
+
+## KLD particle count — `docs/paper/data/mcl_particles.csv`
+| Claim | Value | Source |
+|---|---|---|
+| ceiling / floor (abstract, intro, §4.2, Fig 2b) | 2000 / 500 | min/max of `n_s*` (= `laser2d.yaml` max/min_particles) |
+| 4× steady-state reduction | 2000/500 | same |
+| run-average count, 3.8× fewer (§4.3) | 526.9, 3.8 | mean of all `n_s*` cells; 2000/526.9 |
+
+## BBS relocalization — `docs/paper/data/bbs_relocalization.csv` (N=100, seed 20240607)
+| Claim | Value | Source |
+|---|---|---|
+| success 97/100 (abstract, intro, §4.2, Tab 3) | 97 | count of success rule |
+| median / p95 position error | 0.037 / 0.072 m | `pos_err_m` |
+| median / p95 yaw error | 0.48° / 1.74° | `abs(yaw_err_deg)` |
+| accepted at ρ=0.40 / false accepts / rejected correct | 78 / 0 / 19 | `score_frac >= 0.40` × success |
+| failure score band; failure errors | 0.21–0.27; >3 m, ~90–180° | `score_frac`, `pos_err_m`, `yaw_err_deg` of the 3 failures |
+| success score range; median score fraction | 0.22–0.97; 0.632 | `score_frac` |
+| median / min / p95 latency (Tab 3, §5) | 37.65 / 8.77 / 106.07 ms | `time_ms` (machine-dependent) |
+| threshold sweep (Tab 4) | accepted/false/rejected per ρ | `score_frac` × success |
+| margin 0.13; ρ=0.30 accepts 16 more (§4.3) | 0.40−0.2741; 94−78 | same |
+| clutter terciles (Tab 5) | 37/37/37/0.040/0.831; 30/30/30/0.032/0.624; 33/30/11/0.037/0.353 | bins of `clutter_frac` at 0.8/3, 1.6/3 |
+| clutter drawn in [0, 0.8] | protocol | `experiments/bbs_relocalization.cpp` |
+
+## ESKF fusion — `docs/paper/data/eskf_track.csv` (seed 20240517, logged at 2 Hz, 121 rows)
+| Claim | Value | Source |
+|---|---|---|
+| RMSE before / during / after dropout (abstract, intro, §4.2, Tab 3) | 0.016 / 0.125 / 0.009 m | `err_norm_m`; windows 1≤t<25, 25≤t≤34.5, t>34.5 (dropout = rows with `gnss_active=pose_active=0`) |
+| peak error at t=34.5 s | 0.256 m | max `err_norm_m` |
+| error at t=35 s | 0.015 m | row `time_s=35.000` |
+| peak 3σ bound | 0.663 m | max `sigma3_m` |
+| 3σ under full aiding ~0.03–0.04 m | median 0.037 m (range 0.032–0.066) | `sigma3_m`, 1≤t<25 |
+| 0 of 121 samples with error > 3σ | 0 / 121 | `err_norm_m > sigma3_m` |
+
+## Re-run (appendix A) — `docs/paper/data/rerun_2026-09-28/bbs_relocalization.csv`
+| Claim | Value | Source |
+|---|---|---|
+| all non-latency columns identical to committed CSV | yes | column-wise compare (guard) |
+| median latency on re-run machine (AMD Ryzen 5 5500GT) | 10.26 ms | `time_ms` |
+| mcl_tracking/mcl_particles/eskf_track byte-identical on re-run | yes | `cmp` during preparation (not stored; re-run the drivers to confirm) |
+
+## Non-CSV quantities (source code / configuration)
+| Claim | Value | Source |
+|---|---|---|
+| 44 tests = 25 + 13 + 4 + 2 | counts | `TEST(` macros in `*/test/*.cpp` (guard) |
+| parameter defaults (Tab 7, §3, §4.1) | as listed | `prism_loc/params/{laser2d,ndt3d}.yaml`, `prism_loc_fusion_ros/params/fusion3d.yaml`, headers in `prism_loc_core/include/`, `prism_loc_fusion/include/` |
+| round trip asserted to 1e-9 | 1e-9 | `prism_loc/test/test_tf_math.cpp`, `prism_loc_fusion_ros/test/test_tf_compose.cpp` |
+| eigenvalue floor 1e-3·λmax, s_floor 1e-6, clamp 4σ_hit, occupancy ≥ 50, re-seed σ (0.2, 0.2, 0.1), 10 s watchdog, seed 42 | constants | `ndt_map.cpp`, `measurement_model.hpp`, `bbs.cpp`, `measurement_model.cpp`, `localization_node.cpp`, node sources |
+| experiment geometry (12×10 m, oval 3.6/2.6 m, 65 s @10 Hz, 180 beams, 6×6 m room, figure-eight, 200/10/1 Hz, dropout [25,35) s) | protocol constants | `experiments/*.cpp` |

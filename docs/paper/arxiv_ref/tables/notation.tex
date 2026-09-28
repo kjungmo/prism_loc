@@ -1,0 +1,21 @@
+\begin{table}[h]
+\centering
+\caption{\textbf{Notation.}}\label{tab:notation}
+\small
+\begin{tabular}{@{}ll@{\qquad}ll@{}}
+\toprule
+Symbol & Meaning & Symbol & Meaning \\
+\midrule
+$\mathcal{B}$ & set of backends & $\mathbf{T}_{a,b}$ & pose of frame $b$ in frame $a$ \\
+$\mathbf{x}=(x,y,\theta)$ & planar particle pose & $w^{[i]}$ & particle weight \\
+$\ell(\mathbf{x})$ & measurement log-likelihood & $N_{\mathrm{eff}}$ & effective sample size \\
+$M_k$ & KLD sample bound, $k$ bins & $d(\cdot)$ & distance to nearest obstacle \\
+$\boldsymbol{\mu}_v,\boldsymbol{\Sigma}_v$ & NDT voxel mean, covariance & $P_h$ & BBS pyramid level $h$ \\
+$S_h(k,\mathbf{o})$ & BBS node score & $\mathcal{E}$ & subsampled scan endpoints \\
+$\rho$ & BBS acceptance fraction & $D$ & BBS pyramid depth \\
+$\mathbf{p},\mathbf{v},\mathbf{q}$ & ESKF position, velocity, attitude & $\mathbf{b}_a,\mathbf{b}_g$ & IMU biases \\
+$\delta\mathbf{x}\in\mathbb{R}^{15}$ & ESKF error state & $\mathbf{P}$ & error covariance \\
+$\mathbf{F},\mathbf{Q}$ & transition, process noise & $\mathbf{H},\mathbf{R}_z,\mathbf{K}$ & update Jacobian, noise, gain \\
+\bottomrule
+\end{tabular}
+\end{table}

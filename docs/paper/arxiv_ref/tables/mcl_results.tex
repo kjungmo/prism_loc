@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{\code{laser2d} steady-state tracking error on synthetic data} ($t\ge10$\,s, 110 logged samples per seed at 2\,Hz). Columns are computed from \code{data/mcl\_tracking.csv}; the last two rows pool the three seeds as mean\,$\pm$\,std of the per-seed values and as statistics over all 330 samples.}\label{tab:mcl}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Seed & Mean pos.\ err.\ (m) & Max pos.\ err.\ (m) & Mean yaw err.\ (rad) & Max yaw err.\ (rad) \\
+\midrule
+101 & 0.113 & 0.269 & 0.034 & 0.120 \\
+202 & 0.100 & 0.257 & 0.030 & 0.105 \\
+303 & 0.102 & 0.288 & 0.033 & 0.184 \\
+\midrule
+Per-seed mean\stdv{std} & 0.105\stdv{0.007} & -- & 0.032\stdv{0.002} & -- \\
+Pooled (330 samples) & 0.105 & 0.29 & 0.032 & 0.18 \\
+\bottomrule
+\end{tabular}
+\end{table}

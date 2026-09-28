@@ -1,0 +1,14 @@
+\begin{table}[h]
+\centering
+\caption{\textbf{Experiment drivers, fixed seeds, and committed artifacts.} Drivers live under \code{experiments/}; CSVs under \code{docs/paper/data/} (copied to \code{data/} in this package).}\label{tab:repro}
+\small
+\begin{tabularx}{\linewidth}{@{}lll>{\raggedright\arraybackslash}X@{}}
+\toprule
+Driver & Seed(s) & Figures / tables & CSV(s) \\
+\midrule
+\code{mcl\_tracking.cpp} & 101, 202, 303 & \Cref{fig:mcl}, \Cref{tab:mcl} & \code{mcl\_tracking.csv}, \code{mcl\_particles.csv} \\
+\code{bbs\_relocalization.cpp} & 20240607 & \Cref{fig:bbs}, \Cref{tab:bbs_eskf,tab:threshold,tab:clutter} & \code{bbs\_relocalization.csv} \\
+\code{eskf\_fusion.cpp} & 20240517 & \Cref{fig:eskf}, \Cref{tab:bbs_eskf} & \code{eskf\_track.csv} \\
+\bottomrule
+\end{tabularx}
+\end{table}
