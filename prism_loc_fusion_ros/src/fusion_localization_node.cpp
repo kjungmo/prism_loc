@@ -40,6 +40,7 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   ep.sigma_gyro = declare_parameter<double>("sigma_gyro", 1e-3);
   ep.sigma_acc_bias = declare_parameter<double>("sigma_acc_bias", 1e-4);
   ep.sigma_gyro_bias = declare_parameter<double>("sigma_gyro_bias", 1e-5);
+  ep.reset_jacobian = declare_parameter<bool>("reset_jacobian", false);
   eskf_ = std::make_unique<prism_loc_fusion::Eskf>(ep);
 
   if (declare_parameter<bool>("use_datum", false)) {

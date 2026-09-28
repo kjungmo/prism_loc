@@ -13,6 +13,9 @@ BranchAndBoundMatcher::BranchAndBoundMatcher(const GridMap& grid, BbsParams para
   // Level 0: probability grid p = exp(-d^2 / 2 sigma^2) from the likelihood field.
   LikelihoodField lf(grid, 50, 4.0 * params_.sigma_hit + 1e-3);
   const int n = width_ * height_;
+  blocked_.assign(n, 0);
+  for (int i = 0; i < n; ++i)
+    blocked_[i] = grid.data[i] >= params_.occupied_threshold ? 1 : 0;
   pyramid_.assign(params_.max_depth + 1, std::vector<float>(n, 0.0f));
   const double two_sigma2 = 2.0 * params_.sigma_hit * params_.sigma_hit;
   for (int y = 0; y < height_; ++y)
@@ -69,8 +72,62 @@ double BranchAndBoundMatcher::scoreLevel(const std::vector<std::pair<int, int>>&
   return s;
 }
 
+bool BranchAndBoundMatcher::feasible(const Pose2D& center, int x_off, int y_off) const {
+  // Same world->cell rule as worldToMap(), applied to the pose actually returned.
+  const double wx = center.x + x_off * resolution_;
+  const double wy = center.y + y_off * resolution_;
+  const int mx = static_cast<int>(std::floor((wx - origin_x_) / resolution_));
+  const int my = static_cast<int>(std::floor((wy - origin_y_) / resolution_));
+  if (mx < 0 || my < 0 || mx >= width_ || my >= height_) return false;
+  return blocked_[my * width_ + mx] == 0;
+}
+
+bool BranchAndBoundMatcher::coversMap(const Pose2D& center, int Lx, int Ly) const {
+  // Every cell column/row must contain at least one searched robot position.
+  const double x_lo = center.x - Lx * resolution_, x_hi = center.x + Lx * resolution_;
+  const double y_lo = center.y - Ly * resolution_, y_hi = center.y + Ly * resolution_;
+  return x_lo < origin_x_ + resolution_ && x_hi >= origin_x_ + (width_ - 1) * resolution_ &&
+         y_lo < origin_y_ + resolution_ && y_hi >= origin_y_ + (height_ - 1) * resolution_;
+}
+
+Pose2D BranchAndBoundMatcher::globalCenter() const {
+  return Pose2D{origin_x_ + (width_ / 2 + 0.5) * resolution_,
+                origin_y_ + (height_ / 2 + 0.5) * resolution_, 0.0};
+}
+
+int BranchAndBoundMatcher::globalHalfWindowX() const {
+  const int cap = std::max(1, static_cast<int>(std::lround(params_.max_linear_window / resolution_)));
+  return std::max(1, std::min(width_ / 2, cap));
+}
+
+int BranchAndBoundMatcher::globalHalfWindowY() const {
+  const int cap = std::max(1, static_cast<int>(std::lround(params_.max_linear_window / resolution_)));
+  return std::max(1, std::min(height_ / 2, cap));
+}
+
+bool BranchAndBoundMatcher::globalWindowCoversMap() const {
+  return coversMap(globalCenter(), globalHalfWindowX(), globalHalfWindowY());
+}
+
 BbsResult BranchAndBoundMatcher::match(const LaserScan2D& scan, const Pose2D& center) const {
+  const int L = std::max(1, static_cast<int>(std::lround(params_.linear_window / resolution_)));
+  return search(scan, center, L, L, false);
+}
+
+BbsResult BranchAndBoundMatcher::matchExhaustive(const LaserScan2D& scan,
+                                                 const Pose2D& center) const {
+  const int L = std::max(1, static_cast<int>(std::lround(params_.linear_window / resolution_)));
+  return search(scan, center, L, L, true);
+}
+
+BbsResult BranchAndBoundMatcher::matchGlobal(const LaserScan2D& scan) const {
+  return search(scan, globalCenter(), globalHalfWindowX(), globalHalfWindowY(), false);
+}
+
+BbsResult BranchAndBoundMatcher::search(const LaserScan2D& scan, const Pose2D& center,
+                                        int Lx, int Ly, bool exhaustive) const {
   BbsResult best;
+  best.window_covers_map = coversMap(center, Lx, Ly);
   const int ns = static_cast<int>(scan.ranges.size());
   if (ns == 0) return best;
 
@@ -104,42 +161,65 @@ BbsResult BranchAndBoundMatcher::match(const LaserScan2D& scan, const Pose2D& ce
     }
   }
 
-  const int L = std::max(1, static_cast<int>(std::lround(params_.linear_window / resolution_)));
-  const int top = params_.max_depth;
-  const int coarse = 1 << top;
-
-  struct Cand { int t; int xo; int yo; int depth; double upper; };
-  std::vector<Cand> roots;
-  for (int t = 0; t < na; ++t)
-    for (int xo = -L; xo <= L; xo += coarse)
-      for (int yo = -L; yo <= L; yo += coarse)
-        roots.push_back({t, xo, yo, top, scoreLevel(ep_cells[t], xo, yo, top)});
-
   double best_score = -1.0;
-  std::function<void(std::vector<Cand>&)> branch = [&](std::vector<Cand>& cands) {
-    std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.upper > b.upper; });
-    for (const Cand& c : cands) {
-      if (c.upper <= best_score) break;  // admissible prune (sorted desc)
-      if (c.depth == 0) {
-        best_score = c.upper;            // leaf upper == exact level-0 score
-        best.pose = Pose2D{center.x + c.xo * resolution_, center.y + c.yo * resolution_,
-                           normalizeAngle(center.yaw + angles[c.t])};
-        best.score = c.upper;
-      } else {
-        const int half = 1 << (c.depth - 1);
-        std::vector<Cand> ch;
-        ch.reserve(4);
-        for (int dx : {0, half})
-          for (int dy : {0, half})
-            ch.push_back({c.t, c.xo + dx, c.yo + dy, c.depth - 1,
-                          scoreLevel(ep_cells[c.t], c.xo + dx, c.yo + dy, c.depth - 1)});
-        branch(ch);
-      }
-    }
+  auto accept = [&](int t, int xo, int yo, double score) {
+    best_score = score;
+    best.pose = Pose2D{center.x + xo * resolution_, center.y + yo * resolution_,
+                       normalizeAngle(center.yaw + angles[t])};
+    best.score = score;
   };
-  branch(roots);
 
-  best.valid = best_score >= params_.min_score_fraction * static_cast<double>(eps.size());
+  if (exhaustive) {
+    for (int t = 0; t < na; ++t)
+      for (int xo = -Lx; xo <= Lx; ++xo)
+        for (int yo = -Ly; yo <= Ly; ++yo) {
+          if (!feasible(center, xo, yo)) continue;
+          const double s = scoreLevel(ep_cells[t], xo, yo, 0);
+          if (s > best_score) accept(t, xo, yo, s);
+        }
+  } else {
+    // Search set: offsets in [-Lx, Lx] x [-Ly, Ly] exactly. Roots tile it from the
+    // negative corner; any child whose block starts beyond +L is dropped, so no
+    // offset outside the symmetric window is ever scored as a leaf. A node's
+    // bound max-pools its whole 2^h block, which over-covers the in-window part
+    // and therefore stays an upper bound on every in-window leaf below it.
+    const int top = params_.max_depth;
+    const int coarse = 1 << top;
+    struct Cand { int t; int xo; int yo; int depth; double upper; };
+    std::vector<Cand> roots;
+    for (int t = 0; t < na; ++t)
+      for (int xo = -Lx; xo <= Lx; xo += coarse)
+        for (int yo = -Ly; yo <= Ly; yo += coarse)
+          roots.push_back({t, xo, yo, top, scoreLevel(ep_cells[t], xo, yo, top)});
+
+    std::function<void(std::vector<Cand>&)> branch = [&](std::vector<Cand>& cands) {
+      std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.upper > b.upper; });
+      for (const Cand& c : cands) {
+        if (c.upper <= best_score) break;  // admissible prune (sorted desc)
+        if (c.depth == 0) {
+          // Leaf upper == exact level-0 score. Infeasible robot cells (occupied or
+          // off-map) are skipped: bounds above stay admissible for the feasible
+          // subset because they bound every leaf, feasible or not.
+          if (feasible(center, c.xo, c.yo)) accept(c.t, c.xo, c.yo, c.upper);
+        } else {
+          const int half = 1 << (c.depth - 1);
+          std::vector<Cand> ch;
+          ch.reserve(4);
+          for (int dx : {0, half})
+            for (int dy : {0, half}) {
+              if (c.xo + dx > Lx || c.yo + dy > Ly) continue;  // outside the window
+              ch.push_back({c.t, c.xo + dx, c.yo + dy, c.depth - 1,
+                            scoreLevel(ep_cells[c.t], c.xo + dx, c.yo + dy, c.depth - 1)});
+            }
+          branch(ch);
+        }
+      }
+    };
+    branch(roots);
+  }
+
+  best.valid = best_score >= 0.0 &&
+               best_score >= params_.min_score_fraction * static_cast<double>(eps.size());
   return best;
 }
 

@@ -32,7 +32,9 @@
     initial_pose_y: 0.0               # m: initial pose y (used when set_initial_pose is true)
     initial_pose_yaw: 0.0             # rad: initial pose yaw (used when set_initial_pose is true)
     try_global_localization: false    # bool: run BBS global localization until first converged fix
-    bbs_linear_window: 10.0           # m: +/- translation search window around the map center
+    bbs_global_window: true           # bool: size the search window from the map extent (whole map)
+    bbs_max_linear_window: 50.0       # m: cap on the per-axis +/- half-window when bbs_global_window
+    bbs_linear_window: 10.0           # m: +/- window about the map center when bbs_global_window is false
     bbs_angular_window: 3.14159265    # rad: +/- yaw search window (default M_PI = full circle)
     bbs_angular_step: 0.0175          # rad: yaw search resolution (~1 deg)
     bbs_max_depth: 6                  # count: branch-and-bound pyramid levels

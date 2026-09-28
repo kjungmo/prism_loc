@@ -68,6 +68,7 @@ class LocalizationNode : public rclcpp::Node {
   std::shared_ptr<prism_loc_core::GridMap> grid_;
   prism_loc_core::Pose2D bbs_center_;
   bool try_global_localization_{false};
+  bool bbs_global_window_{true};
   bool relocalize_requested_{false};
   prism_loc_core::BbsParams bbs_params_;
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr global_loc_srv_;

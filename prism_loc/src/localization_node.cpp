@@ -58,7 +58,12 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     laser_min_range_ = declare_parameter<double>("laser_min_range", 0.0);
     laser_max_range_ = declare_parameter<double>("laser_max_range", 0.0);
     try_global_localization_ = declare_parameter<bool>("try_global_localization", false);
+    // bbs_global_window=true: the search window is sized from the map extent
+    // (capped per axis at bbs_max_linear_window); false: ±bbs_linear_window
+    // about the map centre.
+    bbs_global_window_ = declare_parameter<bool>("bbs_global_window", true);
     bbs_params_.linear_window = declare_parameter<double>("bbs_linear_window", 10.0);
+    bbs_params_.max_linear_window = declare_parameter<double>("bbs_max_linear_window", 50.0);
     bbs_params_.angular_window = declare_parameter<double>("bbs_angular_window", M_PI);
     bbs_params_.angular_step = declare_parameter<double>("bbs_angular_step", 0.0175);
     bbs_params_.max_depth = declare_parameter<int>("bbs_max_depth", 6);
@@ -207,7 +212,9 @@ void LocalizationNode::onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg) 
   const auto scan = fromLaserScan(*msg, sib, laser_min_range_, laser_max_range_);
 
   if (bbs_matcher_ && (relocalize_requested_ || (!filter_init_ && try_global_localization_))) {
-    const prism_loc_core::BbsResult r = bbs_matcher_->match(scan, bbs_center_);
+    const prism_loc_core::BbsResult r = bbs_global_window_
+                                            ? bbs_matcher_->matchGlobal(scan)
+                                            : bbs_matcher_->match(scan, bbs_center_);
     if (r.valid) {
       const int n = static_cast<int>(pf_->particles().size());
       pf_->initializeGaussian(r.pose, Pose2D{0.2, 0.2, 0.1}, n > 0 ? n : 2000);
@@ -274,7 +281,23 @@ void LocalizationNode::makeBbsMatcher() {
   bbs_center_ = prism_loc_core::Pose2D{
       grid_->origin_x + 0.5 * grid_->width * grid_->resolution,
       grid_->origin_y + 0.5 * grid_->height * grid_->resolution, 0.0};
-  RCLCPP_INFO(get_logger(), "laser2d: BBS global-localization matcher ready");
+  if (bbs_global_window_) {
+    const double hx = bbs_matcher_->globalHalfWindowX() * grid_->resolution;
+    const double hy = bbs_matcher_->globalHalfWindowY() * grid_->resolution;
+    if (bbs_matcher_->globalWindowCoversMap()) {
+      RCLCPP_INFO(get_logger(),
+                  "laser2d: BBS global-localization matcher ready (window +/-%.1f x +/-%.1f m "
+                  "covers the whole map)", hx, hy);
+    } else {
+      RCLCPP_WARN(get_logger(),
+                  "laser2d: BBS window capped at +/-%.1f x +/-%.1f m by bbs_max_linear_window; "
+                  "relocalization is NOT global on this %.1f x %.1f m map", hx, hy,
+                  grid_->width * grid_->resolution, grid_->height * grid_->resolution);
+    }
+  } else {
+    RCLCPP_INFO(get_logger(), "laser2d: BBS matcher ready (+/-%.1f m about the map centre)",
+                bbs_params_.linear_window);
+  }
 }
 
 void LocalizationNode::onGlobalLocalization(

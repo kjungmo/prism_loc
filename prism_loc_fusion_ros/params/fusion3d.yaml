@@ -19,6 +19,7 @@
     sigma_gyro: 0.001                 # rad/s: gyroscope white-noise std-dev (ESKF process)
     sigma_acc_bias: 0.0001            # m/s^3: accelerometer bias random-walk std-dev
     sigma_gyro_bias: 0.00001          # rad/s^2: gyroscope bias random-walk std-dev
+    reset_jacobian: false             # bool: apply the ESKF reset Jacobian to P after each injection
     use_datum: false                  # bool: use a fixed ENU datum instead of the first GNSS fix
     datum_lat: 0.0                    # deg: datum latitude (used when use_datum is true)
     datum_lon: 0.0                    # deg: datum longitude (used when use_datum is true)
