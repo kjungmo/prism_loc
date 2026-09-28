@@ -55,6 +55,14 @@ otherwise an SI unit.
 | bbs_max_depth | int | `6` | count | Branch-and-bound pyramid levels. |
 | bbs_max_beams | int | `120` | count | Laser beams subsampled for BBS scoring. |
 | bbs_min_score_fraction | double | `0.4` | fraction | Min score/used-beams for a BBS match to be valid. |
+| bbs_verify_top_k | int | `8` | count | Relocalization keeps up to this many distinct BBS modes of the first scan as hypotheses (`1` with `bbs_verify_scans: 1` restores the single-scan rule). |
+| bbs_verify_scans | int | `9` | count | Odometry-chained scans (first included) over which the hypotheses are re-matched before a decision; the existing particle set keeps tracking meanwhile. Needs odom TF. |
+| bbs_verify_evidence_gain | double | `40.0` | 1/fraction | Per-scan log-weight increment = gain x score fraction of the hypothesis' local re-match. |
+| bbs_verify_min_posterior | double | `0.9` | probability | The best hypothesis is committed only if its posterior mass reaches this; otherwise the node reports AMBIGUOUS and retries instead of re-seeding. |
+| bbs_verify_nms_xy | double | `1.0` | m | Two BBS leaves within this distance (and `bbs_verify_nms_yaw`) belong to the same mode. |
+| bbs_verify_nms_yaw | double | `0.35` | rad | Yaw radius of a mode. |
+| bbs_verify_track_linear_window | double | `0.3` | m | ± per-axis window of each hypothesis' local re-match per scan. |
+| bbs_verify_track_angular_window | double | `0.1` | rad | ± yaw window of the local re-match. |
 
 ## ndt3d backend (`prism_loc` node, `backend: "ndt3d"`)
 
