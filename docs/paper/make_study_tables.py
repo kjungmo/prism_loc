@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Generate the LaTeX tables of the large-map BBS study and the ESKF NEES study
-from the committed CSVs (docs/paper/data/bbs_largemap.csv, eskf_nees.csv).
+"""Generate the LaTeX tables of the large-map BBS study, the relocalization
+verification study and the ESKF NEES study from the committed CSVs
+(docs/paper/data/bbs_largemap.csv, bbs_verify.csv, eskf_nees.csv).
 
     python3 docs/paper/make_study_tables.py          # write the tables
     python3 docs/paper/make_study_tables.py --print  # also print derived stats
@@ -124,6 +125,127 @@ def bbs_derived(rows):
     return d
 
 
+# ---------------------------------------------------------------- BBS verification
+def wilson(k, n, z=1.959963984540054):
+    """Two-sided 95 % Wilson score interval for k successes out of n."""
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    den = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / den
+    h = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / den
+    return max(0.0, c - h), min(1.0, c + h)
+
+
+def pct(x):
+    return f"{100 * x:.1f}"
+
+
+def ver_rows():
+    return list(csv.DictReader(open(DATA / "bbs_verify.csv")))
+
+
+def ver_cell(rows, maps, strata, meth):
+    x = [a for a in rows if a["map_m"] in maps and a["stratum"] in strata and a["method"] == meth]
+    return {
+        "n": len(x),
+        "correct": sum(1 for a in x if a["accepted"] == "1" and a["success"] == "1"),
+        "fa": sum(int(a["false_accept"]) for a in x),
+        "amb": sum(1 for a in x if a["outcome"] == "ambiguous"),
+        "noc": sum(1 for a in x if a["outcome"] == "no-candidate"),
+        "lat": st.median(float(a["time_ms"]) for a in x) if x else 0.0,
+        "lat95": p95([float(a["time_ms"]) for a in x]) if x else 0.0,
+    }
+
+
+def ver_table(rows):
+    lines = [
+        r"\begin{table}[t]",
+        r"\centering",
+        r"\caption{\textbf{Single-scan acceptance versus multi-scan verification} on the maps, poses and first scans "
+        r"of \Cref{tab:bbs_large}. Each cell reads single scan\,/\,verified ($K=8$ modes, $M=9$ scans, "
+        r"\Cref{sec:verify}); the robot drives 0.3\,m steps with noisy odometry between scans. Correct: accepted "
+        r"and within 0.5\,m and $10^\circ$ of the truth at the committed scan; false accepts with the 95\% Wilson "
+        r"interval of their rate in percent; ambiguous: verification ended without a hypothesis holding 0.9 of the "
+        r"posterior. Latency: median over the whole decision, measured with three concurrent workers "
+        r"(\code{data/bbs\_verify.csv}, \code{experiments/bbs\_verify.cpp}).}\label{tab:bbs_verify}",
+        r"\small",
+        r"\begin{tabular}{@{}llrcccr@{}}",
+        r"\toprule",
+        r"Map & Poses & $N$ & Correct & False accepts [95\% CI, \%] & Ambiguous & Median latency (ms) \\",
+        r"\midrule",
+    ]
+    groups = [("20", ["20"], ["in"], "in"), ("40", ["40"], ["in"], "in"), ("40", ["40"], ["out"], "out"),
+              ("80", ["80"], ["in"], "in"), ("80", ["80"], ["out"], "out"),
+              ("40+80", ["40", "80"], ["in", "out"], "all")]
+    for i, (lab, maps, strata, slab) in enumerate(groups):
+        a, b = ver_cell(rows, maps, strata, "single"), ver_cell(rows, maps, strata, "verify")
+        la, ha = wilson(a["fa"], a["n"])
+        lb, hb = wilson(b["fa"], b["n"])
+        if i == len(groups) - 1:
+            lines.append(r"\midrule")
+        mlab = lab.replace("+", "\\,+\\,") + "\\,m"
+        lines.append(
+            f"{mlab} & {slab} & {a['n']} & {a['correct']} / {b['correct']} & "
+            f"{a['fa']} [{pct(la)}, {pct(ha)}] / {b['fa']} [{pct(lb)}, {pct(hb)}] & "
+            f"{b['amb']} & {a['lat']:.0f} / {b['lat']:.0f} \\\\"
+        )
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}", ""]
+    return "\n".join(lines)
+
+
+def ver_derived(rows):
+    d = {}
+    for m in ["20", "40", "80"]:
+        for meth in ["single", "verify"]:
+            c = ver_cell(rows, [m], ["in", "out"], meth)
+            for k, v in c.items():
+                d[f"{meth}_{m}_{k}"] = v
+            lo, hi = wilson(c["fa"], c["n"])
+            d[f"{meth}_{m}_fa_ci"] = (lo, hi)
+    for meth in ["single", "verify"]:
+        c = ver_cell(rows, ["40", "80"], ["in", "out"], meth)
+        for k, v in c.items():
+            d[f"{meth}_big_{k}"] = v
+        d[f"{meth}_big_fa_ci"] = wilson(c["fa"], c["n"])
+        c = ver_cell(rows, ["20", "40", "80"], ["in", "out"], meth)
+        for k, v in c.items():
+            d[f"{meth}_all_{k}"] = v
+    # correct single-scan fixes that verification did not commit, and why
+    by = {}
+    for a in rows:
+        by.setdefault((a["map_m"], a["idx"]), {})[a["method"]] = a
+    lost = [q for q in by.values()
+            if q["single"]["accepted"] == "1" and q["single"]["success"] == "1"
+            and not (q["verify"]["accepted"] == "1" and q["verify"]["success"] == "1")]
+    d["lost"] = len(lost)
+    d["lost_amb"] = sum(1 for q in lost if q["verify"]["outcome"] == "ambiguous")
+    d["lost_noc"] = sum(1 for q in lost if q["verify"]["outcome"] == "no-candidate")
+    d["lost_min_clutter"] = min(float(q["verify"]["clutter_frac"]) for q in lost if q["verify"]["outcome"] == "no-candidate")
+    gained = [q for q in by.values()
+              if q["verify"]["accepted"] == "1" and q["verify"]["success"] == "1"
+              and not (q["single"]["accepted"] == "1" and q["single"]["success"] == "1")]
+    d["gained"] = len(gained)
+    fa = [q["verify"] for q in by.values() if q["verify"]["false_accept"] == "1"]
+    d["ver_fa_list"] = [(a["map_m"], a["stratum"], float(a["pos_err_m"]), float(a["yaw_err_deg"]),
+                         float(a["best_posterior"])) for a in fa]
+    # single-scan false accepts that verification turned into ambiguous / no-candidate / correct
+    sfa = [q for q in by.values() if q["single"]["false_accept"] == "1"]
+    d["sfa_to_amb"] = sum(1 for q in sfa if q["verify"]["outcome"] == "ambiguous")
+    d["sfa_to_noc"] = sum(1 for q in sfa if q["verify"]["outcome"] == "no-candidate")
+    d["sfa_to_correct"] = sum(1 for q in sfa if q["verify"]["accepted"] == "1" and q["verify"]["success"] == "1")
+    d["sfa_to_fa"] = sum(1 for q in sfa if q["verify"]["false_accept"] == "1")
+    return d
+
+
+def calib_selection():
+    sel = list(csv.DictReader(open(DATA / "bbs_verify_selection.csv")))
+    best = min(sel, key=lambda r: (int(r["false_accept"]), -int(r["correct"]), int(r["verify_scans"]),
+                                   int(r["top_k"]), float(r["evidence_gain"]), -float(r["min_posterior"])))
+    single = next(r for r in sel if r["top_k"] == "1" and r["verify_scans"] == "1")
+    return best, single
+
+
 # ---------------------------------------------------------------- ESKF NEES
 BLOCKS = [("all", r"Full state (15)"), ("p", r"Position $\delta\mathbf{p}$ (3)"),
           ("v", r"Velocity $\delta\mathbf{v}$ (3)"), ("th", r"Attitude $\delta\boldsymbol{\theta}$ (3)"),
@@ -183,6 +305,7 @@ def generate():
     return {
         TABLES / "bbs_largemap.tex": bbs_table(bbs_rows()),
         TABLES / "eskf_nees.tex": nees_table(nees_rows()),
+        TABLES / "bbs_verify.tex": ver_table(ver_rows()),
     }
 
 
@@ -193,6 +316,9 @@ if __name__ == "__main__":
     if "--print" in sys.argv:
         for k, v in bbs_derived(bbs_rows()).items():
             print("bbs", k, v)
+        for k, v in ver_derived(ver_rows()).items():
+            print("ver", k, v)
+        print("calib", calib_selection())
         S = nees_stats(nees_rows())
         for k, v in S.items():
             print("nees", k, v)

@@ -23,6 +23,12 @@ Parameter & Symbol & Default & Used in \\
 \code{bbs\_angular\_window} / \code{bbs\_angular\_step} & -- & $\pi$ / 0.0175\,rad & \Cref{alg:bbs} \\
 \code{bbs\_max\_depth} / \code{bbs\_max\_beams} & $D$ / -- & 6 / 120 & \Cref{eq:pyramid,eq:bbsscore} \\
 \code{bbs\_min\_score\_fraction} & $\rho$ & 0.4 & \Cref{eq:bbsaccept} \\
+\code{bbs\_verify\_top\_k} & $K$ & 8 & \Cref{sec:verify} \\
+\code{bbs\_verify\_scans} & $M$ & 9 & \Cref{sec:verify} \\
+\code{bbs\_verify\_evidence\_gain} & $\lambda$ & 40 & \Cref{eq:verify} \\
+\code{bbs\_verify\_min\_posterior} & $\tau$ & 0.9 & \Cref{eq:verify} \\
+\code{bbs\_verify\_nms\_xy} / \code{\_yaw} & -- & 1.0\,m / 0.35\,rad & \Cref{sec:verify} \\
+\code{bbs\_verify\_track\_*\_window} & -- & 0.3\,m / 0.1\,rad & \Cref{sec:verify} \\
 \code{sigma\_acc} / \code{sigma\_gyro} & $\sigma_a$ / $\sigma_g$ & 0.01 / 0.001 & \Cref{eq:eskfpred} \\
 \code{sigma\_acc\_bias} / \code{sigma\_gyro\_bias} & $\sigma_{b_a}$ / $\sigma_{b_g}$ & $10^{-4}$ / $10^{-5}$ & \Cref{eq:eskfpred} \\
 \code{reset\_jacobian} & $\mathbf{G}$ & false ($\mathbf{G}=\mathbf{I}$) & \Cref{sec:eskf} \\

@@ -12,11 +12,12 @@ Equation / algorithm & Source \\
 \Cref{alg:mcl} (update order, gates) & \code{node/} (\code{runUpdate}, \code{onScan}) \\
 \Cref{eq:laser} (likelihood field) & \code{core/measurement\_model.cpp}, \code{core/occupancy\_grid.cpp} \\
 \Cref{eq:ndt} (NDT score) & \code{core/measurement\_model.cpp}, \code{core/ndt\_map.cpp} \\
-\Cref{eq:pyramid,eq:bbsscore,eq:bbsaccept}, \Cref{alg:bbs} & \code{core/bbs.cpp}; re-seeding in \code{node/} (\code{onScan}) \\
+\Cref{eq:pyramid,eq:bbsscore,eq:bbsaccept}, \Cref{alg:bbs} & \code{core/bbs.cpp}; re-seeding in \code{node/} (\code{runRelocalization}) \\
 \Cref{eq:eskfpred,eq:eskfupd} (ESKF) & \code{fusion/eskf.cpp}, \code{fusion/so3.cpp}, \code{fusion/geodetic.cpp} \\
 \Cref{eq:attinit}, GNSS and NDT gates & \code{fnode/} (\code{attitudeFromAccel}, \code{onGnss}, \code{onPoints}) \\
 \Cref{cor:bbs} check (exhaustive search) & \code{core/bbs.cpp} (\code{matchExhaustive}); test \code{prism\_loc\_core/test/test\_bbs.cpp} \\
-Synthetic drivers & \code{experiments/mcl\_tracking.cpp}, \code{bbs\_relocalization.cpp}, \code{eskf\_fusion.cpp}, \code{bbs\_largemap.cpp} (with \code{legacy/bbs\_v01.cpp}), \code{eskf\_nees.cpp} \\
+\Cref{eq:verify}, \Cref{sec:verify} & \code{core/relocalization.cpp} (\code{RelocalizationVerifier}), \code{core/bbs.cpp} (\code{matchGlobalTopK}, \code{matchLocal}); node \code{runRelocalization}; test \code{test\_relocalization.cpp} \\
+Synthetic drivers & \code{experiments/mcl\_tracking.cpp}, \code{bbs\_relocalization.cpp}, \code{eskf\_fusion.cpp}, \code{bbs\_largemap.cpp} (with \code{legacy/bbs\_v01.cpp}), \code{eskf\_nees.cpp}, \code{bbs\_verify.cpp} (with \code{select\_verify\_params.py}) \\
 \bottomrule
 \end{tabularx}
 \end{table}

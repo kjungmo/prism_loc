@@ -256,11 +256,11 @@ REPO = ROOT.parent.parent
 def ntests(pkg):
     return sum(len(re.findall(r"^TEST(?:_F)?\(", f.read_text(), re.M)) for f in (REPO / pkg / "test").glob("*.cpp"))
 counts = {k: ntests(k) for k in ["prism_loc_core", "prism_loc_fusion", "prism_loc", "prism_loc_fusion_ros"]}
-check("test counts", list(counts.values()) == [31, 15, 4, 2] and sum(counts.values()) == 52, str(counts))
-ax_expect("test total", "52 GoogleTest cases")
-ax_expect("test split", "31 in \\code{prism\\_loc\\_core}")
+check("test counts", list(counts.values()) == [42, 15, 4, 2] and sum(counts.values()) == 63, str(counts))
+ax_expect("test total", "63 GoogleTest cases")
+ax_expect("test split", "42 in \\code{prism\\_loc\\_core}")
 ax_expect("test split fusion", "15 in \\code{prism\\_loc\\_fusion}")
-ax_expect("intro test total", "52 deterministic unit and integration tests")
+ax_expect("intro test total", "63 deterministic unit and integration tests")
 
 # re-run of the room study against the fixed matcher (symmetric window + feasibility)
 rf = DATA / "rerun_2026-09-28" / "bbs_relocalization_fixbbs.csv"
@@ -302,6 +302,44 @@ check("new never infeasible", d["new_notfree"] == 0 and sum(S[k]["n"] for k in S
 ax_expect("20m latency", f"takes {S[('20','in','new')]['lat']:.0f}\\,ms on the 20\\,m map")
 ax_expect("80m latency", f"{d['new80_lat_med']:.0f}\\,ms on the 80\\,m map")
 ax_expect("80m p95", f"{d['new80_lat_p95']:.0f}\\,ms under heavy clutter")
+
+# ---------------- multi-scan relocalization verification ----------------
+V = mst.ver_derived(mst.ver_rows())
+best, single = mst.calib_selection()
+hdr = (REPO / "prism_loc_core/include/prism_loc_core/relocalization.hpp").read_text()
+for key, val in [("top_k", best["top_k"]), ("verify_scans", best["verify_scans"]),
+                 ("evidence_gain", best["evidence_gain"]), ("min_posterior", best["min_posterior"])]:
+    m_ = re.search(rf"\b{key}\{{([0-9.]+)\}}", hdr)
+    check(f"verifier default {key} == calibration selection", m_ and float(m_.group(1)) == float(val), f"{m_.group(1) if m_ else None} vs {val}")
+ax_expect("calib selection", f"it gives {best['correct']} correct accepts and {best['false_accept']} false accepts ({best['ambiguous']} ambiguous), against {single['correct']} and {single['false_accept']} for the single-scan rule")
+ax_expect("calib defaults", f"$K={best['top_k']}$, $M={best['verify_scans']}$, $\\lambda={float(best['evidence_gain']):.0f}$, $\\tau={best['min_posterior']}$")
+vr = mst.ver_rows()
+lm = {(a["map_m"], a["idx"]): a for a in mst.bbs_rows() if a["method"] == "new"}
+same = all(lm[(a["map_m"], a["idx"])][c] == a[c2] for a in vr if a["method"] == "single"
+           for c, c2 in [("success", "success"), ("accepted", "accepted"), ("rec_x", "rec_x"), ("rec_y", "rec_y"), ("rec_yaw", "rec_yaw")])
+check("verify single rows reproduce bbs_largemap new rows", same and sum(a["method"] == "single" for a in vr) == 300, "300 rows")
+check("verify single FA equals large-map FA", V["single_40_fa"] == d["new_40_fa"] and V["single_80_fa"] == d["new_80_fa"], f"{V['single_40_fa']},{V['single_80_fa']}")
+pc = lambda ci: f"[{100*ci[0]:.1f}, {100*ci[1]:.1f}]\\,\\%"
+ax_expect("ver FA 40", f"False accepts fall from {V['single_40_fa']} of 120 to {V['verify_40_fa']} of 120 on the 40\\,m map")
+ax_expect("ver FA 80", f"from {V['single_80_fa']} to {V['verify_80_fa']} of 120 on the 80\\,m map")
+ax_expect("ver pooled CI", f"falls from {V['single_big_fa']} of 240 {pc(V['single_big_fa_ci'])} to {V['verify_big_fa']} of 240 {pc(V['verify_big_fa_ci'])}")
+ax_expect("ver sfa fate", f"{V['sfa_to_correct']} become correct fixes, {V['sfa_to_amb']} end as ambiguous, and {V['sfa_to_noc']} as no candidate; {V['sfa_to_fa']} remains a false accept")
+fa1 = V["ver_fa_list"]
+check("ver single residual FA is a flip", len(fa1) == 1 and fa1[0][3] > 170 and fa1[0][0] == "80", str(fa1))
+ax_expect("ver residual", f"{fa1[0][2]:.1f}\\,m from the truth, which held {fa1[0][4]:.3f} of the posterior")
+ax_expect("ver residual limitation", f"held {fa1[0][4]:.3f} of the posterior, it can only choose")
+ax_expect("ver correct", f"commits {V['verify_all_correct']} correct poses against {V['single_all_correct']} for the single scan")
+ax_expect("ver lost/gained", f"it loses {V['lost']} fixes the single scan had ({V['lost_amb']} ambiguous, {V['lost_noc']} rejected")
+ax_expect("ver lost clutter", f"at least {V['lost_min_clutter']:.2f})")
+ax_expect("ver gained", f"and gains {V['gained']}.")
+ax_expect("ver latency", f"takes {V['verify_80_lat']:.0f}\\,ms on the 80\\,m map against {V['single_80_lat']:.0f}\\,ms")
+ax_expect("ver latency ratio", f"roughly {V['verify_80_lat'] / V['single_80_lat']:.1f} times the single-scan query")
+ax_expect("abstract ver", f"which multi-scan verification reduces to {V['verify_40_fa']} and {V['verify_80_fa']} of 120 (pooled 95\\% Wilson interval {100*V['verify_big_fa_ci'][0]:.1f}--{100*V['verify_big_fa_ci'][1]:.1f}\\%)")
+ax_expect("abstract ver correct", f"({V['verify_all_correct']} against {V['single_all_correct']} of 300)")
+ax_expect("intro ver", f"multi-scan verification brings this to {V['verify_40_fa']} and {V['verify_80_fa']} of 120")
+ax_expect("limitation ver", f"reduces them to {V['verify_40_fa']} and {V['verify_80_fa']}")
+ax_expect("conclusion ver", f"rare ({V['verify_big_fa']} of 240 synthetic queries)")
+check("ver never loses correct overall", V["verify_all_correct"] >= V["single_all_correct"], f"{V['verify_all_correct']} >= {V['single_all_correct']}")
 
 N = mst.nees_stats(mst.nees_rows())
 g = {b: N[(b, "gi")] for b, _ in mst.BLOCKS}

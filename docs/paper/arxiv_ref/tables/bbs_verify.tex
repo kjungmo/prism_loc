@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Single-scan acceptance versus multi-scan verification} on the maps, poses and first scans of \Cref{tab:bbs_large}. Each cell reads single scan\,/\,verified ($K=8$ modes, $M=9$ scans, \Cref{sec:verify}); the robot drives 0.3\,m steps with noisy odometry between scans. Correct: accepted and within 0.5\,m and $10^\circ$ of the truth at the committed scan; false accepts with the 95\% Wilson interval of their rate in percent; ambiguous: verification ended without a hypothesis holding 0.9 of the posterior. Latency: median over the whole decision, measured with three concurrent workers (\code{data/bbs\_verify.csv}, \code{experiments/bbs\_verify.cpp}).}\label{tab:bbs_verify}
+\small
+\begin{tabular}{@{}llrcccr@{}}
+\toprule
+Map & Poses & $N$ & Correct & False accepts [95\% CI, \%] & Ambiguous & Median latency (ms) \\
+\midrule
+20\,m & in & 60 & 50 / 49 & 0 [0.0, 6.0] / 0 [0.0, 6.0] & 0 & 35 / 127 \\
+40\,m & in & 60 & 54 / 54 & 3 [1.7, 13.7] / 0 [0.0, 6.0] & 1 & 129 / 261 \\
+40\,m & out & 60 & 45 / 45 & 3 [1.7, 13.7] / 0 [0.0, 6.0] & 1 & 238 / 399 \\
+80\,m & in & 60 & 51 / 50 & 4 [2.6, 15.9] / 0 [0.0, 6.0] & 2 & 1351 / 1752 \\
+80\,m & out & 60 & 41 / 44 & 11 [10.6, 29.9] / 1 [0.3, 8.9] & 6 & 1093 / 1526 \\
+\midrule
+40\,+\,80\,m & all & 240 & 191 / 193 & 21 [5.8, 13.0] / 1 [0.1, 2.3] & 10 & 535 / 762 \\
+\bottomrule
+\end{tabular}
+\end{table}
