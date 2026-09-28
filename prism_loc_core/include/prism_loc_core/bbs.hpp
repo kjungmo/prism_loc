@@ -28,6 +28,19 @@ struct BbsResult {
   // True when the searched translation set contains every cell of the map
   // (always the case for matchGlobal unless max_linear_window caps it).
   bool window_covers_map{false};
+  // |E|: number of valid endpoints scored (score / used_beams is the fraction).
+  int used_beams{0};
+  // True when at least one feasible candidate was scored (pose/score are real).
+  bool found{false};
+};
+
+// Top-K mode extraction: two leaves belong to the same mode when their
+// positions are within nms_xy metres AND their yaws within nms_yaw radians;
+// only the higher-scoring leaf of a mode is kept (greedy non-max suppression).
+struct BbsModeParams {
+  int k{5};
+  double nms_xy{1.0};
+  double nms_yaw{0.35};
 };
 
 // Test-only perturbation of the coarse-level (level > 0) bounds, used by the
@@ -60,6 +73,26 @@ class BranchAndBoundMatcher {
   // set as match(); used to verify branch-and-bound optimality.
   BbsResult matchExhaustive(const LaserScan2D& scan, const Pose2D& center) const;
 
+  // Up to K distinct modes, best first, over the same feasible set as
+  // match()/matchGlobal(). The branch-and-bound prunes against the K-th kept
+  // score, so the first mode is exactly the single-best result; later modes are
+  // the highest-scoring leaves not suppressed by a better one (greedy NMS, which
+  // depends on the visiting order, so they are not certified). Every returned
+  // mode carries its own valid flag (score >= min_score_fraction * |E|).
+  std::vector<BbsResult> matchTopK(const LaserScan2D& scan, const Pose2D& center,
+                                   const BbsModeParams& modes) const;
+  std::vector<BbsResult> matchGlobalTopK(const LaserScan2D& scan,
+                                         const BbsModeParams& modes) const;
+
+  // Local re-match: single best over +-linear_window metres (per axis) and
+  // +-angular_window radians (grid symmetric about 0) about `center`, used to
+  // track hypotheses. Exact ties go to the candidate nearest the centre.
+  BbsResult matchLocal(const LaserScan2D& scan, const Pose2D& center,
+                       double linear_window, double angular_window) const;
+
+  double resolution() const { return resolution_; }
+  const BbsParams& params() const { return params_; }
+
   // The center and per-axis half-windows (cells) matchGlobal() uses.
   Pose2D globalCenter() const;
   int globalHalfWindowX() const;
@@ -69,8 +102,12 @@ class BranchAndBoundMatcher {
   void setBoundMutationForTesting(BoundMutationForTesting m) { mutation_ = m; }
 
  private:
-  BbsResult search(const LaserScan2D& scan, const Pose2D& center, int Lx, int Ly,
-                   bool exhaustive) const;
+  std::vector<BbsResult> search(const LaserScan2D& scan, const Pose2D& center, int Lx,
+                                int Ly, double angular_window, bool exhaustive,
+                                const BbsModeParams& modes, bool prefer_center = false) const;
+  BbsResult searchBest(const LaserScan2D& scan, const Pose2D& center, int Lx, int Ly,
+                       double angular_window, bool exhaustive,
+                       bool prefer_center = false) const;
   double scoreLevel(const std::vector<std::pair<int, int>>& ep_cells,
                     int x_off, int y_off, int level) const;
   bool feasible(const Pose2D& center, int x_off, int y_off) const;

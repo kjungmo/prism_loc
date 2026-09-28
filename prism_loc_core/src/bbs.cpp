@@ -111,25 +111,61 @@ bool BranchAndBoundMatcher::globalWindowCoversMap() const {
 
 BbsResult BranchAndBoundMatcher::match(const LaserScan2D& scan, const Pose2D& center) const {
   const int L = std::max(1, static_cast<int>(std::lround(params_.linear_window / resolution_)));
-  return search(scan, center, L, L, false);
+  return searchBest(scan, center, L, L, params_.angular_window, false);
 }
 
 BbsResult BranchAndBoundMatcher::matchExhaustive(const LaserScan2D& scan,
                                                  const Pose2D& center) const {
   const int L = std::max(1, static_cast<int>(std::lround(params_.linear_window / resolution_)));
-  return search(scan, center, L, L, true);
+  return searchBest(scan, center, L, L, params_.angular_window, true);
 }
 
 BbsResult BranchAndBoundMatcher::matchGlobal(const LaserScan2D& scan) const {
-  return search(scan, globalCenter(), globalHalfWindowX(), globalHalfWindowY(), false);
+  return searchBest(scan, globalCenter(), globalHalfWindowX(), globalHalfWindowY(),
+                    params_.angular_window, false);
 }
 
-BbsResult BranchAndBoundMatcher::search(const LaserScan2D& scan, const Pose2D& center,
-                                        int Lx, int Ly, bool exhaustive) const {
-  BbsResult best;
-  best.window_covers_map = coversMap(center, Lx, Ly);
+std::vector<BbsResult> BranchAndBoundMatcher::matchTopK(const LaserScan2D& scan,
+                                                        const Pose2D& center,
+                                                        const BbsModeParams& modes) const {
+  const int L = std::max(1, static_cast<int>(std::lround(params_.linear_window / resolution_)));
+  return search(scan, center, L, L, params_.angular_window, false, modes);
+}
+
+std::vector<BbsResult> BranchAndBoundMatcher::matchGlobalTopK(const LaserScan2D& scan,
+                                                              const BbsModeParams& modes) const {
+  return search(scan, globalCenter(), globalHalfWindowX(), globalHalfWindowY(),
+                params_.angular_window, false, modes);
+}
+
+BbsResult BranchAndBoundMatcher::matchLocal(const LaserScan2D& scan, const Pose2D& center,
+                                            double linear_window, double angular_window) const {
+  const int L = std::max(0, static_cast<int>(std::lround(linear_window / resolution_)));
+  return searchBest(scan, center, L, L, angular_window, false, true);
+}
+
+BbsResult BranchAndBoundMatcher::searchBest(const LaserScan2D& scan, const Pose2D& center,
+                                            int Lx, int Ly, double angular_window,
+                                            bool exhaustive, bool prefer_center) const {
+  std::vector<BbsResult> r = search(scan, center, Lx, Ly, angular_window, exhaustive,
+                                    BbsModeParams{1, 0.0, 0.0}, prefer_center);
+  if (!r.empty()) return r.front();
+  BbsResult none;
+  none.window_covers_map = coversMap(center, Lx, Ly);
+  none.used_beams = 0;
+  return none;
+}
+
+std::vector<BbsResult> BranchAndBoundMatcher::search(const LaserScan2D& scan,
+                                                     const Pose2D& center, int Lx, int Ly,
+                                                     double angular_window, bool exhaustive,
+                                                     const BbsModeParams& modes,
+                                                     bool prefer_center) const {
+  std::vector<BbsResult> out;
+  const bool covers = coversMap(center, Lx, Ly);
   const int ns = static_cast<int>(scan.ranges.size());
-  if (ns == 0) return best;
+  if (ns == 0) return out;
+  const int K = std::max(1, modes.k);
 
   // 1. Subsample valid endpoints in the sensor frame.
   std::vector<Eigen::Vector2d> eps;
@@ -140,12 +176,20 @@ BbsResult BranchAndBoundMatcher::search(const LaserScan2D& scan, const Pose2D& c
     const double a = scan.angle_min + i * scan.angle_increment;
     eps.emplace_back(r * std::cos(a), r * std::sin(a));
   }
-  if (eps.empty()) return best;
+  if (eps.empty()) return out;
 
   // 2. Discrete rotations across the angular window.
+  // Global/windowed search keeps the v0.1 grid (-w, -w + step, ...). The
+  // centre-preferring local re-match uses a grid symmetric about 0 so the
+  // centre pose itself is a candidate.
   std::vector<double> angles;
-  for (double da = -params_.angular_window; da <= params_.angular_window + 1e-9; da += params_.angular_step)
-    angles.push_back(da);
+  if (prefer_center) {
+    const int n = static_cast<int>(std::floor(angular_window / params_.angular_step + 1e-9));
+    for (int k = -n; k <= n; ++k) angles.push_back(k * params_.angular_step);
+  } else {
+    for (double da = -angular_window; da <= angular_window + 1e-9; da += params_.angular_step)
+      angles.push_back(da);
+  }
   const int na = static_cast<int>(angles.size());
 
   // 3. Per-angle endpoint cells at the center translation (translation offsets add later).
@@ -161,12 +205,54 @@ BbsResult BranchAndBoundMatcher::search(const LaserScan2D& scan, const Pose2D& c
     }
   }
 
-  double best_score = -1.0;
+  // Kept modes, sorted by score descending. `threshold` is the score a leaf must
+  // strictly exceed to change the kept set: the K-th kept score once K modes are
+  // held, otherwise -1. With K = 1 this is exactly the single-best rule
+  // (strictly-better replaces, ties keep the first leaf reached).
+  // prefer_center (K = 1 only): ties on the best score are broken towards the
+  // candidate closest to the centre, so on a flat score plateau (e.g. along a
+  // featureless corridor) the result stays at the centre instead of drifting to
+  // whichever tied leaf is reached first. Ties are then not pruned.
+  struct Mode { Pose2D pose; double score; };
+  std::vector<Mode> kept;
+  double kept_dist = 0.0;
+  const bool tie_break = prefer_center && K == 1;
+  auto threshold = [&]() -> double {
+    return static_cast<int>(kept.size()) >= K ? kept.back().score : -1.0;
+  };
+  auto centreDist = [&](int t, int xo, int yo) {
+    const double a = angles[t] / params_.angular_step;
+    return static_cast<double>(xo) * xo + static_cast<double>(yo) * yo + a * a;
+  };
+  auto improves = [&](int t, int xo, int yo, double s) {
+    if (s > threshold()) return true;
+    return tie_break && !kept.empty() && s == threshold() && centreDist(t, xo, yo) < kept_dist;
+  };
   auto accept = [&](int t, int xo, int yo, double score) {
-    best_score = score;
-    best.pose = Pose2D{center.x + xo * resolution_, center.y + yo * resolution_,
-                       normalizeAngle(center.yaw + angles[t])};
-    best.score = score;
+    const Pose2D p{center.x + xo * resolution_, center.y + yo * resolution_,
+                   normalizeAngle(center.yaw + angles[t])};
+    if (K == 1) {  // single best: no suppression needed
+      if (kept.empty()) kept.push_back({p, score}); else kept[0] = {p, score};
+      kept_dist = centreDist(t, xo, yo);
+      return;
+    }
+    // Greedy NMS: a leaf joins the mode of any kept neighbour; it survives only if
+    // it beats every neighbour, which it then replaces.
+    bool dominated = false;
+    std::vector<Mode> next;
+    next.reserve(kept.size() + 1);
+    for (const Mode& m : kept) {
+      const bool near = std::hypot(m.pose.x - p.x, m.pose.y - p.y) <= modes.nms_xy &&
+                        std::fabs(normalizeAngle(m.pose.yaw - p.yaw)) <= modes.nms_yaw;
+      if (!near) { next.push_back(m); continue; }
+      if (m.score >= score) { dominated = true; break; }
+    }
+    if (dominated) return;
+    next.push_back({p, score});
+    std::stable_sort(next.begin(), next.end(),
+                     [](const Mode& a, const Mode& b) { return a.score > b.score; });
+    if (static_cast<int>(next.size()) > K) next.resize(K);
+    kept.swap(next);
   };
 
   if (exhaustive) {
@@ -175,7 +261,7 @@ BbsResult BranchAndBoundMatcher::search(const LaserScan2D& scan, const Pose2D& c
         for (int yo = -Ly; yo <= Ly; ++yo) {
           if (!feasible(center, xo, yo)) continue;
           const double s = scoreLevel(ep_cells[t], xo, yo, 0);
-          if (s > best_score) accept(t, xo, yo, s);
+          if (improves(t, xo, yo, s)) accept(t, xo, yo, s);
         }
   } else {
     // Search set: offsets in [-Lx, Lx] x [-Ly, Ly] exactly. Roots tile it from the
@@ -195,12 +281,14 @@ BbsResult BranchAndBoundMatcher::search(const LaserScan2D& scan, const Pose2D& c
     std::function<void(std::vector<Cand>&)> branch = [&](std::vector<Cand>& cands) {
       std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.upper > b.upper; });
       for (const Cand& c : cands) {
-        if (c.upper <= best_score) break;  // admissible prune (sorted desc)
+        if (c.upper < threshold() || (c.upper == threshold() && !tie_break))
+          break;  // admissible prune (sorted desc)
         if (c.depth == 0) {
           // Leaf upper == exact level-0 score. Infeasible robot cells (occupied or
           // off-map) are skipped: bounds above stay admissible for the feasible
           // subset because they bound every leaf, feasible or not.
-          if (feasible(center, c.xo, c.yo)) accept(c.t, c.xo, c.yo, c.upper);
+          if (feasible(center, c.xo, c.yo) && improves(c.t, c.xo, c.yo, c.upper))
+            accept(c.t, c.xo, c.yo, c.upper);
         } else {
           const int half = 1 << (c.depth - 1);
           std::vector<Cand> ch;
@@ -218,9 +306,24 @@ BbsResult BranchAndBoundMatcher::search(const LaserScan2D& scan, const Pose2D& c
     branch(roots);
   }
 
-  best.valid = best_score >= 0.0 &&
-               best_score >= params_.min_score_fraction * static_cast<double>(eps.size());
-  return best;
+  const double need = params_.min_score_fraction * static_cast<double>(eps.size());
+  for (const Mode& m : kept) {
+    BbsResult r;
+    r.pose = m.pose;
+    r.score = m.score;
+    r.valid = m.score >= 0.0 && m.score >= need;
+    r.window_covers_map = covers;
+    r.used_beams = static_cast<int>(eps.size());
+    r.found = true;
+    out.push_back(r);
+  }
+  if (out.empty()) {  // endpoints exist but no feasible candidate in the window
+    BbsResult r;
+    r.window_covers_map = covers;
+    r.used_beams = static_cast<int>(eps.size());
+    out.push_back(r);
+  }
+  return out;
 }
 
 }  // namespace prism_loc_core
