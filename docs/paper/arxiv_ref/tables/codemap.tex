@@ -15,7 +15,8 @@ Equation / algorithm & Source \\
 \Cref{eq:pyramid,eq:bbsscore,eq:bbsaccept}, \Cref{alg:bbs} & \code{core/bbs.cpp}; re-seeding in \code{node/} (\code{onScan}) \\
 \Cref{eq:eskfpred,eq:eskfupd} (ESKF) & \code{fusion/eskf.cpp}, \code{fusion/so3.cpp}, \code{fusion/geodetic.cpp} \\
 \Cref{eq:attinit}, GNSS and NDT gates & \code{fnode/} (\code{attitudeFromAccel}, \code{onGnss}, \code{onPoints}) \\
-Synthetic drivers & \code{experiments/mcl\_tracking.cpp}, \code{bbs\_relocalization.cpp}, \code{eskf\_fusion.cpp} \\
+\Cref{cor:bbs} check (exhaustive search) & \code{core/bbs.cpp} (\code{matchExhaustive}); test \code{prism\_loc\_core/test/test\_bbs.cpp} \\
+Synthetic drivers & \code{experiments/mcl\_tracking.cpp}, \code{bbs\_relocalization.cpp}, \code{eskf\_fusion.cpp}, \code{bbs\_largemap.cpp} (with \code{legacy/bbs\_v01.cpp}), \code{eskf\_nees.cpp} \\
 \bottomrule
 \end{tabularx}
 \end{table}

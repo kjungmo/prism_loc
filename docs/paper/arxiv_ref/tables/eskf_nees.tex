@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Monte Carlo NEES of the ESKF} ($N=100$ runs, 120 epochs at 2\,Hz after $t=0$; initial error and true IMU biases drawn from $\mathbf{P}_0$). Band: two-sided 95\% interval for the run-averaged NEES; a consistent filter keeps about 95\% of epochs inside it. In / above / below count epochs for the shipped filter ($\mathbf{G}=\mathbf{I}$); the last column is the time-averaged NEES with the reset Jacobian enabled on identical data (\code{data/eskf\_nees.csv}, \code{experiments/eskf\_nees.cpp}).}\label{tab:nees}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Error block (dof) & 95\% band & Mean NEES, $\mathbf{G}=\mathbf{I}$ & In / above / below & Mean NEES, reset $\mathbf{G}$ \\
+\midrule
+Full state (15) & [13.95, 16.09] & 15.17 & 37 / 36 / 47 & 15.17 \\
+Position $\delta\mathbf{p}$ (3) & [2.54, 3.50] & 2.93 & 115 / 1 / 4 & 2.92 \\
+Velocity $\delta\mathbf{v}$ (3) & [2.54, 3.50] & 2.77 & 90 / 0 / 30 & 2.77 \\
+Attitude $\delta\boldsymbol{\theta}$ (3) & [2.54, 3.50] & 3.11 & 94 / 23 / 3 & 3.11 \\
+Accel.\ bias $\delta\mathbf{b}_a$ (3) & [2.54, 3.50] & 2.08 & 39 / 0 / 81 & 2.08 \\
+Gyro bias $\delta\mathbf{b}_g$ (3) & [2.54, 3.50] & 1.91 & 40 / 0 / 80 & 1.91 \\
+\bottomrule
+\end{tabular}
+\end{table}

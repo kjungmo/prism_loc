@@ -12,11 +12,18 @@ g++ -O2 -std=c++17 $CORE prism_loc_core/src/*.cpp \
 g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
     prism_loc_fusion/src/*.cpp experiments/eskf_fusion.cpp -o /tmp/exp_eskf
 /tmp/exp_eskf > docs/paper/data/eskf_track.csv
-python3 docs/paper/check_numbers.py   # recompute every quoted statistic
+g++ -O2 -std=c++17 $CORE -I experiments prism_loc_core/src/*.cpp \
+    experiments/legacy/bbs_v01.cpp experiments/bbs_largemap.cpp \
+    -o /tmp/exp_bbs_large && /tmp/exp_bbs_large     # about 7 min
+g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
+    prism_loc_fusion/src/*.cpp experiments/eskf_nees.cpp -o /tmp/exp_nees
+/tmp/exp_nees
+python3 docs/paper/make_study_tables.py   # tables of the two new studies
+python3 docs/paper/check_numbers.py       # recompute every quoted statistic
 \end{verbatim}
 }
 
-\noindent All randomness derives from fixed compile-time seeds (\Cref{tab:repro}), so every CSV column is bit-for-bit reproducible except the wall-clock \code{time\_ms} latency column of the BBS experiment. We re-ran all three drivers from the sources of this commit while preparing this version: \code{mcl\_tracking.csv}, \code{mcl\_particles.csv}, and \code{eskf\_track.csv} were byte-identical to the committed files, and \code{bbs\_relocalization.csv} matched in every column except \code{time\_ms}. On that re-run machine (AMD Ryzen~5 5500GT, single thread) the median BBS query latency was 10.26\,ms against the 37.65\,ms of the committed CSV, which illustrates why latency is reported as machine-dependent; the re-run CSV is committed under \code{docs/paper/data/rerun\_2026-09-28/}. The guard script \code{docs/paper/check\_numbers.py} recomputes each headline statistic from the committed CSVs and fails if a number quoted in the \LaTeX{} sources, including this package, no longer matches.
+\noindent All randomness derives from fixed compile-time seeds (\Cref{tab:repro}), so every CSV column is bit-for-bit reproducible except the wall-clock \code{time\_ms} latency columns of the two BBS experiments. We re-ran all three drivers from the sources of this commit while preparing this version: \code{mcl\_tracking.csv}, \code{mcl\_particles.csv}, and \code{eskf\_track.csv} were byte-identical to the committed files, and \code{bbs\_relocalization.csv} matched in every column except \code{time\_ms}. On that re-run machine (AMD Ryzen~5 5500GT, single thread) the median BBS query latency was 10.26\,ms against the 37.65\,ms of the committed CSV, which illustrates why latency is reported as machine-dependent; the re-run CSV is committed under \code{docs/paper/data/rerun\_2026-09-28/}. After the matcher gained its symmetric window and feasibility rule we re-ran the room study once more against the current code (\code{bbs\_relocalization\_fixbbs.csv} in the same directory): again every column except \code{time\_ms} is identical to the committed CSV, with a median latency of 9.90\,ms on the same re-run machine. The guard script \code{docs/paper/check\_numbers.py} recomputes each headline statistic from the committed CSVs and fails if a number quoted in the \LaTeX{} sources, including this package, no longer matches.
 
 \input{tables/repro}
 

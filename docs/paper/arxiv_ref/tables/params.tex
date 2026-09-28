@@ -17,12 +17,15 @@ Parameter & Symbol & Default & Used in \\
 \code{likelihood\_max\_dist} & -- & 2.0\,m & \Cref{eq:laser} \\
 \code{ndt\_resolution} / \code{voxel\_min\_points} & -- & 1.0\,m / 5 & \Cref{eq:ndt} \\
 \code{max\_points} / \code{base\_height} & -- & 500 / 0.0\,m & \Cref{eq:ndt} \\
-\code{bbs\_linear\_window} & $W$ & 10.0\,m & \Cref{alg:bbs} \\
+\code{bbs\_global\_window} & -- & true & \Cref{sec:bbs} \\
+\code{bbs\_max\_linear\_window} & $W_{\max}$ & 50.0\,m & \Cref{sec:bbs} \\
+\code{bbs\_linear\_window} (if not global) & $W$ & 10.0\,m & \Cref{sec:bbs} \\
 \code{bbs\_angular\_window} / \code{bbs\_angular\_step} & -- & $\pi$ / 0.0175\,rad & \Cref{alg:bbs} \\
 \code{bbs\_max\_depth} / \code{bbs\_max\_beams} & $D$ / -- & 6 / 120 & \Cref{eq:pyramid,eq:bbsscore} \\
 \code{bbs\_min\_score\_fraction} & $\rho$ & 0.4 & \Cref{eq:bbsaccept} \\
 \code{sigma\_acc} / \code{sigma\_gyro} & $\sigma_a$ / $\sigma_g$ & 0.01 / 0.001 & \Cref{eq:eskfpred} \\
 \code{sigma\_acc\_bias} / \code{sigma\_gyro\_bias} & $\sigma_{b_a}$ / $\sigma_{b_g}$ & $10^{-4}$ / $10^{-5}$ & \Cref{eq:eskfpred} \\
+\code{reset\_jacobian} & $\mathbf{G}$ & false ($\mathbf{G}=\mathbf{I}$) & \Cref{sec:eskf} \\
 \code{pose\_pos\_std} / \code{pose\_rot\_std} & $\sigma_{\mathrm{pos}}$ / $\sigma_{\mathrm{rot}}$ & 0.1\,m / 0.05\,rad & \Cref{eq:eskfupd} \\
 \code{ndt\_max\_fitness} & -- & 2.0 & NDT gate \\
 \code{gnss\_min\_status} / \code{gnss\_max\_pos\_cov} & $s_{\min}$ / $c_{\max}$ & 0 / 25.0\,m$^2$ & GNSS gate \\

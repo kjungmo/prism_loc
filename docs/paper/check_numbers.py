@@ -256,8 +256,65 @@ REPO = ROOT.parent.parent
 def ntests(pkg):
     return sum(len(re.findall(r"^TEST(?:_F)?\(", f.read_text(), re.M)) for f in (REPO / pkg / "test").glob("*.cpp"))
 counts = {k: ntests(k) for k in ["prism_loc_core", "prism_loc_fusion", "prism_loc", "prism_loc_fusion_ros"]}
-check("test counts", list(counts.values()) == [25, 13, 4, 2] and sum(counts.values()) == 44, str(counts))
-ax_expect("test total", "44 GoogleTest cases")
+check("test counts", list(counts.values()) == [31, 15, 4, 2] and sum(counts.values()) == 52, str(counts))
+ax_expect("test total", "52 GoogleTest cases")
+ax_expect("test split", "31 in \\code{prism\\_loc\\_core}")
+ax_expect("test split fusion", "15 in \\code{prism\\_loc\\_fusion}")
+ax_expect("intro test total", "52 deterministic unit and integration tests")
+
+# re-run of the room study against the fixed matcher (symmetric window + feasibility)
+rf = DATA / "rerun_2026-09-28" / "bbs_relocalization_fixbbs.csv"
+a = list(csv.DictReader(open(rf))); b = list(csv.DictReader(open(DATA / "bbs_relocalization.csv")))
+same = len(a) == len(b) and all(x[c] == y[c] for x, y in zip(a, b) for c in b[0] if c != "time_ms")
+check("fixbbs rerun non-latency identical", same, f"rows={len(a)}")
+med = st.median(float(r["time_ms"]) for r in a)
+check("fixbbs rerun median latency", f"{med:.2f}" == "9.90", f"{med:.3f}")
+ax_expect("fixbbs rerun latency", "9.90\\,ms")
+
+# ---------------- large-map BBS study + ESKF NEES study ----------------
+sys.path.insert(0, str(ROOT))
+import make_study_tables as mst
+for path, text in mst.generate().items():
+    check(f"generated table {path.name}", path.exists() and path.read_text() == text, "matches CSV")
+d = mst.bbs_derived(mst.bbs_rows())
+S = mst.bbs_stats(mst.bbs_rows())
+check("bbs large query counts", d["new_40_n"] == 120 and d["new_80_n"] == 120 and S[("20", "in", "new")]["n"] == 60, "60 per stratum")
+ax_expect("large 40 FA", f"{d['new_40_fa']} of 120 queries on the 40\\,m map")
+ax_expect("large 80 FA", f"{d['new_80_fa']} of 120 on the 80\\,m map")
+ax_expect("large old FA", f"(first release: {d['old_40_fa']} and {d['old_80_fa']})")
+ax_expect("abstract FA", f"accepts a wrong pose on {d['new_40_fa']} and {d['new_80_fa']} of 120 queries")
+ax_expect("limitation FA", f"{d['new_40_fa']} of 120 (40\\,m) and {d['new_80_fa']} of 120 (80\\,m)")
+o40, n40 = S[("40", "out", "old")], S[("40", "out", "new")]
+o80, n80 = S[("80", "out", "old")], S[("80", "out", "new")]
+ax_expect("out old succ", f"succeeds on only {o40['succ']} of 60 queries on the 40\\,m map and {o80['succ']} of 60 on the 80\\,m map")
+ax_expect("out old FA", f"wrong in-window pose on {o40['fa']} and {o80['fa']} of them")
+ax_expect("out new succ", f"recovers {n40['succ']} and {n80['succ']} of the same 60 poses")
+ax_expect("intro out succ", f"recovers {n40['succ']} and {n80['succ']} of 60 poses that lie outside")
+ax_expect("intro out old", f"which recovered {o40['succ']} and {o80['succ']}")
+ax_expect("intro FA", f"wrong pose on {d['new_40_fa']} and {d['new_80_fa']} of 120 queries because")
+ax_expect("FA total/flips", f"Of these {d['fa_new_big']} false accepts, {d['fa_new_flip']} are $180^\\circ$ flips")
+ax_expect("FA min err", f"closer than {d['fa_new_minerr']:.2f}\\,m")
+ax_expect("rho star", f"score fraction {d['rho_star']:.2f}")
+ax_expect("succ above rho star", f"only {d['big_succ_above_rho_star']} of the {d['big_succ']} successes")
+check("more than half rejected", d["big_succ_above_rho_star"] < d["big_succ"] / 2, f"{d['big_succ_above_rho_star']}/{d['big_succ']}")
+ax_expect("notfree", f"on {d['old_notfree']} of its 300 queries")
+check("new never infeasible", d["new_notfree"] == 0 and sum(S[k]["n"] for k in S if k[2] == "old") == 300, "0 / 300")
+ax_expect("20m latency", f"takes {S[('20','in','new')]['lat']:.0f}\\,ms on the 20\\,m map")
+ax_expect("80m latency", f"{d['new80_lat_med']:.0f}\\,ms on the 80\\,m map")
+ax_expect("80m p95", f"{d['new80_lat_p95']:.0f}\\,ms under heavy clutter")
+
+N = mst.nees_stats(mst.nees_rows())
+g = {b: N[(b, "gi")] for b, _ in mst.BLOCKS}
+r = {b: N[(b, "rj")] for b, _ in mst.BLOCKS}
+check("nees runs/epochs", N["runs"] == 100 and N["epochs"] == 120, f"{N['runs']} runs, {N['epochs']} epochs")
+ax_expect("nees mean", f"time-averaged full-state NEES is {g['all']['mean']:.2f}")
+ax_expect("nees in/above/below", f"at only {g['all']['in']} of 120 epochs, above it (overconfident) at {g['all']['above']}, and below it (underconfident) at {g['all']['below']}")
+ax_expect("nees pos", f"inside at {g['p']['in']} of 120 epochs")
+ax_expect("nees att", f"above at {g['th']['above']} epochs, peak {g['th']['max']:.2f} against an upper limit of {g['th']['hi']:.2f}")
+ax_expect("nees bias", f"below at {g['ba']['below']} and {g['bg']['below']} epochs")
+check("nees reset: counts unchanged", all((g[b]['in'], g[b]['above'], g[b]['below']) == (r[b]['in'], r[b]['above'], r[b]['below']) for b in g), "in/above/below equal")
+check("nees reset max diff", f"{N['maxdiff']:.3f}" == "0.026", f"{N['maxdiff']:.4f}")
+ax_expect("nees reset diff", "by at most 0.026")
 
 # ---------------- verdict ----------------
 print()

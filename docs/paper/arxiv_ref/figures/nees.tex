@@ -1,0 +1,41 @@
+% nees.tex -- Monte Carlo NEES of the ESKF (SYNTHETIC data, N = 100 runs).
+% Data: data/eskf_nees.csv (copy of docs/paper/data/, produced by experiments/eskf_nees.cpp).
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}
+    \begin{groupplot}[
+        group style={group size=1 by 2, vertical sep=0.9cm},
+        width=0.72\linewidth, height=0.30\linewidth,
+        xmin=0, xmax=60, xtick={0,10,20,30,40,50,60},
+        tick label style={font=\footnotesize}, label style={font=\footnotesize},
+        legend style={font=\scriptsize, draw=black!40, fill=white, fill opacity=0.85, text opacity=1},
+        legend cell align=left, axis on top, grid=major, grid style={gray!20},
+      ]
+      \nextgroupplot[ymin=8, ymax=26, ylabel={Full-state NEES},
+                     legend style={at={(0.99,0.97)}, anchor=north east}, legend columns=2]
+      \addplot[draw=none, fill=black!12, forget plot] coordinates {(25,8) (35,8) (35,26) (25,26)} \closedcycle;
+      \addplot[black!60, dashed, line width=0.8pt, forget plot] table [col sep=comma, x=time_s, y=chi2_lo15] {data/eskf_nees.csv};
+      \addplot[black!60, dashed, line width=0.8pt] table [col sep=comma, x=time_s, y=chi2_hi15] {data/eskf_nees.csv};
+      \addlegendentry{95\% band}
+      \addplot[black, solid, line width=0.9pt, mark=*, mark size=0.5pt] table [col sep=comma, x=time_s, y=nees_all_gi] {data/eskf_nees.csv};
+      \addlegendentry{$\mathbf{G}=\mathbf{I}$}
+      \addplot[red!70!black, densely dotted, line width=0.9pt] table [col sep=comma, x=time_s, y=nees_all_rj] {data/eskf_nees.csv};
+      \addlegendentry{reset $\mathbf{G}$}
+      \nextgroupplot[ymin=0, ymax=6, ylabel={3-D block NEES}, xlabel={Time (s)},
+                     legend style={at={(0.99,0.97)}, anchor=north east}, legend columns=4]
+      \addplot[draw=none, fill=black!12, forget plot] coordinates {(25,0) (35,0) (35,6) (25,6)} \closedcycle;
+      \addplot[black!60, dashed, line width=0.8pt, forget plot] table [col sep=comma, x=time_s, y=chi2_lo3] {data/eskf_nees.csv};
+      \addplot[black!60, dashed, line width=0.8pt, forget plot] table [col sep=comma, x=time_s, y=chi2_hi3] {data/eskf_nees.csv};
+      \addplot[blue!70!black, solid, line width=0.8pt] table [col sep=comma, x=time_s, y=nees_p_gi] {data/eskf_nees.csv};
+      \addlegendentry{$\delta\mathbf{p}$}
+      \addplot[red!70!black, solid, line width=0.8pt] table [col sep=comma, x=time_s, y=nees_th_gi] {data/eskf_nees.csv};
+      \addlegendentry{$\delta\boldsymbol{\theta}$}
+      \addplot[green!50!black, densely dashed, line width=0.8pt] table [col sep=comma, x=time_s, y=nees_ba_gi] {data/eskf_nees.csv};
+      \addlegendentry{$\delta\mathbf{b}_a$}
+      \addplot[orange!80!black, densely dotted, line width=0.9pt] table [col sep=comma, x=time_s, y=nees_bg_gi] {data/eskf_nees.csv};
+      \addlegendentry{$\delta\mathbf{b}_g$}
+    \end{groupplot}
+  \end{tikzpicture}
+  \caption{\textbf{Monte Carlo NEES of the ESKF on synthetic data} ($N=100$ runs of the \Cref{fig:eskf} scenario with initial errors and IMU biases drawn from $\mathbf{P}_0$; aiding dropout shaded). Top: run-averaged NEES of the full 15-D error state for the shipped filter ($\mathbf{G}=\mathbf{I}$) and with the reset Jacobian, which overlap; dashed lines bound the two-sided 95\% interval. Bottom: 3-D blocks of the shipped filter against the 3-dof interval. The full-state NEES leaves the interval in both directions with the phase of the trajectory; position is consistent, attitude is intermittently overconfident, and both bias blocks become increasingly underconfident as the run proceeds.}
+  \label{fig:nees}
+\end{figure}
