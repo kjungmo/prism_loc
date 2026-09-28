@@ -30,6 +30,15 @@ struct BbsResult {
   bool window_covers_map{false};
 };
 
+// Test-only perturbation of the coarse-level (level > 0) bounds, used by the
+// negative-control tests to show that the branch-and-bound vs exhaustive
+// agreement check detects an inadmissible bound. The default is the identity;
+// production code never sets it.
+struct BoundMutationForTesting {
+  double coarse_scale{1.0};         // multiply every coarse-level bound
+  bool coarse_drop_off_map{false};  // coarse levels drop off-map cells like leaves
+};
+
 // Branch-and-bound correlative scan matcher (Hess et al. 2016) over the set
 //   Theta x {-Lx..Lx} x {-Ly..Ly}   (cell offsets from a center pose),
 // restricted to FEASIBLE candidates: the robot position must lie in an on-map
@@ -57,6 +66,8 @@ class BranchAndBoundMatcher {
   int globalHalfWindowY() const;
   bool globalWindowCoversMap() const;
 
+  void setBoundMutationForTesting(BoundMutationForTesting m) { mutation_ = m; }
+
  private:
   BbsResult search(const LaserScan2D& scan, const Pose2D& center, int Lx, int Ly,
                    bool exhaustive) const;
@@ -72,6 +83,7 @@ class BranchAndBoundMatcher {
   double origin_y_;
   std::vector<std::uint8_t> blocked_;          // 1 = occupied cell
   std::vector<std::vector<float>> pyramid_;  // pyramid_[level][y*width_ + x]
+  BoundMutationForTesting mutation_;
 };
 
 }  // namespace prism_loc_core

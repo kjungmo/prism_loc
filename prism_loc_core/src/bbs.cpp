@@ -57,7 +57,7 @@ double BranchAndBoundMatcher::scoreLevel(const std::vector<std::pair<int, int>>&
   for (const auto& c : ep_cells) {
     int cx = c.first + x_off;
     int cy = c.second + y_off;
-    if (level == 0) {
+    if (level == 0 || mutation_.coarse_drop_off_map) {
       if (cx < 0 || cy < 0 || cx >= width_ || cy >= height_) continue;
     } else {
       // Block entirely outside the grid contributes nothing.
@@ -69,7 +69,7 @@ double BranchAndBoundMatcher::scoreLevel(const std::vector<std::pair<int, int>>&
     }
     s += g[cy * width_ + cx];
   }
-  return s;
+  return level > 0 ? s * mutation_.coarse_scale : s;
 }
 
 bool BranchAndBoundMatcher::feasible(const Pose2D& center, int x_off, int y_off) const {

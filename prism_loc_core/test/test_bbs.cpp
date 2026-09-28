@@ -159,14 +159,13 @@ TEST(Bbs, NeverReturnsPoseOffTheMap) {
 
 // Branch-and-bound returns exactly the exhaustive maximum over the feasible,
 // symmetric search set (admissible bound => optimality), on a small case.
-TEST(Bbs, BranchAndBoundMatchesExhaustiveSearch) {
-  GridMap g = asymRoom();
-  BbsParams p = defaultParams();
-  p.linear_window = 1.5; p.max_depth = 3;
-  p.angular_window = 0.35; p.angular_step = 0.0175; p.max_beams = 60;
-  BranchAndBoundMatcher m(g, p);
+// The exhaustive-agreement check, shared by the optimality test and by the
+// negative controls below: number of cases (out of 12) where branch-and-bound
+// and exhaustive search disagree on the best score or on validity.
+static int exhaustiveDisagreements(const BranchAndBoundMatcher& m, const GridMap& g) {
   std::mt19937 rng(7);
   std::uniform_real_distribution<double> u(0.6, 5.4), uy(-0.3, 0.3), un(0.0, 1.0);
+  int bad = 0;
   for (int k = 0; k < 12; ++k) {
     Pose2D truth{u(rng), u(rng), uy(rng)};
     LaserScan2D scan = test::raycastScan(g, truth, Pose2D{0, 0, 0}, 120, 12.0);
@@ -174,7 +173,45 @@ TEST(Bbs, BranchAndBoundMatchesExhaustiveSearch) {
     const Pose2D center{3.0 + 0.3 * (un(rng) - 0.5), 3.0 + 0.3 * (un(rng) - 0.5), 0.0};
     const BbsResult bb = m.match(scan, center);
     const BbsResult ex = m.matchExhaustive(scan, center);
-    EXPECT_DOUBLE_EQ(bb.score, ex.score) << "case " << k;
-    EXPECT_EQ(bb.valid, ex.valid);
+    if (bb.score != ex.score || bb.valid != ex.valid) ++bad;
   }
+  return bad;
+}
+
+static BbsParams agreementParams() {
+  BbsParams p = defaultParams();
+  p.linear_window = 1.5; p.max_depth = 3;
+  p.angular_window = 0.35; p.angular_step = 0.0175; p.max_beams = 60;
+  return p;
+}
+
+TEST(Bbs, BranchAndBoundMatchesExhaustiveSearch) {
+  GridMap g = asymRoom();
+  BranchAndBoundMatcher m(g, agreementParams());
+  EXPECT_EQ(exhaustiveDisagreements(m, g), 0);
+}
+
+// Negative controls: the agreement check must be able to fail. An inflated
+// coarse bound is still admissible (only slower) and must still agree; a
+// deflated bound, or coarse levels that drop off-map cells like the leaves do
+// (the pre-fix v0.1 behaviour), are inadmissible and must be detected.
+TEST(Bbs, AgreementCheckAcceptsInflatedAdmissibleBound) {
+  GridMap g = asymRoom();
+  BranchAndBoundMatcher m(g, agreementParams());
+  m.setBoundMutationForTesting(BoundMutationForTesting{1.5, false});
+  EXPECT_EQ(exhaustiveDisagreements(m, g), 0);
+}
+
+TEST(Bbs, AgreementCheckDetectsDeflatedBound) {
+  GridMap g = asymRoom();
+  BranchAndBoundMatcher m(g, agreementParams());
+  m.setBoundMutationForTesting(BoundMutationForTesting{0.8, false});
+  EXPECT_GT(exhaustiveDisagreements(m, g), 0);
+}
+
+TEST(Bbs, AgreementCheckDetectsCoarseLevelsDroppingOffMapCells) {
+  GridMap g = asymRoom();
+  BranchAndBoundMatcher m(g, agreementParams());
+  m.setBoundMutationForTesting(BoundMutationForTesting{1.0, true});
+  EXPECT_GT(exhaustiveDisagreements(m, g), 0);
 }
