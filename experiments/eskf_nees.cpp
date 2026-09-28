@@ -6,8 +6,13 @@
 // withheld for t in [25, 35) s, fusion3d.yaml process noise, measurement noise
 // equal to the filter's R). Differences from eskf_fusion.cpp, required for a
 // NEES test: in every run the initial estimation error (position, velocity,
-// attitude) AND the true constant IMU biases are drawn from N(0, P0), so the
-// truth is a sample from the filter's own prior.
+// attitude) AND the true IMU biases are drawn from N(0, P0), and the true biases
+// then follow the same random walk the filter's process model assumes
+// (per IMU step, b += N(0, sigma_bias^2 dt), drawn from a separate stream so all
+// other draws are unchanged), so the truth is a sample of the filter's own model.
+// (The first version of this study held the true biases constant while the
+// filter injected bias random-walk noise; that mismatch alone made both bias
+// blocks look underconfident.)
 //
 // Every 0.5 s (121 epochs, after any update at that instant) we compute the
 // normalized estimation error squared eps = e^T P^-1 e for the full 15-D error
@@ -44,6 +49,7 @@ using namespace prism_loc_fusion;
 
 static constexpr std::uint64_t kSeed = 20260929u;  // run k uses kSeed + k
 static constexpr int kRuns = 100;
+static constexpr std::uint64_t kBiasSeed = 20261029u;  // bias random walk of run k: kBiasSeed + k
 
 struct Truth { Eigen::Vector3d p, v, a; double yaw, yaw_rate; };
 
@@ -106,7 +112,8 @@ int main() {
 
   for (int run = 0; run < kRuns; ++run) {
     Rng rng(kSeed + static_cast<std::uint64_t>(run));
-    const Eigen::Vector3d ba_true = gauss3(rng, s0_ba), bg_true = gauss3(rng, s0_bg);
+    Rng rng_bias(kBiasSeed + static_cast<std::uint64_t>(run));  // separate stream
+    Eigen::Vector3d ba_true = gauss3(rng, s0_ba), bg_true = gauss3(rng, s0_bg);
     const Truth T0 = truthAt(0.0);
     NominalState x0;
     x0.p = T0.p - gauss3(rng, s0_p);
@@ -121,6 +128,9 @@ int main() {
     for (int k = 0; k <= steps; ++k) {
       const double t = k * imu_dt;
       if (k > 0) {
+        // True biases follow the filter's random-walk model (Q_b = sigma_b^2 dt).
+        ba_true += gauss3(rng_bias, params.sigma_acc_bias * std::sqrt(imu_dt));
+        bg_true += gauss3(rng_bias, params.sigma_gyro_bias * std::sqrt(imu_dt));
         const Truth Tk = truthAt(t);
         const Eigen::Matrix3d R = yawQuat(Tk.yaw).toRotationMatrix();
         const Eigen::Vector3d f_body = R.transpose() * (Tk.a - params.gravity);

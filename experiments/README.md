@@ -122,11 +122,13 @@ deterministic.
 ## 5. `eskf_nees.cpp` — Monte Carlo NEES consistency of the ESKF
 
 N = 100 runs of the study-3 scenario, with the initial error and the true IMU
-biases drawn from the filter's own prior N(0, P0) in every run. Logs, every
+biases drawn from the filter's own prior N(0, P0) in every run; the true biases
+then random-walk exactly as the filter's process model assumes. Logs, every
 0.5 s, the run-averaged NEES of the full 15-D error state and of each 3-D block,
 with the two-sided 95 % chi-square acceptance interval, for the v0.1 filter
 (reset Jacobian G = I, suffix `_gi`) and with `EskfParams::reset_jacobian`
-(suffix `_rj`) on identical data. Seeds: 20260929 + run index.
+(suffix `_rj`) on identical data. Seeds: 20260929 + run index (sensor noise and
+initial draws), 20261029 + run index (bias random walk).
 
 ```sh
 g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
