@@ -135,3 +135,28 @@ g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
   prism_loc_fusion/src/*.cpp experiments/eskf_nees.cpp -o /tmp/exp_nees
 /tmp/exp_nees               # writes docs/paper/data/eskf_nees.csv (deterministic)
 ```
+
+## `bbs_verify.cpp` + `select_verify_params.py` — multi-scan relocalization verification
+
+Compares the single-scan acceptance rule with `RelocalizationVerifier`
+(top-K BBS modes of the first scan, re-matched over M odometry-chained scans,
+committed only when one hypothesis holds enough posterior mass) on the maps,
+poses and first scans of `bbs_largemap.cpp` (seed 20260928; its `single` rows
+reproduce that study's `new` rows). The robot then drives a short random
+trajectory (0.3 m steps) with noisy odometry, one cluttered scan per step.
+
+The verifier defaults were chosen on a separate calibration run (seed
+20261105: different maps and poses) by `select_verify_params.py`, which
+replays the decision rule over a (K, M, gain, posterior) grid and picks the
+configuration with the fewest false accepts, then the most correct accepts.
+
+```sh
+g++ -O2 -std=c++17 \
+  -I prism_loc_core/include -I prism_loc_core/test -I /usr/include/eigen3 \
+  prism_loc_core/src/*.cpp experiments/bbs_verify.cpp -pthread -o /tmp/exp_bbs_verify
+/tmp/exp_bbs_verify calib 10                          # bbs_verify_calib.csv
+python3 experiments/select_verify_params.py --check   # bbs_verify_selection.csv
+/tmp/exp_bbs_verify study 3                           # bbs_verify.csv
+```
+
+The second argument is the worker-thread count; it changes only `time_ms`.
