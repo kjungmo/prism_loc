@@ -66,10 +66,10 @@ M.~Magnusson, A.~Lilienthal, and T.~Duckett.
 \newblock ISSN 1556-4959.
 \newblock \doi{10.1002/rob.20204}.
 
-\bibitem[Moore and Stouch(2014)]{moore2014generalized}
+\bibitem[Moore and Stouch(2016)]{moore2014generalized}
 T.~Moore and D.~Stouch.
 \newblock A generalized extended {Kalman} filter implementation for the robot operating system.
-\newblock In \emph{Intelligent Autonomous Systems 13: Proceedings of the 13th International Conference (IAS-13)}, volume 302 of \emph{Advances in Intelligent Systems and Computing}, pages 335--348, Cham, 2014. Springer.
+\newblock In \emph{Intelligent Autonomous Systems 13: Proceedings of the 13th International Conference (IAS-13)}, volume 302 of \emph{Advances in Intelligent Systems and Computing}, pages 335--348, Cham, 2016. Springer.
 \newblock ISBN 978-3-319-08338-4.
 \newblock \doi{10.1007/978-3-319-08338-4_25}.
 
