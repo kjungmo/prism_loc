@@ -1,0 +1,85 @@
+% overview.tex -- architecture teaser (TikZ), ported from docs/paper/figures/fig_architecture.tex
+\begin{figure}[t]
+\centering
+\footnotesize
+\begin{tikzpicture}[
+  font=\footnotesize,
+  >={Stealth[length=1.4mm]},
+  node distance=2mm and 2.6mm,
+  block/.style={draw, rounded corners=1pt, inner sep=1.6pt, align=center,
+                minimum height=4.4mm},
+  core/.style={block, fill=blue!5},
+  meas/.style={block, fill=blue!9, font=\scriptsize},
+  ros/.style={block, fill=orange!8, align=left, inner sep=2pt},
+  io/.style={draw, dashed, rounded corners=1pt, inner sep=2pt, align=left,
+             fill=green!7, text width=80mm},
+  flow/.style={->, thin},
+]
+
+% ============ Estimator core layer (bottom) ============
+% ---- prism_loc_core (MCL) ----
+\node[core] (omm) {Odometry\\MotionModel};
+\node[core, right=of omm] (pf) {Particle\\Filter};
+\node[core, right=of pf] (mclout) {Pose2D\\$+\,6{\times}6$ cov};
+\node[meas, below=4mm of pf] (mcM)
+  {Laser2DLikelihoodField\\$\mid$~~Ndt3DModel};
+\draw[flow] (omm) -- (pf);
+\draw[flow] (pf) -- (mclout);
+\draw[flow] (mcM) -- (pf);
+\node[font=\scriptsize\bfseries, anchor=south west]
+  (mcllbl) at ([yshift=0.6mm]omm.north west) {prism\_loc\_core \textmd{(MCL)}};
+
+% ---- prism_loc_fusion (ESKF) ----
+\node[core, below=16mm of omm.south west, anchor=north west] (imu) {IMU\\predict};
+\node[core, right=of imu] (eskf) {15-state\\ESKF};
+\node[core, right=of eskf] (fusout) {pose $+$\\velocity};
+\node[meas, below=4mm of eskf] (esM)
+  {NDT 6-DoF pose upd.\\$\mid$~~GNSS position upd.};
+\draw[flow] (imu) -- (eskf);
+\draw[flow] (eskf) -- (fusout);
+\draw[flow] (esM) -- (eskf);
+\node[font=\scriptsize\bfseries, anchor=south west]
+  (fuslbl) at ([yshift=0.6mm]imu.north west) {prism\_loc\_fusion \textmd{(ESKF)}};
+
+% fit box around the core layer
+\node[draw, thick, rounded corners=2pt, fill=none,
+      fit=(mcllbl)(mclout)(mcM)(imu)(fusout)(esM),
+      inner sep=3pt] (corebox) {};
+\node[anchor=north, font=\scriptsize\itshape, inner sep=1.5pt]
+  at ([yshift=-0.4mm]corebox.south)
+  {middleware-free cores: C++17 + Eigen only \textmd{(no ROS/PCL; gtest)}};
+
+% ============ ROS 2 node layer (top) ============
+\node[ros, above=19mm of corebox.north west, anchor=south west]
+  (plnode) {\texttt{prism\_loc}\\backend: laser2d\,$\mid$\,ndt3d};
+\node[ros, right=of plnode]
+  (fnode) {\texttt{prism\_loc\_}\\\texttt{fusion\_ros}\\backend: fusion3d};
+\node[ros, below=1.6mm of plnode.south west, anchor=north west]
+  (adapt) {adapters: laser / pointcloud / ndt\_registration};
+\node[draw, thick, rounded corners=2pt, fill=none,
+      fit=(plnode)(fnode)(adapt), inner sep=3pt] (rosbox) {};
+\node[anchor=south east, font=\scriptsize\itshape, inner sep=1.5pt]
+  at ([yshift=0.2mm]rosbox.north east)
+  {ROS~2 nodes: \textmd{rclcpp / tf2 / PCL}};
+
+% dependency arrow: nodes consume cores upward
+\draw[->, very thick, blue!55!black]
+  ([xshift=-10mm]corebox.north) -- ([xshift=-10mm]corebox.north |- rosbox.south);
+\node[text=black, font=\scriptsize\itshape, align=left, anchor=west]
+  at ([xshift=-8.5mm, yshift=5mm]corebox.north)
+  {depends on\\\textmd{\tiny(ament find\_package)}};
+
+% ============ Shared contract I/O (top) ============
+\node[io, above=6mm of rosbox.north, anchor=south] (io) {%
+  \textbf{in:} \texttt{/scan}\,$\mid$\,\texttt{/points}\,$\mid$\,\texttt{/imu}\,$\mid$\,\texttt{/gnss},\;
+  map,\; \texttt{/initialpose},\; TF \texttt{odom}$\to$\texttt{base}\\
+  \textbf{out:} \texttt{/tf}\,(\texttt{map}$\to$\texttt{odom}),\;
+  \texttt{\char`~/pose}\,(pose+cov),\;
+  \texttt{\char`~/particle\_cloud}\,$\mid$\,\texttt{\char`~/odometry}};
+\draw[<->, thin]
+  ([xshift=-10mm]rosbox.north) -- ([xshift=-10mm]rosbox.north |- io.south);
+
+\end{tikzpicture}
+\caption{\textbf{\sname{} overview.} Two middleware-free estimator cores (bottom, C++17 + Eigen only): \code{prism\_loc\_core} runs the MCL loop (\textsc{OdometryMotionModel}\,$\to$\,\textsc{ParticleFilter}, corrected by either the \textsc{Laser2DLikelihoodField} or the \textsc{Ndt3DModel} measurement model, plus a branch-and-bound relocalizer), and \code{prism\_loc\_fusion} runs a 15-state ESKF (IMU prediction, corrected by NDT 6-DoF pose and GNSS position updates). The ROS~2 node packages (top) consume the cores upward through ament, select a backend at launch, bridge messages through adapters, and expose one shared contract: a \code{map}$\to$\code{odom} TF, a pose-with-covariance output, and an \code{/initialpose} seed input.}
+  \label{fig:overview}
+\end{figure}

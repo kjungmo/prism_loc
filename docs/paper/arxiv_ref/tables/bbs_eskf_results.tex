@@ -1,0 +1,29 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Relocalization and fusion results on synthetic data.} Left: branch-and-bound over $N=100$ kidnapped-robot queries (\code{data/bbs\_relocalization.csv}); percentiles use linear interpolation; latency is single-threaded wall-clock on the machine that produced the committed CSV. Right: ESKF position error by window relative to the 10\,s aiding dropout (\code{data/eskf\_track.csv}, logged at 2\,Hz).}\label{tab:bbs_eskf}
+\small
+\begin{tabular}{@{}lr@{}}
+\toprule
+\multicolumn{2}{@{}l}{\textbf{BBS relocalization}} \\
+\midrule
+Success (pos.\ $<0.5$\,m, yaw $<10^\circ$) & 97 / 100 \\
+Median / p95 position error & 0.037 / 0.072\,m \\
+Median / p95 yaw error & 0.48$^\circ$ / 1.74$^\circ$ \\
+Accepted at $\rho=0.40$ / false accepts & 78 / 0 \\
+Median score fraction & 0.632 \\
+Median latency (min, p95) & 37.65\,ms (8.77, 106.07) \\
+\bottomrule
+\end{tabular}\hfill
+\begin{tabular}{@{}lr@{}}
+\toprule
+\multicolumn{2}{@{}l}{\textbf{ESKF fusion}} \\
+\midrule
+RMSE before dropout ($1\le t<25$\,s) & 0.016\,m \\
+RMSE during dropout ($25\le t<35$\,s) & 0.125\,m \\
+RMSE after dropout ($t\ge35$\,s) & 0.009\,m \\
+Peak error (at $t=34.5$\,s) & 0.256\,m \\
+Peak $3\sigma$ bound (at $t=34.5$\,s) & 0.663\,m \\
+Samples with error $>3\sigma$ & 0 / 121 \\
+\bottomrule
+\end{tabular}
+\end{table}

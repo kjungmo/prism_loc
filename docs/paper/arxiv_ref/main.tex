@@ -1,0 +1,30 @@
+\documentclass{kjpaper}
+\usepackage[authoryear,sort&compress,round]{natbib}
+\bibliographystyle{abbrvnat}
+\usepgfplotslibrary{groupplots}
+\usetikzlibrary{positioning,arrows.meta,fit}
+% ---- project macros ----
+\newcommand{\sname}{PRISM-Loc}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\T}{\top}
+\title{\sname: Three LiDAR Localization Backends Behind One ROS~2 Contract, with Middleware-Free Estimator Cores}
+\correspondingauthor{kangjmo91@gmail.com}
+\paperurl{https://github.com/kjungmo/prism\string_loc}
+\author[1]{Jungmo Kang}
+\affil[1]{Independent Researcher, Seoul, Republic of Korea}
+\keywords{mobile robots, LiDAR localization, Monte Carlo localization, NDT, error-state Kalman filter, ROS~2}
+\setlength{\emergencystretch}{2em}
+\begin{document}
+\input{sections/0_abstract}
+\maketitle
+\input{sections/1_introduction}
+\input{sections/2_related_works}
+\input{sections/3_method}
+\input{sections/4_experiments}
+\input{sections/5_discussion}
+\input{sections/6_conclusion}
+\bibliography{main}
+\clearpage
+\appendix
+\input{sections/appendix}
+\end{document}

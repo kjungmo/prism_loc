@@ -1,0 +1,125 @@
+\begin{thebibliography}{19}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bar-Shalom et~al.(2001)Bar-Shalom, Li, and Kirubarajan]{barshalom2001estimation}
+Y.~Bar-Shalom, X.~R. Li, and T.~Kirubarajan.
+\newblock \emph{Estimation with Applications to Tracking and Navigation: Theory, Algorithms and Software}.
+\newblock John Wiley \& Sons, New York, 2001.
+\newblock \doi{10.1002/0471221279}.
+
+\bibitem[Biber and Stra{\ss}er(2003)]{biber2003ndt}
+P.~Biber and W.~Stra{\ss}er.
+\newblock The normal distributions transform: A new approach to laser scan matching.
+\newblock In \emph{Proceedings of the 2003 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, volume~3, pages 2743--2748, Las Vegas, NV, USA, Oct. 2003. IEEE.
+\newblock \doi{10.1109/IROS.2003.1249285}.
+
+\bibitem[Dellaert et~al.(1999)Dellaert, Fox, Burgard, and Thrun]{dellaert1999montecarlo}
+F.~Dellaert, D.~Fox, W.~Burgard, and S.~Thrun.
+\newblock Monte {C}arlo localization for mobile robots.
+\newblock In \emph{Proceedings of the 1999 IEEE International Conference on Robotics and Automation (ICRA)}, volume~2, pages 1322--1328, Detroit, MI, USA, May 1999. IEEE.
+\newblock \doi{10.1109/ROBOT.1999.772544}.
+
+\bibitem[Felzenszwalb and Huttenlocher(2012)]{felzenszwalb2012distance}
+P.~F. Felzenszwalb and D.~P. Huttenlocher.
+\newblock Distance transforms of sampled functions.
+\newblock \emph{Theory of Computing}, 8\penalty0 (19):\penalty0 415--428, 2012.
+\newblock \doi{10.4086/toc.2012.v008a019}.
+
+\bibitem[Fox(2003)]{fox2003kld}
+D.~Fox.
+\newblock Adapting the sample size in particle filters through {KLD}-sampling.
+\newblock \emph{The International Journal of Robotics Research}, 22\penalty0 (12):\penalty0 985--1003, 2003.
+\newblock \doi{10.1177/0278364903022012001}.
+
+\bibitem[Fox et~al.(1999)Fox, Burgard, Dellaert, and Thrun]{fox1999efficient}
+D.~Fox, W.~Burgard, F.~Dellaert, and S.~Thrun.
+\newblock Monte {C}arlo localization: Efficient position estimation for mobile robots.
+\newblock In \emph{Proceedings of the Sixteenth National Conference on Artificial Intelligence (AAAI/IAAI)}, pages 343--349, Orlando, FL, USA, 1999. AAAI Press / The MIT Press.
+
+\bibitem[Hess et~al.(2016)Hess, Kohler, Rapp, and Andor]{hess2016realtime}
+W.~Hess, D.~Kohler, H.~Rapp, and D.~Andor.
+\newblock Real-time loop closure in {2D} {LIDAR} {SLAM}.
+\newblock In \emph{2016 IEEE International Conference on Robotics and Automation (ICRA)}, pages 1271--1278, Stockholm, Sweden, 2016. IEEE.
+\newblock \doi{10.1109/ICRA.2016.7487258}.
+
+\bibitem[Koide et~al.(2019)Koide, Miura, and Menegatti]{koide2019portable}
+K.~Koide, J.~Miura, and E.~Menegatti.
+\newblock A portable three-dimensional {LiDAR}-based system for long-term and wide-area people behavior measurement.
+\newblock \emph{International Journal of Advanced Robotic Systems}, 16\penalty0 (2), Mar. 2019.
+\newblock ISSN 1729-8814.
+\newblock \doi{10.1177/1729881419841532}.
+
+\bibitem[Macenski et~al.(2020)Macenski, Mart{\'i}n, White, and Clavero]{macenski2020marathon}
+S.~Macenski, F.~Mart{\'i}n, R.~White, and J.~G. Clavero.
+\newblock The {Marathon 2}: A navigation system.
+\newblock In \emph{2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 2718--2725. IEEE, 2020.
+\newblock \doi{10.1109/IROS45743.2020.9341207}.
+
+\bibitem[Macenski et~al.(2023)Macenski, Moore, Lu, Merzlyakov, and Ferguson]{macenski2023survey}
+S.~Macenski, T.~Moore, D.~V. Lu, A.~Merzlyakov, and M.~Ferguson.
+\newblock From the desks of {ROS} maintainers: A survey of modern \& capable mobile robotics algorithms in the {Robot Operating System 2}.
+\newblock \emph{Robotics and Autonomous Systems}, 168:\penalty0 104493, 2023.
+\newblock \doi{10.1016/j.robot.2023.104493}.
+
+\bibitem[Magnusson et~al.(2007)Magnusson, Lilienthal, and Duckett]{magnusson2007scan}
+M.~Magnusson, A.~Lilienthal, and T.~Duckett.
+\newblock Scan registration for autonomous mining vehicles using {3D-NDT}.
+\newblock \emph{Journal of Field Robotics}, 24\penalty0 (10):\penalty0 803--827, 2007.
+\newblock ISSN 1556-4959.
+\newblock \doi{10.1002/rob.20204}.
+
+\bibitem[Moore and Stouch(2016)]{moore2014generalized}
+T.~Moore and D.~Stouch.
+\newblock A generalized extended {Kalman} filter implementation for the robot operating system.
+\newblock In \emph{Intelligent Autonomous Systems 13: Proceedings of the 13th International Conference (IAS-13)}, volume 302 of \emph{Advances in Intelligent Systems and Computing}, pages 335--348, Cham, 2016. Springer.
+\newblock ISBN 978-3-319-08338-4.
+\newblock \doi{10.1007/978-3-319-08338-4_25}.
+
+\bibitem[Olson(2009)]{olson2009correlative}
+E.~B. Olson.
+\newblock Real-time correlative scan matching.
+\newblock In \emph{2009 IEEE International Conference on Robotics and Automation (ICRA)}, pages 4387--4393, Kobe, Japan, 2009. IEEE.
+\newblock \doi{10.1109/ROBOT.2009.5152375}.
+
+\bibitem[Sol{\`a}(2017)]{sola2017quaternion}
+J.~Sol{\`a}.
+\newblock Quaternion kinematics for the error-state {Kalman} filter, Nov. 2017.
+\newblock URL \url{https://arxiv.org/abs/1711.02508}.
+\newblock arXiv:1711.02508 [cs.RO], tutorial/technical report.
+
+\bibitem[Sturm et~al.(2012)Sturm, Engelhard, Endres, Burgard, and Cremers]{sturm2012benchmark}
+J.~Sturm, N.~Engelhard, F.~Endres, W.~Burgard, and D.~Cremers.
+\newblock A benchmark for the evaluation of {RGB-D} {SLAM} systems.
+\newblock In \emph{2012 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 573--580, Vilamoura, Portugal, Oct. 2012. IEEE.
+\newblock \doi{10.1109/IROS.2012.6385773}.
+
+\bibitem[Thrun et~al.(2001)Thrun, Fox, Burgard, and Dellaert]{thrun2001robust}
+S.~Thrun, D.~Fox, W.~Burgard, and F.~Dellaert.
+\newblock Robust {M}onte {C}arlo localization for mobile robots.
+\newblock \emph{Artificial Intelligence}, 128\penalty0 (1-2):\penalty0 99--141, May 2001.
+\newblock ISSN 0004-3702.
+\newblock \doi{10.1016/S0004-3702(01)00069-8}.
+
+\bibitem[Thrun et~al.(2005)Thrun, Burgard, and Fox]{thrun2005probabilistic}
+S.~Thrun, W.~Burgard, and D.~Fox.
+\newblock \emph{Probabilistic Robotics}.
+\newblock MIT Press, Cambridge, MA, USA, 2005.
+\newblock ISBN 978-0-262-20162-9.
+
+\bibitem[Wan et~al.(2018)Wan, Yang, Cai, Li, Zhou, Wang, and Song]{wan2018robust}
+G.~Wan, X.~Yang, R.~Cai, H.~Li, Y.~Zhou, H.~Wang, and S.~Song.
+\newblock Robust and precise vehicle localization based on multi-sensor fusion in diverse city scenes.
+\newblock In \emph{2018 IEEE International Conference on Robotics and Automation (ICRA)}, pages 4670--4677, Brisbane, QLD, Australia, May 2018. IEEE.
+\newblock \doi{10.1109/ICRA.2018.8461224}.
+
+\bibitem[Xu and Zhang(2021)]{xu2021fastlio}
+W.~Xu and F.~Zhang.
+\newblock {FAST-LIO}: A fast, robust {LiDAR}-inertial odometry package by tightly-coupled iterated {Kalman} filter.
+\newblock \emph{IEEE Robotics and Automation Letters}, 6\penalty0 (2):\penalty0 3317--3324, Apr. 2021.
+\newblock \doi{10.1109/LRA.2021.3064227}.
+
+\end{thebibliography}

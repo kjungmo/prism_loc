@@ -1,0 +1,23 @@
+\begin{table}[h]
+\centering
+\caption{\textbf{Where each equation lives.} Paths are relative to the repository root; \code{core/} abbreviates \code{prism\_loc\_core/src/}, \code{fusion/} abbreviates \code{prism\_loc\_fusion/src/}, and \code{node/} and \code{fnode/} abbreviate \code{prism\_loc/src/localization\_node.cpp} and \code{prism\_loc\_fusion\_ros/src/fusion\_localization\_node.cpp}.}\label{tab:codemap}
+\small
+\begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X@{}}
+\toprule
+Equation / algorithm & Source \\
+\midrule
+\Cref{eq:mapodom} (map$\to$odom) & \code{node/}, \code{fnode/}; tests \code{prism\_loc/test/test\_tf\_math.cpp}, \code{prism\_loc\_fusion\_ros/test/test\_tf\_compose.cpp} \\
+\Cref{eq:motion} (motion model) & \code{core/motion\_model.cpp} \\
+\Cref{eq:weights,eq:kld,eq:estimate} (filter) & \code{core/particle\_filter.cpp} \\
+\Cref{alg:mcl} (update order, gates) & \code{node/} (\code{runUpdate}, \code{onScan}) \\
+\Cref{eq:laser} (likelihood field) & \code{core/measurement\_model.cpp}, \code{core/occupancy\_grid.cpp} \\
+\Cref{eq:ndt} (NDT score) & \code{core/measurement\_model.cpp}, \code{core/ndt\_map.cpp} \\
+\Cref{eq:pyramid,eq:bbsscore,eq:bbsaccept}, \Cref{alg:bbs} & \code{core/bbs.cpp}; re-seeding in \code{node/} (\code{runRelocalization}) \\
+\Cref{eq:eskfpred,eq:eskfupd} (ESKF) & \code{fusion/eskf.cpp}, \code{fusion/so3.cpp}, \code{fusion/geodetic.cpp} \\
+\Cref{eq:attinit}, GNSS and NDT gates & \code{fnode/} (\code{attitudeFromAccel}, \code{onGnss}, \code{onPoints}) \\
+\Cref{cor:bbs} check (exhaustive search) & \code{core/bbs.cpp} (\code{matchExhaustive}); test \code{prism\_loc\_core/test/test\_bbs.cpp} \\
+\Cref{eq:verify}, \Cref{sec:verify} & \code{core/relocalization.cpp} (\code{RelocalizationVerifier}), \code{core/bbs.cpp} (\code{matchGlobalTopK}, \code{matchLocal}); node \code{runRelocalization}; test \code{test\_relocalization.cpp} \\
+Synthetic drivers & \code{experiments/mcl\_tracking.cpp}, \code{bbs\_relocalization.cpp}, \code{eskf\_fusion.cpp}, \code{bbs\_largemap.cpp} (with \code{legacy/bbs\_v01.cpp}), \code{eskf\_nees.cpp}, \code{bbs\_verify.cpp} (with \code{select\_verify\_params.py}) \\
+\bottomrule
+\end{tabularx}
+\end{table}

@@ -1,0 +1,41 @@
+\begin{table}[h]
+\centering
+\caption{\textbf{Default parameters} (from the shipped YAML files; symbols as in \Cref{sec:method}).}\label{tab:params}
+\footnotesize
+\begin{tabular}{@{}llll@{}}
+\toprule
+Parameter & Symbol & Default & Used in \\
+\midrule
+\code{min\_particles} / \code{max\_particles} & $N_{\min}$ / $N_{\max}$ & 500 / 2000 & \Cref{eq:kld} \\
+\code{resample\_threshold} & $\tau$ & 0.5 & $N_{\mathrm{eff}}$ trigger \\
+\code{kld\_err} / \code{kld\_z} & $\epsilon_{\mathrm{kld}}$ / $z_{1-\delta}$ & 0.05 / 2.33 & \Cref{eq:kld} \\
+\code{kld\_bin\_xy} / \code{kld\_bin\_yaw} & -- & 0.5\,m / 0.17\,rad & \Cref{eq:kld} \\
+\code{update\_min\_d} / \code{update\_min\_a} & $d_{\min}$ / $a_{\min}$ & 0.2\,m / 0.2\,rad & \Cref{alg:mcl} \\
+\code{alpha1}--\code{alpha4} & $\alpha_{1..4}$ & 0.2 & \Cref{eq:motion} \\
+\code{max\_beams} & -- & 60 & \Cref{eq:laser} \\
+\code{z\_hit} / \code{z\_rand} / \code{sigma\_hit} & $z_{\mathrm{hit}}$ / $z_{\mathrm{rand}}$ / $\sigma_{\mathrm{hit}}$ & 0.5 / 0.5 / 0.2\,m & \Cref{eq:laser,eq:pyramid} \\
+\code{likelihood\_max\_dist} & -- & 2.0\,m & \Cref{eq:laser} \\
+\code{ndt\_resolution} / \code{voxel\_min\_points} & -- & 1.0\,m / 5 & \Cref{eq:ndt} \\
+\code{max\_points} / \code{base\_height} & -- & 500 / 0.0\,m & \Cref{eq:ndt} \\
+\code{bbs\_global\_window} & -- & true & \Cref{sec:bbs} \\
+\code{bbs\_max\_linear\_window} & $W_{\max}$ & 50.0\,m & \Cref{sec:bbs} \\
+\code{bbs\_linear\_window} (if not global) & $W$ & 10.0\,m & \Cref{sec:bbs} \\
+\code{bbs\_angular\_window} / \code{bbs\_angular\_step} & -- & $\pi$ / 0.0175\,rad & \Cref{alg:bbs} \\
+\code{bbs\_max\_depth} / \code{bbs\_max\_beams} & $D$ / -- & 6 / 120 & \Cref{eq:pyramid,eq:bbsscore} \\
+\code{bbs\_min\_score\_fraction} & $\rho$ & 0.4 & \Cref{eq:bbsaccept} \\
+\code{bbs\_verify\_top\_k} & $K$ & 8 & \Cref{sec:verify} \\
+\code{bbs\_verify\_scans} & $M$ & 9 & \Cref{sec:verify} \\
+\code{bbs\_verify\_evidence\_gain} & $\lambda$ & 40 & \Cref{eq:verify} \\
+\code{bbs\_verify\_min\_posterior} & $\tau$ & 0.9 & \Cref{eq:verify} \\
+\code{bbs\_verify\_nms\_xy} / \code{\_yaw} & -- & 1.0\,m / 0.35\,rad & \Cref{sec:verify} \\
+\code{bbs\_verify\_track\_*\_window} & -- & 0.3\,m / 0.1\,rad & \Cref{sec:verify} \\
+\code{sigma\_acc} / \code{sigma\_gyro} & $\sigma_a$ / $\sigma_g$ & 0.01 / 0.001 & \Cref{eq:eskfpred} \\
+\code{sigma\_acc\_bias} / \code{sigma\_gyro\_bias} & $\sigma_{b_a}$ / $\sigma_{b_g}$ & $10^{-4}$ / $10^{-5}$ & \Cref{eq:eskfpred} \\
+\code{reset\_jacobian} & $\mathbf{G}$ & false ($\mathbf{G}=\mathbf{I}$) & \Cref{sec:eskf} \\
+\code{pose\_pos\_std} / \code{pose\_rot\_std} & $\sigma_{\mathrm{pos}}$ / $\sigma_{\mathrm{rot}}$ & 0.1\,m / 0.05\,rad & \Cref{eq:eskfupd} \\
+\code{ndt\_max\_fitness} & -- & 2.0 & NDT gate \\
+\code{gnss\_min\_status} / \code{gnss\_max\_pos\_cov} & $s_{\min}$ / $c_{\max}$ & 0 / 25.0\,m$^2$ & GNSS gate \\
+\code{transform\_tolerance} / \code{seed} & -- & 0.1\,s / 42 & \Cref{eq:mapodom} / RNG \\
+\bottomrule
+\end{tabular}
+\end{table}

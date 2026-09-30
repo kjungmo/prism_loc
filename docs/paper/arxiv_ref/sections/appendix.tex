@@ -1,0 +1,46 @@
+\section{Reproduction}\label{app:repro}
+
+Every number and figure of \Cref{sec:exp} regenerates from the repository alone. The drivers and the core test suites need only a C++17 compiler and the Eigen~3 headers (Debian/Ubuntu packages \code{g++}, \code{libeigen3-dev}); the unit tests additionally use GoogleTest (\code{libgtest-dev}). ROS~2 Humble is required only for the two node packages, which continuous integration builds in a \code{ros:humble} container (\code{.github/workflows/ci.yml}). From the repository root:
+
+{\footnotesize
+\begin{verbatim}
+CORE="-I prism_loc_core/include -I prism_loc_core/test -I /usr/include/eigen3"
+g++ -O2 -std=c++17 $CORE prism_loc_core/src/*.cpp \
+    experiments/mcl_tracking.cpp -o /tmp/exp_mcl && /tmp/exp_mcl
+g++ -O2 -std=c++17 $CORE prism_loc_core/src/*.cpp \
+    experiments/bbs_relocalization.cpp -o /tmp/exp_bbs && /tmp/exp_bbs
+g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
+    prism_loc_fusion/src/*.cpp experiments/eskf_fusion.cpp -o /tmp/exp_eskf
+/tmp/exp_eskf > docs/paper/data/eskf_track.csv
+g++ -O2 -std=c++17 $CORE -I experiments prism_loc_core/src/*.cpp \
+    experiments/legacy/bbs_v01.cpp experiments/bbs_largemap.cpp \
+    -o /tmp/exp_bbs_large && /tmp/exp_bbs_large     # about 7 min
+g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
+    prism_loc_fusion/src/*.cpp experiments/eskf_nees.cpp -o /tmp/exp_nees
+/tmp/exp_nees
+g++ -O2 -std=c++17 $CORE prism_loc_core/src/*.cpp \
+    experiments/bbs_verify.cpp -pthread -o /tmp/exp_bbs_verify
+/tmp/exp_bbs_verify calib 10              # calibration log
+python3 experiments/select_verify_params.py --check
+/tmp/exp_bbs_verify study 3               # verification study
+python3 docs/paper/make_study_tables.py   # generated study tables
+python3 docs/paper/check_numbers.py       # recompute every quoted statistic
+\end{verbatim}
+}
+
+\noindent All randomness derives from fixed compile-time seeds (\Cref{tab:repro}), so every CSV column is bit-for-bit reproducible except the wall-clock \code{time\_ms} latency columns of the two BBS experiments. We re-ran all three drivers from the sources of this commit while preparing this version: \code{mcl\_tracking.csv}, \code{mcl\_particles.csv}, and \code{eskf\_track.csv} were byte-identical to the committed files, and \code{bbs\_relocalization.csv} matched in every column except \code{time\_ms}. On that re-run machine (AMD Ryzen~5 5500GT, single thread) the median BBS query latency was 10.26\,ms against the 37.65\,ms of the committed CSV, which illustrates why latency is reported as machine-dependent; the re-run CSV is committed under \code{docs/paper/data/rerun\_2026-09-28/}. After the matcher gained its symmetric window and feasibility rule we re-ran the room study once more against the current code (\code{bbs\_relocalization\_fixbbs.csv} in the same directory): again every column except \code{time\_ms} is identical to the committed CSV, with a median latency of 9.90\,ms on the same re-run machine. The guard script \code{docs/paper/check\_numbers.py} recomputes each headline statistic from the committed CSVs and fails if a number quoted in the \LaTeX{} sources, including this package, no longer matches.
+
+\input{tables/repro}
+
+\section{Parameters}\label{app:params}
+
+\Cref{tab:params} lists the defaults used throughout the paper; each is a declared ROS~2 parameter documented one-to-one in \code{PARAMS.md}, with deployed overrides in \code{prism\_loc/params/laser2d.yaml}, \code{prism\_loc/params/ndt3d.yaml}, and \code{prism\_loc\_fusion\_ros/params/fusion3d.yaml}.
+
+\input{tables/params}
+
+\section{Code Map}\label{app:codemap}
+
+\Cref{tab:codemap} maps each equation and algorithm to the source file that implements it, and \Cref{tab:notation} collects the notation.
+
+\input{tables/codemap}
+\input{tables/notation}
