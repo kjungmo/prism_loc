@@ -72,6 +72,11 @@ void Eskf::inject(const Vec15& dx) {
   x_.q = (x_.q * so3Exp(dx.segment<3>(6))).normalized();
   x_.ba += dx.segment<3>(9);
   x_.bg += dx.segment<3>(12);
+  if (params_.reset_jacobian) {
+    Mat15 G = Mat15::Identity();
+    G.block<3, 3>(6, 6) = Eigen::Matrix3d::Identity() - skew(0.5 * dx.segment<3>(6));
+    P_ = G * P_ * G.transpose();
+  }
 }
 
 }  // namespace prism_loc_fusion

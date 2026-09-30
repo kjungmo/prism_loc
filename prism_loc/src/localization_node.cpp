@@ -58,13 +58,35 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     laser_min_range_ = declare_parameter<double>("laser_min_range", 0.0);
     laser_max_range_ = declare_parameter<double>("laser_max_range", 0.0);
     try_global_localization_ = declare_parameter<bool>("try_global_localization", false);
+    // bbs_global_window=true: the search window is sized from the map extent
+    // (capped per axis at bbs_max_linear_window); false: ±bbs_linear_window
+    // about the map centre.
+    bbs_global_window_ = declare_parameter<bool>("bbs_global_window", true);
     bbs_params_.linear_window = declare_parameter<double>("bbs_linear_window", 10.0);
+    bbs_params_.max_linear_window = declare_parameter<double>("bbs_max_linear_window", 50.0);
     bbs_params_.angular_window = declare_parameter<double>("bbs_angular_window", M_PI);
     bbs_params_.angular_step = declare_parameter<double>("bbs_angular_step", 0.0175);
     bbs_params_.max_depth = declare_parameter<int>("bbs_max_depth", 6);
     bbs_params_.max_beams = declare_parameter<int>("bbs_max_beams", 120);
     bbs_params_.min_score_fraction = declare_parameter<double>("bbs_min_score_fraction", 0.4);
     bbs_params_.sigma_hit = get_parameter_or("sigma_hit", 0.2);
+    // Relocalization verification: keep the top-K distinct BBS modes of the first
+    // scan and commit only when one holds >= bbs_verify_min_posterior of the
+    // posterior after bbs_verify_scans scans (odometry-chained); otherwise report
+    // ambiguity and retry. top_k = 1 and scans = 1 restore the single-scan rule.
+    const prism_loc_core::RelocVerifierParams rv;
+    reloc_params_.top_k = declare_parameter<int>("bbs_verify_top_k", rv.top_k);
+    reloc_params_.verify_scans = declare_parameter<int>("bbs_verify_scans", rv.verify_scans);
+    reloc_params_.evidence_gain =
+        declare_parameter<double>("bbs_verify_evidence_gain", rv.evidence_gain);
+    reloc_params_.min_posterior =
+        declare_parameter<double>("bbs_verify_min_posterior", rv.min_posterior);
+    reloc_params_.nms_xy = declare_parameter<double>("bbs_verify_nms_xy", rv.nms_xy);
+    reloc_params_.nms_yaw = declare_parameter<double>("bbs_verify_nms_yaw", rv.nms_yaw);
+    reloc_params_.track_linear_window =
+        declare_parameter<double>("bbs_verify_track_linear_window", rv.track_linear_window);
+    reloc_params_.track_angular_window =
+        declare_parameter<double>("bbs_verify_track_angular_window", rv.track_angular_window);
     global_loc_srv_ = create_service<std_srvs::srv::Empty>(
         "~/global_localization",
         std::bind(&LocalizationNode::onGlobalLocalization, this,
@@ -206,22 +228,9 @@ void LocalizationNode::onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg) 
   if (!lookupSensor(msg->header.frame_id, sib)) return;
   const auto scan = fromLaserScan(*msg, sib, laser_min_range_, laser_max_range_);
 
-  if (bbs_matcher_ && (relocalize_requested_ || (!filter_init_ && try_global_localization_))) {
-    const prism_loc_core::BbsResult r = bbs_matcher_->match(scan, bbs_center_);
-    if (r.valid) {
-      const int n = static_cast<int>(pf_->particles().size());
-      pf_->initializeGaussian(r.pose, Pose2D{0.2, 0.2, 0.1}, n > 0 ? n : 2000);
-      filter_init_ = true;
-      force_update_ = true;
-      have_last_odom_ = false;
-      relocalize_requested_ = false;
-      RCLCPP_INFO(get_logger(), "global localization: seeded at (%.2f, %.2f, %.2f) score %.1f",
-                  r.pose.x, r.pose.y, r.pose.yaw, r.score);
-    } else {
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                           "global localization: no confident pose this scan");
-    }
-  }
+  const rclcpp::Time stamp(msg->header.stamp, get_clock()->get_clock_type());
+  if (bbs_matcher_ && (relocalize_requested_ || (!filter_init_ && try_global_localization_)))
+    runRelocalization(scan, stamp);
 
   if (!filter_init_) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
@@ -231,7 +240,65 @@ void LocalizationNode::onScan(const sensor_msgs::msg::LaserScan::SharedPtr msg) 
     return;
   }
   laser_model_->setScan(scan);
-  runUpdate(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
+  runUpdate(stamp);
+}
+
+// While verification is pending the existing particle set (if any) keeps
+// tracking untouched; it is replaced only when one hypothesis is accepted.
+void LocalizationNode::runRelocalization(const prism_loc_core::LaserScan2D& scan,
+                                         const rclcpp::Time& stamp) {
+  using prism_loc_core::RelocStatus;
+  prism_loc_core::Pose2D odom;
+  const bool need_odom = reloc_params_.verify_scans > 1;
+  if (need_odom && !lookupOdom(stamp, odom)) return;  // scans must be odometry-chained
+  if (!reloc_verifier_)
+    reloc_verifier_ =
+        std::make_unique<prism_loc_core::RelocalizationVerifier>(*bbs_matcher_, reloc_params_);
+  RelocStatus st;
+  if (!reloc_active_) {
+    st = bbs_global_window_ ? reloc_verifier_->start(scan)
+                            : reloc_verifier_->start(scan, bbs_center_);
+  } else {
+    st = reloc_verifier_->update(
+        prism_loc_core::compose(prism_loc_core::inverse(reloc_last_odom_), odom), scan);
+  }
+  reloc_last_odom_ = odom;
+  reloc_active_ = st == RelocStatus::kPending;
+  switch (st) {
+    case RelocStatus::kPending:
+      RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+                           "global localization: verifying %zu hypotheses (%d/%d scans, best "
+                           "posterior %.3f) - keep the robot moving",
+                           reloc_verifier_->hypotheses().size(), reloc_verifier_->scansUsed(),
+                           reloc_params_.verify_scans, reloc_verifier_->bestPosterior());
+      break;
+    case RelocStatus::kAccepted: {
+      const prism_loc_core::Pose2D p = reloc_verifier_->pose();
+      const int n = static_cast<int>(pf_->particles().size());
+      pf_->initializeGaussian(p, Pose2D{0.2, 0.2, 0.1}, n > 0 ? n : 2000);
+      filter_init_ = true;
+      force_update_ = true;
+      have_last_odom_ = false;
+      relocalize_requested_ = false;
+      RCLCPP_INFO(get_logger(),
+                  "global localization: seeded at (%.2f, %.2f, %.2f), posterior %.3f over %d "
+                  "scans",
+                  p.x, p.y, p.yaw, reloc_verifier_->bestPosterior(), reloc_verifier_->scansUsed());
+      break;
+    }
+    case RelocStatus::kAmbiguous:
+      RCLCPP_WARN(get_logger(),
+                  "global localization: AMBIGUOUS - best of %zu hypotheses holds only %.3f "
+                  "(< %.3f) after %d scans; not committing, retrying (move the robot to a "
+                  "more distinctive place)",
+                  reloc_verifier_->hypotheses().size(), reloc_verifier_->bestPosterior(),
+                  reloc_params_.min_posterior, reloc_verifier_->scansUsed());
+      break;
+    default:
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                           "global localization: no confident pose this attempt");
+      break;
+  }
 }
 
 void LocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
@@ -265,6 +332,7 @@ void LocalizationNode::onInitialPose(
   const int n = pf_->particles().empty() ? 2000 : static_cast<int>(pf_->particles().size());
   pf_->initializeGaussian(mean, Pose2D{sx, sy, sa}, std::max(n, 500));
   filter_init_ = true; force_update_ = true; have_last_odom_ = false;
+  reloc_active_ = false;  // a manual pose abandons any verification in progress
   RCLCPP_INFO(get_logger(), "initialpose: (%.2f, %.2f, %.2f)", mean.x, mean.y, mean.yaw);
 }
 
@@ -274,7 +342,23 @@ void LocalizationNode::makeBbsMatcher() {
   bbs_center_ = prism_loc_core::Pose2D{
       grid_->origin_x + 0.5 * grid_->width * grid_->resolution,
       grid_->origin_y + 0.5 * grid_->height * grid_->resolution, 0.0};
-  RCLCPP_INFO(get_logger(), "laser2d: BBS global-localization matcher ready");
+  if (bbs_global_window_) {
+    const double hx = bbs_matcher_->globalHalfWindowX() * grid_->resolution;
+    const double hy = bbs_matcher_->globalHalfWindowY() * grid_->resolution;
+    if (bbs_matcher_->globalWindowCoversMap()) {
+      RCLCPP_INFO(get_logger(),
+                  "laser2d: BBS global-localization matcher ready (window +/-%.1f x +/-%.1f m "
+                  "covers the whole map)", hx, hy);
+    } else {
+      RCLCPP_WARN(get_logger(),
+                  "laser2d: BBS window capped at +/-%.1f x +/-%.1f m by bbs_max_linear_window; "
+                  "relocalization is NOT global on this %.1f x %.1f m map", hx, hy,
+                  grid_->width * grid_->resolution, grid_->height * grid_->resolution);
+    }
+  } else {
+    RCLCPP_INFO(get_logger(), "laser2d: BBS matcher ready (+/-%.1f m about the map centre)",
+                bbs_params_.linear_window);
+  }
 }
 
 void LocalizationNode::onGlobalLocalization(
@@ -282,6 +366,7 @@ void LocalizationNode::onGlobalLocalization(
     std::shared_ptr<std_srvs::srv::Empty::Response>) {
   std::lock_guard<std::mutex> lk(mutex_);
   relocalize_requested_ = true;
+  reloc_active_ = false;  // start a fresh verification from the next scan
   if (!bbs_matcher_ && !grid_) {
     RCLCPP_WARN(get_logger(),
                 "global localization requested before any map arrived - it will run once the "

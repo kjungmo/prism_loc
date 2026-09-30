@@ -235,9 +235,12 @@ then hand the result to `prism_loc`:
 `v0.1` ships 2D likelihood-field MCL and 3D NDT-MCL (planar x, y, yaw), plus a
 3D LiDAR + IMU + RTK-GNSS error-state Kalman fusion (`fusion3d`) with full
 6-DoF state and IMU-bias estimation. The `laser2d` backend self-initializes
-via branch-and-bound (BBS) global localization — recovering pose from a single
-scan with no `/initialpose` (param `try_global_localization`, on-demand
-service `~/global_localization`). Planned:
+via branch-and-bound (BBS) global localization with no `/initialpose` (param
+`try_global_localization`, on-demand service `~/global_localization`): the
+top-K distinct BBS modes of the first scan are verified over several
+odometry-chained scans, and the pose is committed only when one hypothesis
+dominates the posterior; otherwise the node reports the place as ambiguous
+instead of re-seeding (`bbs_verify_*` params). Planned:
 
 - [ ] Quantitative field evaluation (ATE/RPE) on public datasets
 - [ ] 3D global localization for `ndt3d` / `fusion3d`

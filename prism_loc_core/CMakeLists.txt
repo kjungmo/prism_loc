@@ -18,6 +18,7 @@ add_library(prism_loc_core
   src/measurement_model.cpp
   src/particle_filter.cpp
   src/bbs.cpp
+  src/relocalization.cpp
 )
 target_include_directories(prism_loc_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -55,7 +56,8 @@ if(BUILD_TESTING OR PRISM_LOC_CORE_BUILD_TESTS)
     test/test_measurement_ndt.cpp
     test/test_particle_filter.cpp
     test/test_integration.cpp
-    test/test_bbs.cpp)
+    test/test_bbs.cpp
+    test/test_relocalization.cpp)
   add_executable(prism_loc_core_tests ${PRISM_LOC_CORE_TESTS})
   target_link_libraries(prism_loc_core_tests prism_loc_core GTest::gtest GTest::gtest_main)
   add_test(NAME prism_loc_core_tests COMMAND prism_loc_core_tests)

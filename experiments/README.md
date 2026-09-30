@@ -96,3 +96,67 @@ cd docs/paper && tectonic main.tex
 
 The figure `.tex` files read the CSVs via pgfplots `table` directives with
 paths relative to `docs/paper/`, so no further wiring is needed.
+
+## 4. `bbs_largemap.cpp` — relocalization on large maps, v0.1 window vs map-sized window
+
+Runs the **v0.1** matcher (verbatim copy under `experiments/legacy/`, centred on
+the map midpoint with the v0.1 default ±10 m window, which actually searched
+−10 m … +15.5 m) and the **current** `BranchAndBoundMatcher::matchGlobal()`
+(symmetric map-sized window, occupied/off-map candidates rejected) on the
+identical scans. Worlds: 20, 40 and 80 m square warehouse-like grids at
+0.1 m/cell with repeated shelf rows and random pillars. Kidnapped poses are
+stratified into inside (`in`) and outside (`out`) the v0.1 searched set, 60
+each (the 20 m map lies entirely inside it). 180-beam, 30 m scans with the same
+U[0, 0.8] clutter model as study 2. Fixed seed: 20260928.
+
+```sh
+g++ -O2 -std=c++17 -I prism_loc_core/include -I prism_loc_core/test -I experiments \
+  -I /usr/include/eigen3 prism_loc_core/src/*.cpp experiments/legacy/bbs_v01.cpp \
+  experiments/bbs_largemap.cpp -o /tmp/exp_bbs_large
+/tmp/exp_bbs_large          # ~7 min single-threaded; writes docs/paper/data/bbs_largemap.csv
+```
+
+One row per (query, method); `time_ms` is wall-clock, all other columns are
+deterministic.
+
+## 5. `eskf_nees.cpp` — Monte Carlo NEES consistency of the ESKF
+
+N = 100 runs of the study-3 scenario, with the initial error and the true IMU
+biases drawn from the filter's own prior N(0, P0) in every run; the true biases
+then random-walk exactly as the filter's process model assumes. Logs, every
+0.5 s, the run-averaged NEES of the full 15-D error state and of each 3-D block,
+with the two-sided 95 % chi-square acceptance interval, for the v0.1 filter
+(reset Jacobian G = I, suffix `_gi`) and with `EskfParams::reset_jacobian`
+(suffix `_rj`) on identical data. Seeds: 20260929 + run index (sensor noise and
+initial draws), 20261029 + run index (bias random walk).
+
+```sh
+g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
+  prism_loc_fusion/src/*.cpp experiments/eskf_nees.cpp -o /tmp/exp_nees
+/tmp/exp_nees               # writes docs/paper/data/eskf_nees.csv (deterministic)
+```
+
+## `bbs_verify.cpp` + `select_verify_params.py` — multi-scan relocalization verification
+
+Compares the single-scan acceptance rule with `RelocalizationVerifier`
+(top-K BBS modes of the first scan, re-matched over M odometry-chained scans,
+committed only when one hypothesis holds enough posterior mass) on the maps,
+poses and first scans of `bbs_largemap.cpp` (seed 20260928; its `single` rows
+reproduce that study's `new` rows). The robot then drives a short random
+trajectory (0.3 m steps) with noisy odometry, one cluttered scan per step.
+
+The verifier defaults were chosen on a separate calibration run (seed
+20261105: different maps and poses) by `select_verify_params.py`, which
+replays the decision rule over a (K, M, gain, posterior) grid and picks the
+configuration with the fewest false accepts, then the most correct accepts.
+
+```sh
+g++ -O2 -std=c++17 \
+  -I prism_loc_core/include -I prism_loc_core/test -I /usr/include/eigen3 \
+  prism_loc_core/src/*.cpp experiments/bbs_verify.cpp -pthread -o /tmp/exp_bbs_verify
+/tmp/exp_bbs_verify calib 10                          # bbs_verify_calib.csv
+python3 experiments/select_verify_params.py --check   # bbs_verify_selection.csv
+/tmp/exp_bbs_verify study 3                           # bbs_verify.csv
+```
+
+The second argument is the worker-thread count; it changes only `time_ms`.

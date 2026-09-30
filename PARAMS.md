@@ -47,12 +47,22 @@ otherwise an SI unit.
 | initial_pose_y | double | `0.0` | m | Initial pose y (when `set_initial_pose` is true). |
 | initial_pose_yaw | double | `0.0` | rad | Initial pose yaw (when `set_initial_pose` is true). |
 | try_global_localization | bool | `false` | bool | Run BBS global localization until first converged fix. |
-| bbs_linear_window | double | `10.0` | m | ± translation search window around the map center. |
+| bbs_global_window | bool | `true` | - | Size the BBS search window from the map extent so relocalization covers the whole map (symmetric, capped by `bbs_max_linear_window`). Candidates whose robot cell is occupied or off-map are never returned. |
+| bbs_max_linear_window | double | `50.0` | m | Per-axis cap on the ± half-window used when `bbs_global_window` is true (compute bound); the node warns when the cap leaves part of the map unsearched. |
+| bbs_linear_window | double | `10.0` | m | ± translation search window around the map center, used only when `bbs_global_window` is false. |
 | bbs_angular_window | double | `M_PI` (~3.14159) | rad | ± yaw search window (full circle by default). |
 | bbs_angular_step | double | `0.0175` | rad | Yaw search resolution (~1 deg). |
 | bbs_max_depth | int | `6` | count | Branch-and-bound pyramid levels. |
 | bbs_max_beams | int | `120` | count | Laser beams subsampled for BBS scoring. |
 | bbs_min_score_fraction | double | `0.4` | fraction | Min score/used-beams for a BBS match to be valid. |
+| bbs_verify_top_k | int | `8` | count | Relocalization keeps up to this many distinct BBS modes of the first scan as hypotheses (`1` with `bbs_verify_scans: 1` restores the single-scan rule). |
+| bbs_verify_scans | int | `9` | count | Odometry-chained scans (first included) over which the hypotheses are re-matched before a decision; the existing particle set keeps tracking meanwhile. Needs odom TF. |
+| bbs_verify_evidence_gain | double | `40.0` | 1/fraction | Per-scan log-weight increment = gain x score fraction of the hypothesis' local re-match. |
+| bbs_verify_min_posterior | double | `0.9` | probability | The best hypothesis is committed only if its posterior mass reaches this; otherwise the node reports AMBIGUOUS and retries instead of re-seeding. |
+| bbs_verify_nms_xy | double | `1.0` | m | Two BBS leaves within this distance (and `bbs_verify_nms_yaw`) belong to the same mode. |
+| bbs_verify_nms_yaw | double | `0.35` | rad | Yaw radius of a mode. |
+| bbs_verify_track_linear_window | double | `0.3` | m | ± per-axis window of each hypothesis' local re-match per scan. |
+| bbs_verify_track_angular_window | double | `0.1` | rad | ± yaw window of the local re-match. |
 
 ## ndt3d backend (`prism_loc` node, `backend: "ndt3d"`)
 
@@ -113,6 +123,7 @@ otherwise an SI unit.
 | sigma_gyro | double | `0.001` | rad/s | Gyroscope white-noise std-dev (ESKF process). |
 | sigma_acc_bias | double | `0.0001` | m/s^3 | Accelerometer bias random-walk std-dev. |
 | sigma_gyro_bias | double | `0.00001` | rad/s^2 | Gyroscope bias random-walk std-dev. |
+| reset_jacobian | bool | `false` | - | Apply the ESKF reset Jacobian G = blkdiag(I, I, I - [dθ/2]×, I, I) to the covariance after each error injection (Solà 2017 §7.2). Off reproduces v0.1 (G = I). |
 | use_datum | bool | `false` | bool | Use a fixed ENU datum instead of the first GNSS fix. |
 | datum_lat | double | `0.0` | deg | Datum latitude (when `use_datum` is true). |
 | datum_lon | double | `0.0` | deg | Datum longitude (when `use_datum` is true). |

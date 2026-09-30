@@ -32,9 +32,19 @@
     initial_pose_y: 0.0               # m: initial pose y (used when set_initial_pose is true)
     initial_pose_yaw: 0.0             # rad: initial pose yaw (used when set_initial_pose is true)
     try_global_localization: false    # bool: run BBS global localization until first converged fix
-    bbs_linear_window: 10.0           # m: +/- translation search window around the map center
+    bbs_global_window: true           # bool: size the search window from the map extent (whole map)
+    bbs_max_linear_window: 50.0       # m: cap on the per-axis +/- half-window when bbs_global_window
+    bbs_linear_window: 10.0           # m: +/- window about the map center when bbs_global_window is false
     bbs_angular_window: 3.14159265    # rad: +/- yaw search window (default M_PI = full circle)
     bbs_angular_step: 0.0175          # rad: yaw search resolution (~1 deg)
     bbs_max_depth: 6                  # count: branch-and-bound pyramid levels
     bbs_max_beams: 120                # count: laser beams subsampled for BBS scoring
     bbs_min_score_fraction: 0.4       # fraction: min score/used-beams for a BBS match to be valid
+    bbs_verify_top_k: 8               # count: distinct BBS modes kept as relocalization hypotheses (1 = single-scan rule)
+    bbs_verify_scans: 9               # count: odometry-chained scans before the verifier decides (1 = single-scan rule)
+    bbs_verify_evidence_gain: 40.0    # 1/fraction: log-weight added per scan = gain * score fraction
+    bbs_verify_min_posterior: 0.9     # probability: posterior mass the best hypothesis needs to be committed
+    bbs_verify_nms_xy: 1.0            # m: modes closer than this (and within nms_yaw) are merged
+    bbs_verify_nms_yaw: 0.35          # rad: yaw radius of a mode
+    bbs_verify_track_linear_window: 0.3   # m: +/- per-axis local re-match window per hypothesis per scan
+    bbs_verify_track_angular_window: 0.1  # rad: +/- yaw local re-match window

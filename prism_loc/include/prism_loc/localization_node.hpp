@@ -22,6 +22,7 @@
 #include "prism_loc_core/ndt_map.hpp"
 #include <std_srvs/srv/empty.hpp>
 #include "prism_loc_core/bbs.hpp"
+#include "prism_loc_core/relocalization.hpp"
 
 namespace prism_loc {
 
@@ -68,8 +69,15 @@ class LocalizationNode : public rclcpp::Node {
   std::shared_ptr<prism_loc_core::GridMap> grid_;
   prism_loc_core::Pose2D bbs_center_;
   bool try_global_localization_{false};
+  bool bbs_global_window_{true};
   bool relocalize_requested_{false};
   prism_loc_core::BbsParams bbs_params_;
+  // Multi-scan verification of a relocalization (top-K hypotheses, M scans).
+  prism_loc_core::RelocVerifierParams reloc_params_;
+  std::unique_ptr<prism_loc_core::RelocalizationVerifier> reloc_verifier_;
+  prism_loc_core::Pose2D reloc_last_odom_;
+  bool reloc_active_{false};
+  void runRelocalization(const prism_loc_core::LaserScan2D& scan, const rclcpp::Time& stamp);
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr global_loc_srv_;
   void makeBbsMatcher();
   void onGlobalLocalization(const std::shared_ptr<std_srvs::srv::Empty::Request>,
