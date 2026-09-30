@@ -167,7 +167,7 @@ def ver_table(rows):
         r"\Cref{sec:verify}); the robot drives 0.3\,m steps with noisy odometry between scans. Correct: accepted "
         r"and within 0.5\,m and $10^\circ$ of the truth at the committed scan; false accepts with the 95\% Wilson "
         r"interval of their rate in percent; ambiguous: verification ended without a hypothesis holding 0.9 of the "
-        r"posterior. Latency: median over the whole decision, measured with three concurrent workers "
+        r"normalized evidence score. Latency: median over the whole decision, measured with three concurrent workers "
         r"(\code{data/bbs\_verify.csv}, \code{experiments/bbs\_verify.cpp}).}\label{tab:bbs_verify}",
         r"\small",
         r"\begin{tabular}{@{}llrcccr@{}}",

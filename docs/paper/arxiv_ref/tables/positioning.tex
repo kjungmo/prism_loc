@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{Closest prior work for each component of \sname.} The last column states what \sname{} does, not what the cited systems lack; a component is claimed as a difference only where the cited sources document the alternative. ``Concurrent'' marks a preprint posted in July 2026.}\label{tab:positioning}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.2\linewidth}>{\raggedright\arraybackslash}p{0.3\linewidth}>{\raggedright\arraybackslash}X@{}}
+\toprule
+Component & Closest prior work & In \sname{} \\
+\midrule
+One particle-filter core for 2D likelihood-field and NDT models & Beluga \citep{puga2024beluga}; NDT-MCL \citep{saarinen2013ndtmcl} & No methodological difference. \code{ndt3d} samples a planar pose (Beluga's 3D NDT node estimates $SE(3)$ \citep{ekumen2022belugarepo}) and scores raw points against the NDT map. \\
+Several estimators behind one interface & fuse \citep{locus2018fuse}; Autoware pose-estimator arbiter \citep{autoware2024arbiter}; MOLA \citep{blancoclaraco2025mola} & Exactly three backends, 2D MCL, planar NDT-MCL, and a LiDAR+IMU+RTK-GNSS ESKF, behind one \code{map}$\to$\code{odom} contract chosen at launch. \\
+Middleware-free estimator core & Beluga \citep{puga2024beluga}; \code{iris\_lama} \citep{pedrosa2019lama} & No methodological difference; one seeded generator makes the tests and experiments bit-reproducible. \\
+Branch-and-bound relocalization against a prior map & \citet{hess2016realtime}; \code{hdl\_global\_localization} \citep{koide2021hdlgl}; \code{lidar\_localization\_ros2} \citep{sasaki2026globalloc}; 3D-BBS \citep{aoki2024bbs3d}; \citet{adurthi2023scan}; MH-AMCL \citep{garcia2023mhamcl}; \citet{akai2023reliable} & Lattice-exact 2D branch-and-bound over the non-occupied cells of a map-sized window, verified over several scans before a single re-seed of the shared MCL core; feeding global matches into a particle filter is itself established. \\
+Hypotheses verified before commitment & \citet{gao2019global}; MH-AMCL \citep{garcia2023mhamcl}; \citet{adurthi2023scan}; concurrent: \citet{zhang2026movefirst} & First-scan top-$K$ branch-and-bound modes, odometric propagation, local re-scoring, and an explicit ambiguous outcome before re-seeding; the evidence score is heuristic. \\
+Error-state Kalman fusion of LiDAR, IMU, and GNSS & \citet{sola2017quaternion}; \citet{wan2018robust} & No methodological difference; the filter is exposed under the same contract as the MCL backends, and its covariance is overconfident in our test (\Cref{tab:nees}). \\
+\bottomrule
+\end{tabularx}
+\end{table}

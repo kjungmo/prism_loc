@@ -1,9 +1,33 @@
-\begin{thebibliography}{19}
+\begin{thebibliography}{40}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Adurthi(2023)]{adurthi2023scan}
+N.~Adurthi.
+\newblock Scan matching-based particle filter for {LIDAR}-only localization.
+\newblock \emph{Sensors}, 23\penalty0 (8):\penalty0 4010, 2023.
+\newblock \doi{10.3390/s23084010}.
+
+\bibitem[Akai(2023)]{akai2023reliable}
+N.~Akai.
+\newblock Reliable {M}onte {C}arlo localization for mobile robots.
+\newblock \emph{Journal of Field Robotics}, 40\penalty0 (3):\penalty0 595--613, 2023.
+\newblock \doi{10.1002/rob.22149}.
+
+\bibitem[Aoki et~al.(2024)Aoki, Koide, Oishi, Yokozuka, Banno, and Meguro]{aoki2024bbs3d}
+K.~Aoki, K.~Koide, S.~Oishi, M.~Yokozuka, A.~Banno, and J.~Meguro.
+\newblock {3D-BBS}: Global localization for {3D} point cloud scan matching using branch-and-bound algorithm.
+\newblock In \emph{2024 IEEE International Conference on Robotics and Automation (ICRA)}, pages 1796--1802. IEEE, 2024.
+\newblock \doi{10.1109/ICRA57147.2024.10610810}.
+
+\bibitem[{Autoware Foundation}(2024)]{autoware2024arbiter}
+{Autoware Foundation}.
+\newblock {autoware\_pose\_estimator\_arbiter}.
+\newblock Autoware Universe documentation, \url{https://autowarefoundation.github.io/autoware_universe/main/localization/autoware_pose_estimator_arbiter/}, 2024.
+\newblock Accessed 2026-09-30.
 
 \bibitem[Bar-Shalom et~al.(2001)Bar-Shalom, Li, and Kirubarajan]{barshalom2001estimation}
 Y.~Bar-Shalom, X.~R. Li, and T.~Kirubarajan.
@@ -17,17 +41,35 @@ P.~Biber and W.~Stra{\ss}er.
 \newblock In \emph{Proceedings of the 2003 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, volume~3, pages 2743--2748, Las Vegas, NV, USA, Oct. 2003. IEEE.
 \newblock \doi{10.1109/IROS.2003.1249285}.
 
+\bibitem[Blanco-Claraco(2025)]{blancoclaraco2025mola}
+J.~L. Blanco-Claraco.
+\newblock A flexible framework for accurate {LiDAR} odometry, map manipulation, and localization.
+\newblock \emph{The International Journal of Robotics Research}, 44\penalty0 (9):\penalty0 1553--1599, 2025.
+\newblock \doi{10.1177/02783649251316881}.
+
 \bibitem[Dellaert et~al.(1999)Dellaert, Fox, Burgard, and Thrun]{dellaert1999montecarlo}
 F.~Dellaert, D.~Fox, W.~Burgard, and S.~Thrun.
 \newblock Monte {C}arlo localization for mobile robots.
 \newblock In \emph{Proceedings of the 1999 IEEE International Conference on Robotics and Automation (ICRA)}, volume~2, pages 1322--1328, Detroit, MI, USA, May 1999. IEEE.
 \newblock \doi{10.1109/ROBOT.1999.772544}.
 
+\bibitem[{Ekumen, Inc.}(2022)]{ekumen2022belugarepo}
+{Ekumen, Inc.}
+\newblock Beluga.
+\newblock GitHub repository \texttt{Ekumen-OS/beluga}, \url{https://github.com/Ekumen-OS/beluga}, 2022.
+\newblock Generic C++17 MCL library with ROS AMCL nodes that provide interface parity with \texttt{nav2\_amcl} (and \texttt{amcl}); includes likelihood-field, beam, and NDT sensor models and 2D and 3D NDT AMCL nodes for ROS~2; accessed 2026-09-30.
+
 \bibitem[Felzenszwalb and Huttenlocher(2012)]{felzenszwalb2012distance}
 P.~F. Felzenszwalb and D.~P. Huttenlocher.
 \newblock Distance transforms of sampled functions.
 \newblock \emph{Theory of Computing}, 8\penalty0 (19):\penalty0 415--428, 2012.
 \newblock \doi{10.4086/toc.2012.v008a019}.
+
+\bibitem[Filotheou(2024)]{filotheou2024cbgl}
+A.~Filotheou.
+\newblock {CBGL}: Fast {M}onte {C}arlo passive global localisation of {2D} {LIDAR} sensor.
+\newblock In \emph{2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 3268--3275. IEEE, 2024.
+\newblock \doi{10.1109/IROS58592.2024.10802235}.
 
 \bibitem[Fox(2003)]{fox2003kld}
 D.~Fox.
@@ -40,11 +82,29 @@ D.~Fox, W.~Burgard, F.~Dellaert, and S.~Thrun.
 \newblock Monte {C}arlo localization: Efficient position estimation for mobile robots.
 \newblock In \emph{Proceedings of the Sixteenth National Conference on Artificial Intelligence (AAAI/IAAI)}, pages 343--349, Orlando, FL, USA, 1999. AAAI Press / The MIT Press.
 
+\bibitem[Gao et~al.(2019)Gao, Zhang, Yuan, Song, and Fang]{gao2019global}
+H.~Gao, X.~Zhang, J.~Yuan, J.~Song, and Y.~Fang.
+\newblock A novel global localization approach based on structural unit encoding and multiple hypothesis tracking.
+\newblock \emph{IEEE Transactions on Instrumentation and Measurement}, 68\penalty0 (11):\penalty0 4427--4442, Nov. 2019.
+\newblock \doi{10.1109/TIM.2018.2890455}.
+
+\bibitem[Garc{\'i}a et~al.(2023)Garc{\'i}a, Mart{\'i}n, Guerrero, Rodr{\'i}guez, and Matell{\'a}n]{garcia2023mhamcl}
+A.~Garc{\'i}a, F.~Mart{\'i}n, J.~M. Guerrero, F.~J. Rodr{\'i}guez, and V.~Matell{\'a}n.
+\newblock Portable multi-hypothesis {M}onte {C}arlo localization for mobile robots.
+\newblock In \emph{2023 IEEE International Conference on Robotics and Automation (ICRA)}, pages 1933--1939. IEEE, 2023.
+\newblock \doi{10.1109/ICRA48891.2023.10160957}.
+
 \bibitem[Hess et~al.(2016)Hess, Kohler, Rapp, and Andor]{hess2016realtime}
 W.~Hess, D.~Kohler, H.~Rapp, and D.~Andor.
 \newblock Real-time loop closure in {2D} {LIDAR} {SLAM}.
 \newblock In \emph{2016 IEEE International Conference on Robotics and Automation (ICRA)}, pages 1271--1278, Stockholm, Sweden, 2016. IEEE.
 \newblock \doi{10.1109/ICRA.2016.7487258}.
+
+\bibitem[Koide(2021)]{koide2021hdlgl}
+K.~Koide.
+\newblock {hdl\_global\_localization}.
+\newblock ROS package, GitHub repository, \url{https://github.com/koide3/hdl_global_localization}, 2021.
+\newblock Global localization service with 2D grid-map branch-and-bound, FPFH+RANSAC, and FPFH+TEASER++ engines; accessed 2026-09-30.
 
 \bibitem[Koide et~al.(2019)Koide, Miura, and Menegatti]{koide2019portable}
 K.~Koide, J.~Miura, and E.~Menegatti.
@@ -52,6 +112,12 @@ K.~Koide, J.~Miura, and E.~Menegatti.
 \newblock \emph{International Journal of Advanced Robotic Systems}, 16\penalty0 (2), Mar. 2019.
 \newblock ISSN 1729-8814.
 \newblock \doi{10.1177/1729881419841532}.
+
+\bibitem[{Locus Robotics}(2018)]{locus2018fuse}
+{Locus Robotics}.
+\newblock {fuse}.
+\newblock GitHub repository, \url{https://github.com/locusrobotics/fuse}, 2018.
+\newblock A ROS framework for sensor fusion using nonlinear least squares optimization; accessed 2026-09-30.
 
 \bibitem[Macenski et~al.(2020)Macenski, Mart{\'i}n, White, and Clavero]{macenski2020marathon}
 S.~Macenski, F.~Mart{\'i}n, R.~White, and J.~G. Clavero.
@@ -72,6 +138,11 @@ M.~Magnusson, A.~Lilienthal, and T.~Duckett.
 \newblock ISSN 1556-4959.
 \newblock \doi{10.1002/rob.20204}.
 
+\bibitem[Mart{\'i}n~Rico et~al.(2023)Mart{\'i}n~Rico, Guerrero~Hern{\'a}ndez, P{\'e}rez~Rodr{\'i}guez, Pe{\~n}a~Narv{\'a}ez, and Garc{\'i}a G{\'o}mez-Jacinto]{martinrico2023nonplanar}
+F.~Mart{\'i}n~Rico, J.~M. Guerrero~Hern{\'a}ndez, R.~P{\'e}rez~Rodr{\'i}guez, J.~D. Pe{\~n}a~Narv{\'a}ez, and A.~Garc{\'i}a G{\'o}mez-Jacinto.
+\newblock Open source robot localization for non-planar environments.
+\newblock arXiv preprint arXiv:2309.12744, 2023.
+
 \bibitem[Moore and Stouch(2016)]{moore2014generalized}
 T.~Moore and D.~Stouch.
 \newblock A generalized extended {Kalman} filter implementation for the robot operating system.
@@ -84,6 +155,30 @@ E.~B. Olson.
 \newblock Real-time correlative scan matching.
 \newblock In \emph{2009 IEEE International Conference on Robotics and Automation (ICRA)}, pages 4387--4393, Kobe, Japan, 2009. IEEE.
 \newblock \doi{10.1109/ROBOT.2009.5152375}.
+
+\bibitem[Pedrosa(2019)]{pedrosa2019lama}
+E.~Pedrosa.
+\newblock {iris\_lama}.
+\newblock GitHub repository, \url{https://github.com/iris-ua/iris_lama}, 2019.
+\newblock C++ localization and mapping library whose only dependency is Eigen; accessed 2026-09-30.
+
+\bibitem[Puga et~al.(2024)Puga, Espinosa, Hidalgo, Garc{\'i}a, and Paunovic]{puga2024beluga}
+G.~Puga, N.~Espinosa, M.~Hidalgo, O.~Garc{\'i}a, and I.~Paunovic.
+\newblock Beluga: A modern {M}onte {C}arlo localization package for {ROS} and {ROS}~2.
+\newblock In \emph{European Robotics Forum 2024}, Springer Proceedings in Advanced Robotics, pages 126--130, Cham, 2024. Springer Nature Switzerland.
+\newblock \doi{10.1007/978-3-031-76424-0_23}.
+
+\bibitem[Saarinen et~al.(2013)Saarinen, Andreasson, Stoyanov, and Lilienthal]{saarinen2013ndtmcl}
+J.~Saarinen, H.~Andreasson, T.~Stoyanov, and A.~J. Lilienthal.
+\newblock Normal distributions transform {M}onte-{C}arlo localization ({NDT-MCL}).
+\newblock In \emph{2013 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)}, pages 382--389, Tokyo, Japan, Nov. 2013. IEEE.
+\newblock \doi{10.1109/IROS.2013.6696380}.
+
+\bibitem[Sasaki(2026)]{sasaki2026globalloc}
+R.~Sasaki.
+\newblock {lidar\_localization\_ros2}: Global localization.
+\newblock Documentation in the \texttt{lidar\_localization\_ros2} GitHub repository, \url{https://github.com/rsasaki0109/lidar_localization_ros2/blob/main/docs/global_localization.md}, 2026.
+\newblock The repository dates from 2020; this document was added in 2026. Accessed 2026-09-30.
 
 \bibitem[Sol{\`a}(2017)]{sola2017quaternion}
 J.~Sol{\`a}.
@@ -116,10 +211,39 @@ G.~Wan, X.~Yang, R.~Cai, H.~Li, Y.~Zhou, H.~Wang, and S.~Song.
 \newblock In \emph{2018 IEEE International Conference on Robotics and Automation (ICRA)}, pages 4670--4677, Brisbane, QLD, Australia, May 2018. IEEE.
 \newblock \doi{10.1109/ICRA.2018.8461224}.
 
+\bibitem[Watanabe(2016)]{watanabe2016mcl3dl}
+A.~Watanabe.
+\newblock {mcl\_3dl}.
+\newblock ROS package, GitHub repository, \url{https://github.com/at-wat/mcl_3dl}, 2016.
+\newblock 3-D/6-DOF point-cloud Monte Carlo localization; accessed 2026-09-30.
+
+\bibitem[Wilson(1927)]{wilson1927probable}
+E.~B. Wilson.
+\newblock Probable inference, the law of succession, and statistical inference.
+\newblock \emph{Journal of the American Statistical Association}, 22\penalty0 (158):\penalty0 209--212, 1927.
+\newblock \doi{10.1080/01621459.1927.10502953}.
+
 \bibitem[Xu and Zhang(2021)]{xu2021fastlio}
 W.~Xu and F.~Zhang.
 \newblock {FAST-LIO}: A fast, robust {LiDAR}-inertial odometry package by tightly-coupled iterated {Kalman} filter.
 \newblock \emph{IEEE Robotics and Automation Letters}, 6\penalty0 (2):\penalty0 3317--3324, Apr. 2021.
 \newblock \doi{10.1109/LRA.2021.3064227}.
+
+\bibitem[Zhang et~al.(2026{\natexlab{a}})Zhang, Ma, Wu, Shen, Huang, and Leung]{zhang2026krp}
+M.~Zhang, L.~Ma, Y.~Wu, K.~Shen, D.~Huang, and H.~Leung.
+\newblock Tackling the kidnapped robot problem via sparse feasible hypothesis sampling and reliable batched multistage inference.
+\newblock \emph{IEEE Transactions on Instrumentation and Measurement}, 75:\penalty0 7504614, 2026{\natexlab{a}}.
+\newblock \doi{10.1109/TIM.2026.3694741}.
+
+\bibitem[Zhang et~al.(2026{\natexlab{b}})Zhang, Guo, Zheng, Fan, Jia, and Liu]{zhang2026movefirst}
+Y.~Zhang, Y.~Guo, J.~Zheng, Z.~Fan, X.~Jia, and J.~Liu.
+\newblock Move first, commit later: Selective {LiDAR}-to-{BIM} global initialization via sequential consensus with symmetry-aware abstention.
+\newblock arXiv preprint arXiv:2607.17103, July 2026{\natexlab{b}}.
+\newblock Concurrent work.
+
+\bibitem[Zou et~al.(2024)Zou, Li, Wu, Liang, Yang, and Dong]{zou2024reliableloc}
+X.~Zou, J.~Li, W.~Wu, F.~Liang, B.~Yang, and Z.~Dong.
+\newblock Reliable-loc: Robust sequential {LiDAR} global localization in large-scale street scenes based on verifiable cues.
+\newblock arXiv preprint arXiv:2411.07815, 2024.
 
 \end{thebibliography}

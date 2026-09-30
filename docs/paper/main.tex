@@ -3,6 +3,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.17}
 \usepgfplotslibrary{groupplots}
@@ -23,28 +24,34 @@ ROS~2 Contract, with Middleware-Free Estimator Cores}
 \maketitle
 
 \begin{abstract}
-Map-based LiDAR localization for mobile robots is solved in fragments:
-a 2D scanner calls for an AMCL-style particle filter over an occupancy
-grid, a 3D LiDAR for an NDT-based tracker over a point-cloud map, and
-an inertial- or GNSS-aided platform for a Kalman fusion node---each
-with its own topics, parameters, initialization ritual, and recovery
-behavior. We present \prismloc{}, an open-source ROS~2 localization
-stack that places three known estimator families behind one node
-contract: \texttt{laser2d}, a likelihood-field Monte Carlo localizer;
-\texttt{ndt3d}, an NDT-MCL backend that reuses the same particle filter
+Widely used open-source tools for map-based LiDAR localization of mobile
+robots are still largely organized by sensor suite: a 2D scanner
+typically calls for an AMCL-style particle filter over an occupancy
+grid, a 3D LiDAR for an NDT-based tracker over a point-cloud map, and an
+inertial- or GNSS-aided platform for a Kalman fusion node, often with
+different topics, parameters, initialization, and recovery behavior.
+Existing libraries already share one particle-filter core across 2D and
+3D sensor models, and other systems already relocalize a robot by
+branch-and-bound scan matching. We describe \prismloc{}, an open-source
+ROS~2 localization stack that places three established estimator
+families behind one node contract: \texttt{laser2d}, a likelihood-field
+Monte Carlo localizer; \texttt{ndt3d}, a planar NDT-MCL
+backend~\cite{saarinen2013ndtmcl} that reuses the same particle filter
 with a Gaussian-voxel measurement model; and \texttt{fusion3d}, a
 15-state error-state Kalman filter fusing LiDAR, IMU, and RTK-GNSS.
 Every backend publishes the same \texttt{map}$\to$\texttt{odom}
 transform and pose with covariance and accepts the same
 \texttt{/initialpose} seeding, so the sensor suite selects a backend at
-launch time rather than a separate software stack. All filter
+launch time rather than a stack with a different interface. All filter
 mathematics reside in middleware-free C++17 cores that depend only on
 Eigen and are exercised by deterministic, seeded unit and integration
 tests with no ROS runtime; the \texttt{laser2d} backend additionally
 recovers from the kidnapped-robot condition by deterministic
-branch-and-bound scan matching. We claim no new estimator theory: the
-contribution is architectural, delivered as a usability-focused
-open-source release.
+branch-and-bound scan matching. We claim no new estimator theory; the
+contribution is this particular integration, released as
+usability-focused open-source software. No external baseline and no
+real or public data are used in the evaluation, and no field-accuracy
+claim is made.
 \end{abstract}
 
 \input{sections/intro}

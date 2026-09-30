@@ -20,7 +20,7 @@ g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 \
 /tmp/exp_nees
 g++ -O2 -std=c++17 $CORE prism_loc_core/src/*.cpp \
     experiments/bbs_verify.cpp -pthread -o /tmp/exp_bbs_verify
-/tmp/exp_bbs_verify calib 10              # calibration log
+/tmp/exp_bbs_verify calib 10              # parameter-selection log
 python3 experiments/select_verify_params.py --check
 /tmp/exp_bbs_verify study 3               # verification study
 python3 docs/paper/make_study_tables.py   # generated study tables

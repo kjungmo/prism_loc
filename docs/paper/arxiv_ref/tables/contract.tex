@@ -1,6 +1,6 @@
 \begin{table}[t]
 \centering
-\caption{\textbf{Per-backend topic contract.} All backends additionally subscribe \code{/initialpose} and the TF \code{odom}$\to$\code{base\_link}, and broadcast \code{map}$\to$\code{odom} by \Cref{eq:mapodom} with the stamp future-dated by \code{transform\_tolerance} (default 0.1\,s).}\label{tab:contract}
+\caption{\textbf{Per-backend topic contract.} All backends additionally subscribe \code{/initialpose} and the TF \code{odom}$\to$\code{base\_link}, and broadcast \code{map}$\to$\code{odom} by \Cref{eq:mapodom} with the stamp future-dated by \code{transform\_tolerance} (default 0.1\,s). The private topic \code{\char`~/pose} resolves under the node name (\code{/prism\_loc/pose} for \code{laser2d} and \code{ndt3d}, \code{/prism\_loc\_fusion/pose} for \code{fusion3d}) and can be remapped.}\label{tab:contract}
 \small
 \begin{tabularx}{\linewidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
 \toprule

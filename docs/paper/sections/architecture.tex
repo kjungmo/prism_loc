@@ -42,15 +42,18 @@ accepts a \texttt{PoseWithCovarianceStamped} on \texttt{/initialpose}
 for seeding; the MCL nodes additionally publish a particle cloud while
 the fusion node publishes an \texttt{Odometry} message carrying pose
 and velocity. Because the contract is fixed, choosing between the
-likelihood-field MCL, NDT-MCL, and ESKF estimators is a runtime
-decision: \texttt{prism\_loc} reads a \texttt{backend} string parameter
+likelihood-field MCL, NDT-MCL, and ESKF estimators is a launch-time
+choice: \texttt{prism\_loc} reads a \texttt{backend} string parameter
 (\texttt{"laser2d"} by default) and branches on it when constructing
 its measurement model and when applying the correction step, and
-\texttt{prism\_loc\_fusion\_ros} supplies the \texttt{fusion3d}
-estimator behind the identical topic and TF interface. As stated in
-Section~\ref{sec:related}, this factoring --- three known estimator
-families behind one ROS~2 contract --- is the architectural
-contribution; the estimators themselves are textbook.
+\texttt{prism\_loc\_fusion\_ros}, started by its own launch file,
+supplies the \texttt{fusion3d} estimator behind the same topic and TF
+interface, up to the node namespace under which
+\texttt{\char`~/pose} resolves (Table~\ref{tab:contract}). As stated in
+Section~\ref{sec:intro}, this factoring --- three known estimator
+families behind one ROS~2 contract --- is a specific integration of
+established patterns rather than a new architecture
+(Table~\ref{tab:positioning}); the estimators themselves are textbook.
 
 \textbf{Core interfaces.} The MCL core expresses the shared
 predict--weight--resample loop against a small set of value types.
