@@ -5,9 +5,9 @@ behind a single ROS~2 contract. All three are implemented as ROS-free C++
 libraries: the two Monte Carlo localization (MCL) backends and the global
 relocalizer live in \texttt{prism\_loc\_core}, and the fusion filter lives in
 \texttt{prism\_loc\_fusion}. Consistent with the architectural framing of
-Section~\ref{sec:architecture}, the contribution here is factoring, not new
-estimation theory: we reuse textbook constructions and report only what the
-code implements.
+Section~\ref{sec:architecture}, the contribution here is an integration of
+established components, not new estimation theory: we reuse textbook
+constructions and report only what the code implements.
 
 \subsection{Shared Monte Carlo Localization Core}
 
@@ -76,9 +76,11 @@ $\log\!\big(s(p) + s_\mathrm{floor}\big)$ over cloud points $p$, where
 $s(p) = \exp\!\big(-\tfrac{1}{2}(p-\mu_v)^\top \Sigma_v^{-1}(p-\mu_v)\big)$ and
 empty voxels score zero. The planar particle state $(x,y,\theta)$ is lifted to a
 3D transform at a fixed base height, so the 3D backend estimates the same
-$(x,y,\theta)$ as the 2D one. This is the NDT-as-measurement-model (NDT-MCL)
-idea: the NDT score usually optimized by Newton registration is instead read out
-as a particle likelihood, so the two backends differ only in this class.
+$(x,y,\theta)$ as the 2D one. This is a simplified form of
+NDT-MCL~\cite{saarinen2013ndtmcl}, which represents both the map and the scan by
+NDTs; here raw points are scored against the NDT map, and a score of the kind
+that Newton registration optimizes is read out as a particle likelihood, so the
+two backends differ only in this class.
 
 \subsection{Branch-and-Bound Global Localization}\label{sec:global}
 
@@ -95,7 +97,11 @@ translations within \texttt{linear\_window} and rotations spanning
 expanded depth-first with children visited in decreasing order of their
 pyramid-derived upper bound; because the max-pooled bound is admissible, a
 subtree is pruned only when its bound cannot exceed the best exact (leaf) score
-found so far, so the returned pose is globally optimal over the discretization. The
+found so far, so, by the standard branch-and-bound argument of Hess et
+al.~\cite{hess2016realtime}, the returned pose attains the best correlative score
+over the discretized search window. This is the discrete optimum of a
+correlative surrogate score, not of the pose posterior; it is not optimal
+localization in any statistical sense. The
 result is accepted only when its score reaches \texttt{min\_score\_fraction} of
 the number of beams used; an accepted pose re-seeds the particle filter, whereas
 a rejected one leaves the current estimate untouched. Unlike the stochastic

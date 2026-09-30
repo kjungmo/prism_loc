@@ -12,7 +12,10 @@ interface rather than glue code, following the conventions that
 established for drop-in localization: a REP-105 frame contract, a
 \texttt{map}$\to$\texttt{odom} TF output, and \texttt{/initialpose}
 seeding. A robot already configured for AMCL can therefore switch
-backends by changing a launch file, not its TF tree or its consumers.
+backends by changing a launch file, not its TF tree; consumers of the
+pose topic need at most a remapping, because
+\texttt{\textasciitilde/pose} resolves under the node name
+(Table~\ref{tab:contract}).
 
 \subsection{Frames and \texttt{map}$\to$\texttt{odom} composition}
 All three backends honor the REP-105 frame chain
@@ -49,8 +52,9 @@ extrapolation on the consumer side.
 Table~\ref{tab:contract} lists the per-backend contract. Inputs and
 outputs are uniform across backends wherever the sensing allows: every
 backend outputs the same \texttt{map}$\to$\texttt{odom} TF and a
-\texttt{PoseWithCovarianceStamped} on \texttt{\textasciitilde/pose},
-and every backend accepts \texttt{/initialpose}. QoS profiles match
+\texttt{PoseWithCovarianceStamped} on \texttt{\textasciitilde/pose}, a
+private topic that resolves under the node name, and every backend
+accepts \texttt{/initialpose}. QoS profiles match
 each publisher's expected semantics rather than using defaults: sensor
 streams (\texttt{LaserScan}, \texttt{PointCloud2}, \texttt{Imu},
 \texttt{NavSatFix}) are subscribed with \texttt{SensorDataQoS}
@@ -66,7 +70,11 @@ interface removes it.
 \caption{Per-backend topic contract. All backends additionally
 subscribe \texttt{/initialpose} and the TF
 \texttt{odom}$\to$\texttt{base\_link}, and broadcast
-\texttt{map}$\to$\texttt{odom}.}
+\texttt{map}$\to$\texttt{odom}. The private topic
+\texttt{\textasciitilde/pose} resolves under the node name
+(\texttt{/prism\_loc/pose} for \texttt{laser2d} and \texttt{ndt3d},
+\texttt{/prism\_loc\_fusion/pose} for \texttt{fusion3d}) and can be
+remapped.}
 \label{tab:contract}
 \small
 \begin{tabular}{@{}lll@{}}
@@ -147,5 +155,5 @@ NaN coordinates, or position variance above \texttt{gnss\_max\_pos\_cov}
 ---and the NDT update likewise reports non-convergence and fitness
 versus \texttt{ndt\_max\_fitness}. These diagnostics carry no algorithmic
 weight; they exist so that a misconfiguration is diagnosable from the
-console log alone, consistent with the operational transparency Nav2
-found necessary for long-term autonomy~\cite{macenski2020marathon}.
+console log alone, in the spirit of the logging infrastructure Nav2
+relied on in its long-duration field experiment~\cite{macenski2020marathon}.

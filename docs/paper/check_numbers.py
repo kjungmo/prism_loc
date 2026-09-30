@@ -326,8 +326,8 @@ ax_expect("ver pooled CI", f"falls from {V['single_big_fa']} of 240 {pc(V['singl
 ax_expect("ver sfa fate", f"{V['sfa_to_correct']} become correct fixes, {V['sfa_to_amb']} end as ambiguous, and {V['sfa_to_noc']} as no candidate; {V['sfa_to_fa']} remains a false accept")
 fa1 = V["ver_fa_list"]
 check("ver single residual FA is a flip", len(fa1) == 1 and fa1[0][3] > 170 and fa1[0][0] == "80", str(fa1))
-ax_expect("ver residual", f"{fa1[0][2]:.1f}\\,m from the truth, which held {fa1[0][4]:.3f} of the posterior")
-ax_expect("ver residual limitation", f"held {fa1[0][4]:.3f} of the posterior, it can only choose")
+ax_expect("ver residual", f"{fa1[0][2]:.1f}\\,m from the truth, which held {fa1[0][4]:.3f} of the evidence score")
+ax_expect("ver residual limitation", f"held {fa1[0][4]:.3f} of the evidence score, it can only choose")
 ax_expect("ver correct", f"commits {V['verify_all_correct']} correct poses against {V['single_all_correct']} for the single scan")
 ax_expect("ver lost/gained", f"it loses {V['lost']} fixes the single scan had ({V['lost_amb']} ambiguous, {V['lost_noc']} rejected")
 ax_expect("ver lost clutter", f"at least {V['lost_min_clutter']:.2f})")

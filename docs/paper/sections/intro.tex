@@ -1,71 +1,113 @@
 \section{Introduction}\label{sec:intro}
 
 Localizing a mobile robot against a prior map is, on paper, a solved
-problem, but in practice it is solved in fragments. A team fielding a 2D
-LiDAR reaches for \texttt{nav2\_amcl}, a particle filter that tracks a
-planar pose against an occupancy grid and nothing else. A team with a 3D
-LiDAR reaches instead for an \texttt{hdl\_localization}-style tracker
-built around 3D NDT registration. A team that must fuse inertial and
-satellite measurements reaches for a \texttt{robot\_localization}-style
-node~\cite{moore2014generalized}, which composes an EKF over odometry,
-IMU, and GNSS but treats the map-relative LiDAR measurement as someone
-else's problem. Each of these tools carries its own topic interface,
-parameter vocabulary, initialization ritual, and recovery story, so a
-practitioner who moves from a 2D platform to a 3D one, or who adds a
-GNSS receiver, re-integrates from scratch. The ROS~2 maintainers'
-localization survey~\cite{macenski2023survey} names exactly this gap
-and sketches, as unbuilt future work, a modular framework of swappable
-2D and 3D localization components behind a common interface
-(Section~\ref{sec:related} details this and the surrounding prior
-work). The cost of the gap is not merely inconvenience: the Nav2
-marathon deployment~\cite{macenski2020marathon} attributes a leading
-share of its autonomy-recovery triggers to loss of localization
-confidence, so how a stack initializes, degrades, and recovers is a
-first-class deployment concern rather than a detail.
+problem, but the widely used open-source tools are still largely
+organized by sensor suite. A team fielding a 2D LiDAR typically reaches
+for \texttt{nav2\_amcl}, a particle filter that tracks a planar pose
+against an occupancy grid and nothing else. A team with a 3D LiDAR may
+reach instead for an \texttt{hdl\_localization}-style tracker built
+around 3D NDT registration. A team that must fuse inertial and
+satellite measurements may reach for a
+\texttt{robot\_localization}-style node~\cite{moore2014generalized},
+which composes an EKF over odometry, IMU, and GNSS but leaves the
+map-relative LiDAR measurement to another node. These tools differ in
+topic interface, parameter vocabulary, initialization, and recovery
+behavior, so a practitioner who moves from a 2D platform to a 3D one,
+or who adds a GNSS receiver, must re-integrate much of the localization
+layer.
 
-\prismloc{} is an engineering response to that gap. It packages three
+The split is not universal, and several efforts reduce it. The survey
+of the ROS~2 navigation maintainers~\cite{macenski2023survey} catalogs
+the shortcomings of AMCL and reports a proposed design for a
+localization framework that builds 2D and 3D localization systems from
+modular components. Beluga~\cite{puga2024beluga,ekumen2022belugarepo}
+is a ROS-agnostic C++17 Monte Carlo localization library whose ROS~2
+nodes offer interface parity with \texttt{nav2\_amcl} and pair one
+particle-filter core with likelihood-field and 2D and 3D NDT sensor
+models; Autoware's pose-estimator arbiter~\cite{autoware2024arbiter}
+launches several heterogeneous pose estimators and provides a mechanism
+to stop and resume them; and fuse~\cite{locus2018fuse} and
+MOLA~\cite{blancoclaraco2025mola} provide modular estimation frameworks
+(Section~\ref{sec:related} details these and the surrounding prior
+work). How a stack initializes, degrades, and recovers also matters in
+deployment: the Nav2 marathon deployment~\cite{macenski2020marathon}
+names low localization confidence as one of the two causes behind most
+of its recovery triggers. Classical MCL recovers from such failures
+through stochastic mechanisms, random particle injection or dual
+sampling~\cite{fox1999efficient,thrun2001robust}, which are hard to
+reproduce in a test; later systems add failure
+detection~\cite{akai2023reliable}, keep several particle populations
+seeded by map matching~\cite{garcia2023mhamcl}, or reset a tracker from
+a branch-and-bound global search~\cite{koide2021hdlgl,sasaki2026globalloc}.
+
+We describe \prismloc{}, an engineering integration that packages three
 map-based LiDAR localization backends behind one ROS~2 node contract:
 \texttt{laser2d}, a 2D likelihood-field Monte Carlo localizer against an
-occupancy grid; \texttt{ndt3d}, a 3D NDT-MCL backend that reuses the
-same particle filter with a voxel-Gaussian measurement model over a
-prior point cloud, sampling the planar $(x, y, \theta)$ pose; and
-\texttt{fusion3d}, a 15-state error-state Kalman filter (ESKF) that fuses
-3D LiDAR, IMU, and RTK-GNSS with IMU-bias estimation. All three present the
-identical interface --- a \texttt{map}$\to$\texttt{odom} transform, a pose
-with $6\times6$ covariance, and \texttt{/initialpose} seeding --- so
-that choosing between a 2D scan, a 3D cloud, and an inertial/GNSS-aided
-configuration is a launch-time decision rather than a change of stack.
-The two MCL backends share a single pure-C++17 estimator core (motion
-model, particle filter, KLD-adaptive resampling, pose estimate), and the
-fusion backend is a second such core; in both cases the algorithmic code
-depends only on Eigen and is unit-tested with no ROS or PCL present.
-When \texttt{laser2d} is started with no initial pose, it recovers one
-from a single scan by deterministic branch-and-bound (BBS) correlative
-scan matching over the occupancy grid, and re-seeds the particle filter
-from that result. We claim no new estimator theory: likelihood-field
-MCL, NDT-MCL, ESKF fusion, and BBS scan matching are all established.
-The contribution is architectural --- three known estimator families
-placed behind one contract, factored so their cores are deterministically
-testable off-robot --- and it is delivered as usable open-source
-software.
+occupancy grid; \texttt{ndt3d}, a 3D NDT-MCL
+backend~\cite{saarinen2013ndtmcl} that reuses the same particle filter
+with a voxel-Gaussian measurement model over a prior point cloud,
+sampling the planar $(x, y, \theta)$ pose; and \texttt{fusion3d}, a
+15-state error-state Kalman filter (ESKF) that fuses 3D LiDAR, IMU, and
+RTK-GNSS with IMU-bias estimation. All three present the same
+interface --- a \texttt{map}$\to$\texttt{odom} transform, a pose with
+$6\times6$ covariance on a private \texttt{\textasciitilde/pose} topic
+that differs between the two nodes only by namespace and can be
+remapped (Table~\ref{tab:contract}), and \texttt{/initialpose}
+seeding --- so that choosing between a 2D scan, a 3D cloud, and an
+inertial/GNSS-aided configuration is a launch-time choice of parameter
+or launch file rather than a change of interface. The two MCL backends
+share a single pure-C++17 estimator core (motion model, particle
+filter, KLD-adaptive resampling, pose estimate), and the fusion backend
+is a second such core; in both cases the algorithmic code depends only
+on Eigen and is unit-tested with no ROS or PCL present. When
+\texttt{laser2d} is started with no initial pose, it recovers one from a
+single scan by deterministic branch-and-bound (BBS) correlative scan
+matching over the occupancy grid, and re-seeds the particle filter from
+that result. We claim no new estimator theory: likelihood-field MCL,
+NDT-MCL, ESKF fusion, and BBS scan matching are all established, and so
+are the broader patterns we use, namely one particle-filter core shared
+by 2D and 3D measurement models~\cite{puga2024beluga,ekumen2022belugarepo}
+and branch-and-bound relocalization against a prior
+map~\cite{hess2016realtime,koide2021hdlgl}. We are not aware of a
+released package that combines exactly the three backends below behind
+one contract with a relocalizer that can decline to commit; that
+combination is the contribution, delivered as usable open-source
+software. Table~\ref{tab:positioning} lists the closest prior work for
+each component.
 
-Concretely, this paper contributes:
+Concretely, the paper describes:
 \begin{enumerate}
   \item A \textbf{unified, pluggable localization architecture} in which
     three estimator families (2D likelihood-field MCL, 3D NDT-MCL, and
     LiDAR+IMU+RTK-GNSS ESKF fusion) present one ROS~2
     \texttt{map}$\to$\texttt{odom} contract, so the sensor suite selects
-    a backend rather than a separate stack.
+    a backend, not a stack with a different interface. Beluga already
+    serves its likelihood-field and NDT particle filters through one
+    node interface~\cite{puga2024beluga,ekumen2022belugarepo}; the
+    addition here is an inertial/GNSS Kalman backend that shares the
+    same \texttt{map}$\to$\texttt{odom} TF edge, pose message type, and
+    \texttt{/initialpose} seeding (\texttt{laser2d} and \texttt{ndt3d}
+    are chosen by one \texttt{backend} parameter, \texttt{fusion3d} by
+    its own launch file); because the consistency of its covariance has
+    not been established, we release it as experimental
+    (Section~\ref{sec:limitations}).
   \item \textbf{ROS-free estimator cores} that hold all filter
     mathematics behind an Eigen-only, PCL-free, rclcpp-free boundary,
     making every algorithmic claim exercisable by deterministic,
     seeded-RNG unit and integration tests that run without a middleware
-    runtime.
+    runtime. Middleware-independent estimator cores are established
+    practice~\cite{puga2024beluga,pedrosa2019lama}; we list this as a
+    property of the artifact, not as a research contribution.
   \item A \textbf{deterministic global relocalization} path for
-    \texttt{laser2d}: branch-and-bound correlative scan matching solves
-    the kidnapped-robot problem from one scan and re-seeds the MCL
-    posterior, replacing stochastic random-injection recovery with a
-    repeatable search.
+    \texttt{laser2d}: the branch-and-bound correlative scan matcher of
+    Hess et al.~\cite{hess2016realtime}, run over a max-pooled
+    likelihood pyramid, recovers a pose for a kidnapped robot from one
+    scan and re-seeds the MCL particle set with a repeatable search, in
+    place of stochastic random-injection recovery. By the standard
+    branch-and-bound argument of Hess et al.~\cite{hess2016realtime}, the
+    search returns the best correlative score over its discretized
+    search window; this is the discrete optimum of a surrogate score,
+    not an optimal pose estimate.
   \item An \textbf{open-source release engineered for usability},
     including fail-fast configuration validation, startup watchdog
     diagnostics that name the input that has gone silent, and a
@@ -83,4 +125,8 @@ software-description paper, together with a seeded synthetic evaluation
 that demonstrates closed-loop tracking, global relocalization, and
 fusion behavior of the actual cores, and
 Sections~\ref{sec:limitations} and~\ref{sec:conclusion} discuss
-limitations and conclude.
+limitations and conclude. The evaluation runs no external baseline and
+uses no real or public data, so we make no claim of accuracy or
+robustness relative to \texttt{nav2\_amcl}, Beluga, MH-AMCL, or the
+global-localization methods of Section~\ref{sec:related}; that
+comparison is planned (Section~\ref{sec:limitations}).

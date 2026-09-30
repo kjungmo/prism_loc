@@ -80,9 +80,14 @@ CSV logs shipped in the repository (\texttt{experiments/}). We stress
 that this is a \emph{correctness and behavior demonstration on
 synthetic data}, not a field-accuracy benchmark: no real robot or
 sensor is involved, and the sensor-noise models match the assumptions
-of the filters by construction. A quantitative field evaluation on
-public datasets remains future work
-(Section~\ref{sec:limitations}).
+of the filters by construction. No external baseline is run: neither a
+tracker such as \texttt{nav2\_amcl}, Beluga~\cite{puga2024beluga},
+MH-AMCL~\cite{garcia2023mhamcl}, or
+\texttt{hdl\_localization}~\cite{koide2019portable}, nor a global
+localizer such as \texttt{hdl\_global\_localization}~\cite{koide2021hdlgl}
+or CBGL~\cite{filotheou2024cbgl}. Every result below concerns
+\prismloc{}'s own cores, and a comparative study on real and public data
+is left to future work (Section~\ref{sec:limitations}).
 
 \textbf{MCL pose tracking and KLD adaptation.}
 The first experiment exercises the \texttt{laser2d} pipeline exactly as
@@ -173,8 +178,9 @@ a peak error of 0.256\,m at $t = 34.5$\,s (end of the IMU-only
 blackout) recovering to 0.015\,m within one aiding cycle by
 $t = 35$\,s. The $3\sigma$ bound inflates from roughly 0.03\,m under
 full aiding to a peak of 0.663\,m at $t = 34.5$\,s and stays above the
-true error throughout---the covariance the filter reports is
-consistent with its actual error.
+true error throughout this run. A single run does not test whether the
+reported covariance is statistically consistent, so we make no
+consistency claim for it (Section~\ref{sec:limitations}).
 
 \input{figures/fig_eskf}
 
