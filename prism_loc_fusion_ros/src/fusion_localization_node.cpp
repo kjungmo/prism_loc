@@ -128,6 +128,9 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   // Startup watchdog: warn every 10 s about required inputs that have gone silent.
   watchdog_timer_ = create_wall_timer(std::chrono::seconds(10),
                                       std::bind(&FusionLocalizationNode::onWatchdog, this));
+  tf_watch_sub_ = create_subscription<tf2_msgs::msg::TFMessage>(
+      "/tf", rclcpp::QoS(100),
+      std::bind(&FusionLocalizationNode::onTfWatch, this, std::placeholders::_1));
   // Wall timer, so /diagnostics keeps flowing when inputs stop or the ROS clock is stuck.
   start_wall_ = last_imu_wall_ = last_points_wall_ = last_ndt_wall_ = last_gnss_wall_ = Steady::now();
   diag_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>("/diagnostics", 10);
@@ -160,6 +163,22 @@ void FusionLocalizationNode::onWatchdog() {
                 gnss_topic_.c_str(), count_publishers(gnss_topic_));
   }
   if (all_seen) watchdog_timer_->cancel();
+}
+
+// Notes odom->base_link transforms published by any node (diagnostics only).
+void FusionLocalizationNode::onTfWatch(const tf2_msgs::msg::TFMessage::SharedPtr msg) {
+  for (const auto& t : msg->transforms) {
+    if (t.header.frame_id != odom_frame_ || t.child_frame_id != base_frame_) continue;
+    std::lock_guard<std::mutex> lk(mutex_);
+    const auto now_w = Steady::now();
+    ext_odom_seen_ = true;
+    last_ext_odom_wall_ = now_w;
+    if (fallback_ever_ && now_w - last_fallback_wall_ < std::chrono::seconds(1)) {
+      two_parents_ = true;
+      two_parents_wall_ = now_w;
+    }
+    return;
+  }
 }
 
 // 1 Hz wall timer. Only reads state under the mutex; no TF lookups or registration here.
@@ -204,21 +223,19 @@ void FusionLocalizationNode::onDiagnostics() {
   // A robot without odometry runs on the fallback by design: that is OK. Warn when the
   // fallback is off (no TF at all), when odometry was seen and then lost, and for a
   // while after odometry appeared next to the fallback (two parents for base_link).
-  const bool fallback_active = odom_tf_missing_ > 0 && map_to_base_fallback_;
-  if (odom_tf_missing_ > 0 && (odom_tf_seen_ || !map_to_base_fallback_)) {
-    std::snprintf(buf, sizeof(buf), "%s %s->%s TF: %s", odom_tf_seen_ ? "lost" : "no",
-                  odom_frame_.c_str(), base_frame_.c_str(),
-                  map_to_base_fallback_ ? "publishing map->base_link instead (map_to_base_fallback)"
-                                        : "not broadcasting TF (map_to_base_fallback is false)");
+  const bool fallback_active = fallback_ever_ && secs(last_fallback_wall_) < 1.5;
+  if (ext_odom_seen_ && secs(last_ext_odom_wall_) > 1.0) {
+    std::snprintf(buf, sizeof(buf), "lost %s->%s: none on /tf for %.1f s (odometry stopped?)%s",
+                  odom_frame_.c_str(), base_frame_.c_str(), secs(last_ext_odom_wall_),
+                  fallback_active ? "; publishing map->base_link instead (map_to_base_fallback)" : "");
     warnings.emplace_back(buf);
-  }
-  if (odom_tf_stale_ > 0) {
-    std::snprintf(buf, sizeof(buf), "%s->%s is %.1f s old (odometry stopped?)",
-                  odom_frame_.c_str(), base_frame_.c_str(), odom_tf_age_s_);
+  } else if (!ext_odom_seen_ && odom_tf_missing_ > 0 && !map_to_base_fallback_) {
+    std::snprintf(buf, sizeof(buf), "no %s->%s TF: not broadcasting TF (map_to_base_fallback is "
+                  "false)", odom_frame_.c_str(), base_frame_.c_str());
     warnings.emplace_back(buf);
   }
   if (two_parents_ && secs(two_parents_wall_) < 30.0) {
-    std::snprintf(buf, sizeof(buf), "%s->%s appeared while map->%s was being broadcast: %s had "
+    std::snprintf(buf, sizeof(buf), "%s->%s published while map->%s was being broadcast: %s had "
                   "two parents; set map_to_base_fallback false when another node owns %s->%s",
                   odom_frame_.c_str(), base_frame_.c_str(), base_frame_.c_str(),
                   base_frame_.c_str(), odom_frame_.c_str(), base_frame_.c_str());
@@ -279,7 +296,6 @@ void FusionLocalizationNode::onDiagnostics() {
   diag_pub_->publish(arr);
   imu_gaps_reported_ = imu_gaps_;
   odom_tf_missing_ = 0;
-  odom_tf_stale_ = 0;
 }
 
 bool FusionLocalizationNode::tryInitialize() {
@@ -443,28 +459,14 @@ void FusionLocalizationNode::publish(const rclcpp::Time& stamp) {
                                             t.transform.rotation.y, t.transform.rotation.z).toRotationMatrix();
     out_tf = computeMapToOdom(map_base, odom_base);
     child = odom_frame_;
-    // The latest-transform fallback keeps resolving for the buffer's cache time after
-    // odometry stops; report that age (the broadcast TF is unchanged).
-    const double age = (stamp - rclcpp::Time(t.header.stamp, stamp.get_clock_type())).seconds();
-    if (age > 1.0) {
-      ++odom_tf_stale_;
-      odom_tf_age_s_ = age;
-    }
-    if (fallback_used_) {
-      // Another node now publishes odom->base_link while this one has been
-      // broadcasting map->base_link: base_link briefly had two parents.
-      two_parents_ = true;
-      two_parents_wall_ = Steady::now();
-      fallback_used_ = false;
-    }
-    odom_tf_seen_ = true;
   } catch (const std::exception&) {
     ++odom_tf_missing_;
     if (map_to_base_fallback_) {
       out_tf = map_base;
       child = base_frame_;
-      fallback_used_ = true;
-      if (odom_tf_seen_) {
+      fallback_ever_ = true;
+      last_fallback_wall_ = Steady::now();
+      if (ext_odom_seen_) {
         RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
                              "fusion3d: %s->%s lost; publishing %s->%s (map_to_base_fallback)",
                              odom_frame_.c_str(), base_frame_.c_str(), global_frame_.c_str(),

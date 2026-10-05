@@ -14,6 +14,7 @@
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <tf2_msgs/msg/tf_message.hpp>
 #include "prism_loc_fusion/eskf.hpp"
 #include "prism_loc_fusion/geodetic.hpp"
 #include "prism_loc_fusion_ros/ndt_registration.hpp"
@@ -28,6 +29,7 @@ class FusionLocalizationNode : public rclcpp::Node {
   void onInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void onWatchdog();
   void onDiagnostics();
+  void onTfWatch(const tf2_msgs::msg::TFMessage::SharedPtr msg);
   bool tryInitialize();
   void publish(const rclcpp::Time& stamp);
 
@@ -61,12 +63,14 @@ class FusionLocalizationNode : public rclcpp::Node {
   long imu_count_{0}, imu_gaps_{0}, imu_gaps_reported_{0}, ndt_rejected_{0};
   std::string tf_child_{"none"};  // child frame of the last broadcast TF
   long odom_tf_missing_{0};       // publishes without odom->base since the last status
-  bool odom_tf_seen_{false};      // odom->base resolved at least once
-  long odom_tf_stale_{0};         // publishes using odom->base older than 1 s, since last status
-  double odom_tf_age_s_{0.0};
-  bool fallback_used_{false};     // map->base_link has been broadcast since odom was last seen
-  bool two_parents_{false};       // odom->base appeared while map->base_link was broadcast
-  Steady::time_point two_parents_wall_;
+  // Who publishes odom->base_link is watched on /tf directly: while this node broadcasts
+  // map->base_link, lookups of odom->base_link fail intermittently (base_link's parent
+  // flips), so they cannot tell whether odometry exists.
+  bool ext_odom_seen_{false};     // odom->base_link seen on /tf at least once
+  bool fallback_ever_{false};     // map->base_link broadcast at least once
+  bool two_parents_{false};       // odom->base_link on /tf while map->base_link was broadcast
+  Steady::time_point last_ext_odom_wall_, last_fallback_wall_, two_parents_wall_;
+  rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr tf_watch_sub_;
   rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};
   int ros_clock_stuck_ticks_{0};
   rclcpp::Time last_imu_time_;

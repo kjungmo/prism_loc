@@ -14,6 +14,7 @@ find_package(tf2_ros REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
+find_package(tf2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters registration)
@@ -21,7 +22,7 @@ find_package(Eigen3 REQUIRED)
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-set(deps prism_loc_fusion rclcpp tf2 tf2_ros sensor_msgs nav_msgs geometry_msgs diagnostic_msgs
+set(deps prism_loc_fusion rclcpp tf2 tf2_ros sensor_msgs nav_msgs geometry_msgs diagnostic_msgs tf2_msgs
   pcl_conversions)
 
 add_library(fusion_node SHARED

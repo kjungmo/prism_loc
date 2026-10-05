@@ -6,8 +6,7 @@ and one /initialpose, and checks the "prism_loc_fusion: fusion" status:
   1. no odometry at all (a robot that runs on the fallback by design): OK with
      map_to_base_fallback_active=true, and map->base_link is broadcast
   2. an odom->base_link publisher appears: WARN naming the two parents of base_link
-  3. that publisher stops again: WARN that odom->base_link is old (the buffer still
-     holds it) or lost
+  3. that publisher stops again: WARN that odom->base_link was lost
 
     fusion_fallback_check.py PARAMS_YAML MAP_PCD
 """
@@ -103,8 +102,8 @@ def main():
         t3 = time.monotonic()
         stream(3.0, odom=False)
         w = [s for t, s in diags if t > t3 and level_of(s) == 1
-             and (' old ' in s.message or 'lost' in s.message)]
-        results.append((bool(w), 'odometry stops after being seen: WARN "old"/"lost"'
+             and 'lost' in s.message]
+        results.append((bool(w), 'odometry stops after being seen: WARN "lost"'
                         + (f' ("{w[0].message}")' if w else ' missing')))
     finally:
         n.destroy_node()
