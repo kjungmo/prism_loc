@@ -63,6 +63,8 @@ if(BUILD_TESTING)
   ament_add_gtest(test_param_validation test/test_param_validation.cpp)
   target_link_libraries(test_param_validation prism_loc_node)
   ament_target_dependencies(test_param_validation ${deps})
+  ament_add_gtest(test_tf_wait test/test_tf_wait.cpp)
+  target_include_directories(test_tf_wait PRIVATE include)
 endif()
 
 ament_package()

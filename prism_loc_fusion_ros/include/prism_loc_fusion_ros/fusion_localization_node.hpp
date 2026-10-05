@@ -61,6 +61,12 @@ class FusionLocalizationNode : public rclcpp::Node {
   long imu_count_{0}, imu_gaps_{0}, imu_gaps_reported_{0}, ndt_rejected_{0};
   std::string tf_child_{"none"};  // child frame of the last broadcast TF
   long odom_tf_missing_{0};       // publishes without odom->base since the last status
+  bool odom_tf_seen_{false};      // odom->base resolved at least once
+  long odom_tf_stale_{0};         // publishes using odom->base older than 1 s, since last status
+  double odom_tf_age_s_{0.0};
+  bool fallback_used_{false};     // map->base_link has been broadcast since odom was last seen
+  bool two_parents_{false};       // odom->base appeared while map->base_link was broadcast
+  Steady::time_point two_parents_wall_;
   rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};
   int ros_clock_stuck_ticks_{0};
   rclcpp::Time last_imu_time_;

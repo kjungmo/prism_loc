@@ -65,8 +65,9 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   vp.pose_pos_std = pose_pos_std_;
   vp.pose_rot_std = pose_rot_std_;
   vp.gnss_max_pos_cov = gnss_max_pos_cov_;
-  // IMU messages queue while a point cloud is being registered on the same executor;
-  // the queue must hold one NDT align's worth of IMU samples (still best effort).
+  // IMU messages queue while a point cloud is being registered on the same executor.
+  // The default keeps SensorDataQoS's depth (5); raise it (e.g. 200) when /diagnostics
+  // reports IMU gaps, so the queue holds one NDT align's worth of samples.
   vp.imu_queue_depth = declare_parameter<int>("imu_queue_depth", vp.imu_queue_depth);
   // /diagnostics: startup grace, IMU silence threshold (larger of input_timeout_s and
   // input_timeout_periods x the IMU period) and the age of the last accepted NDT
@@ -200,10 +201,27 @@ void FusionLocalizationNode::onDiagnostics() {
       warnings.emplace_back(buf);
     }
   }
-  if (odom_tf_missing_ > 0) {
-    std::snprintf(buf, sizeof(buf), "no %s->%s TF: %s", odom_frame_.c_str(), base_frame_.c_str(),
+  // A robot without odometry runs on the fallback by design: that is OK. Warn when the
+  // fallback is off (no TF at all), when odometry was seen and then lost, and for a
+  // while after odometry appeared next to the fallback (two parents for base_link).
+  const bool fallback_active = odom_tf_missing_ > 0 && map_to_base_fallback_;
+  if (odom_tf_missing_ > 0 && (odom_tf_seen_ || !map_to_base_fallback_)) {
+    std::snprintf(buf, sizeof(buf), "%s %s->%s TF: %s", odom_tf_seen_ ? "lost" : "no",
+                  odom_frame_.c_str(), base_frame_.c_str(),
                   map_to_base_fallback_ ? "publishing map->base_link instead (map_to_base_fallback)"
-                                        : "not broadcasting TF");
+                                        : "not broadcasting TF (map_to_base_fallback is false)");
+    warnings.emplace_back(buf);
+  }
+  if (odom_tf_stale_ > 0) {
+    std::snprintf(buf, sizeof(buf), "%s->%s is %.1f s old (odometry stopped?)",
+                  odom_frame_.c_str(), base_frame_.c_str(), odom_tf_age_s_);
+    warnings.emplace_back(buf);
+  }
+  if (two_parents_ && secs(two_parents_wall_) < 30.0) {
+    std::snprintf(buf, sizeof(buf), "%s->%s appeared while map->%s was being broadcast: %s had "
+                  "two parents; set map_to_base_fallback false when another node owns %s->%s",
+                  odom_frame_.c_str(), base_frame_.c_str(), base_frame_.c_str(),
+                  base_frame_.c_str(), odom_frame_.c_str(), base_frame_.c_str());
     warnings.emplace_back(buf);
   }
   if (imu_gaps_ > imu_gaps_reported_) {
@@ -253,6 +271,7 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("covariance_trace_position",
      filter_init_ ? num(eskf_->covariance().block<3, 3>(0, 0).trace(), "%.6f") : "n/a");
   kv("tf_child_frame", tf_child_);
+  kv("map_to_base_fallback_active", fallback_active ? "true" : "false");
   kv("use_sim_time", sim_time ? "true" : "false");
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
@@ -260,6 +279,7 @@ void FusionLocalizationNode::onDiagnostics() {
   diag_pub_->publish(arr);
   imu_gaps_reported_ = imu_gaps_;
   odom_tf_missing_ = 0;
+  odom_tf_stale_ = 0;
 }
 
 bool FusionLocalizationNode::tryInitialize() {
@@ -423,15 +443,38 @@ void FusionLocalizationNode::publish(const rclcpp::Time& stamp) {
                                             t.transform.rotation.y, t.transform.rotation.z).toRotationMatrix();
     out_tf = computeMapToOdom(map_base, odom_base);
     child = odom_frame_;
+    // The latest-transform fallback keeps resolving for the buffer's cache time after
+    // odometry stops; report that age (the broadcast TF is unchanged).
+    const double age = (stamp - rclcpp::Time(t.header.stamp, stamp.get_clock_type())).seconds();
+    if (age > 1.0) {
+      ++odom_tf_stale_;
+      odom_tf_age_s_ = age;
+    }
+    if (fallback_used_) {
+      // Another node now publishes odom->base_link while this one has been
+      // broadcasting map->base_link: base_link briefly had two parents.
+      two_parents_ = true;
+      two_parents_wall_ = Steady::now();
+      fallback_used_ = false;
+    }
+    odom_tf_seen_ = true;
   } catch (const std::exception&) {
     ++odom_tf_missing_;
     if (map_to_base_fallback_) {
       out_tf = map_base;
       child = base_frame_;
-      RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
-                           "fusion3d: no %s->%s; publishing %s->%s (map_to_base_fallback)",
-                           odom_frame_.c_str(), base_frame_.c_str(), global_frame_.c_str(),
-                           base_frame_.c_str());
+      fallback_used_ = true;
+      if (odom_tf_seen_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
+                             "fusion3d: %s->%s lost; publishing %s->%s (map_to_base_fallback)",
+                             odom_frame_.c_str(), base_frame_.c_str(), global_frame_.c_str(),
+                             base_frame_.c_str());
+      } else {
+        RCLCPP_INFO_ONCE(get_logger(),
+                         "fusion3d: no %s->%s; publishing %s->%s (map_to_base_fallback)",
+                         odom_frame_.c_str(), base_frame_.c_str(), global_frame_.c_str(),
+                         base_frame_.c_str());
+      }
     } else {
       send_tf = false;
       RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
