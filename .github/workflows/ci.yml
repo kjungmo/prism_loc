@@ -80,9 +80,24 @@ jobs:
           mkdir -p ci_logs && cd ci_logs
           bash ../src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
 
+      # fusion3d /diagnostics around the map->base_link fallback: OK without odometry,
+      # WARN when odometry appears next to the fallback (two parents) or stops.
+      - name: fusion3d fallback diagnostics
+        shell: bash
+        env:
+          ROS_DOMAIN_ID: "92"
+        run: |
+          source install/setup.bash
+          mkdir -p ci_logs && cd ci_logs
+          python3 ../src/prism_loc/scripts/make_fixtures.py fusion_fix
+          timeout 120 python3 ../src/prism_loc/scripts/fusion_fallback_check.py \
+            ../install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml \
+            fusion_fix/map.pcd || { tail -n 40 fusion_fallback.log; exit 1; }
+
       # laser2d over real topics/TF on a synthetic world: convergence, map->odom stamp
-      # and cadence, recovery after a scan gap, and the /diagnostics status for stopped
-      # scans, missing odometry, zero-stamped scans and a stuck ROS clock.
+      # and cadence, recovery after a scan gap, poses at a 0.1x sim clock, no low-n_eff
+      # warning after /initialpose, and the /diagnostics status for stopped scans,
+      # missing odometry, zero-stamped scans and a stuck ROS clock.
       - name: synthetic end-to-end (laser2d)
         shell: bash
         env:

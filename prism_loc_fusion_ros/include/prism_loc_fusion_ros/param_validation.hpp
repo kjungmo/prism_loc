@@ -12,7 +12,7 @@ struct FusionNodeParams {
   double ndt_max_fitness{2.0}, points_voxel_leaf{0.5};
   double pose_pos_std{0.1}, pose_rot_std{0.05};
   double gnss_max_pos_cov{25.0};
-  int imu_queue_depth{200};
+  int imu_queue_depth{5};
   double startup_timeout_s{30.0}, input_timeout_s{1.0}, input_timeout_periods{5.0};
   double correction_timeout_s{5.0};
 };

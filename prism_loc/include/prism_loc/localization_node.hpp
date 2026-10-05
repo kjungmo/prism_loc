@@ -99,7 +99,6 @@ class LocalizationNode : public rclcpp::Node {
   rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
   rclcpp::TimerBase::SharedPtr diag_timer_;
-  double tf_timeout_s_{0.1};
   double startup_timeout_s_{30.0}, input_timeout_s_{1.0}, input_timeout_periods_{5.0};
   double min_neff_fraction_{0.005};
   Steady::time_point start_wall_, last_input_wall_, last_update_wall_;
@@ -109,7 +108,7 @@ class LocalizationNode : public rclcpp::Node {
   long odom_tf_failures_{0}, sensor_tf_failures_{0}, zero_stamp_inputs_{0};  // since last status
   std::string last_tf_error_;
   double last_neff_{0.0};
-  size_t last_n_{0};
+  size_t last_n_{0};  // particles at the last motion update; 0 = n_eff not judged yet
   std::string reloc_state_{"idle"};
   rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};
   int ros_clock_stuck_ticks_{0};

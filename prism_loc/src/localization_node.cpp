@@ -330,7 +330,7 @@ void LocalizationNode::onDiagnostics() {
   kv("map_received", map_ready_ ? "true" : "false");
   kv("filter_initialized", filter_init_ ? "true" : "false");
   kv("particles", std::to_string(pf_->particles().size()));
-  kv("n_eff", num(last_neff_, "%.1f"));
+  kv("n_eff", last_n_ > 0 ? num(last_neff_, "%.1f") : std::string("n/a"));
   kv("covariance_trace_xy", num(last_cov_(0, 0) + last_cov_(1, 1), "%.6f"));
   kv("covariance_yaw", num(last_cov_(5, 5), "%.6f"));
   kv("input_rate_hz", num(input_period_s_ > 0.0 ? 1.0 / input_period_s_ : 0.0, "%.2f"));
@@ -365,8 +365,8 @@ void LocalizationNode::onMap(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) 
 
 bool LocalizationNode::lookupOdom(const rclcpp::Time& stamp, Pose2D& odom_base) {
   try {
-    auto tf = lookupTransformSteady(*tf_buffer_, odom_frame_, base_frame_,
-                                    tf2_ros::fromRclcpp(stamp), tf_timeout_s_);
+    auto tf = lookupTransformWait(*tf_buffer_, odom_frame_, base_frame_,
+                                  tf2_ros::fromRclcpp(stamp), *get_clock());
     odom_base = toPose2D(tf.transform);
     return true;
   } catch (const std::exception& e) {
@@ -591,8 +591,16 @@ void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {
     pf_->predict(*motion_, last_odom_, odom_base);
     if (backend_ == "laser2d") pf_->correct(*laser_model_);
     else pf_->correct(*ndt_model_);
-    last_neff_ = pf_->effectiveSampleSize();  // before resampling resets the weights
-    last_n_ = pf_->particles().size();
+    if (force_update_) {
+      // The update forced by a reseed (/initialpose, set_initial_pose, an accepted
+      // relocalization) scores a fresh Gaussian cloud against one scan: its n_eff is
+      // always tiny and says nothing about tracking health. Judge n_eff again only
+      // after a normal motion-triggered update.
+      last_n_ = 0;
+    } else {
+      last_neff_ = pf_->effectiveSampleSize();  // before resampling resets the weights
+      last_n_ = pf_->particles().size();
+    }
     pf_->resample();
     last_odom_ = odom_base;
     force_update_ = false;

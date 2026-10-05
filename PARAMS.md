@@ -73,7 +73,7 @@ node with an error naming the parameter.
 | startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing map, missing input or missing pose seed is reported as ERROR (drivers can be slow to start). |
 | input_timeout_s | double | `1.0` | s | `/diagnostics` reports the scans/clouds as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x observed input period)` of silence. |
 | input_timeout_periods | double | `5.0` | count | Input periods of silence (period measured on the steady clock) before input counts as stopped. |
-| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Healthy tracking in the synthetic end-to-end test stays at or above 0.025. |
+| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Healthy tracking measured >= 0.025 in the synthetic e2e `track` runs (not asserted). Not judged on the update forced by a reseed (`/initialpose`, `set_initial_pose`, accepted relocalization). |
 
 ## ndt3d backend (`prism_loc` node, `backend: "ndt3d"`)
 
@@ -112,7 +112,7 @@ node with an error naming the parameter.
 | startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing map, missing input or missing pose seed is reported as ERROR (drivers can be slow to start). |
 | input_timeout_s | double | `1.0` | s | `/diagnostics` reports the scans/clouds as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x observed input period)` of silence. |
 | input_timeout_periods | double | `5.0` | count | Input periods of silence (period measured on the steady clock) before input counts as stopped. |
-| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Healthy tracking in the synthetic end-to-end test stays at or above 0.025. |
+| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Healthy tracking measured >= 0.025 in the synthetic e2e `track` runs (not asserted). Not judged on the update forced by a reseed (`/initialpose`, `set_initial_pose`, accepted relocalization). |
 
 ## fusion3d backend (`prism_loc_fusion` node)
 
@@ -147,7 +147,7 @@ node with an error naming the parameter.
 | gnss_max_pos_cov | double | `25.0` | m^2 | Reject GNSS fixes whose x position variance exceeds this. |
 | initial_yaw | double | `0.0` | rad | Assumed initial heading when seeding attitude from accel. |
 | map_to_base_fallback | bool | `true` | bool | While `odom_frame -> base_frame` is unavailable, broadcast `map -> base_link` instead of `map -> odom`. Set `false` when wheel odometry or an EKF owns `odom -> base_link`: if that node starts after this one, `base_link` would otherwise have two parents in the TF tree. With `false` no TF is broadcast until odometry appears; the pose topics still publish. |
-| imu_queue_depth | int | `200` | count | Depth of the best-effort IMU subscription queue. IMU messages wait in it while a point cloud is being registered on the same executor. |
+| imu_queue_depth | int | `5` | count | Depth of the best-effort IMU subscription queue (`5` = the `SensorDataQoS` depth used before this parameter existed). IMU messages wait in it while a point cloud is being registered on the same executor; raise it (recommended `200`) when `/diagnostics` reports IMU gaps. |
 | startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing IMU or a filter that never initialized is reported as ERROR. |
 | input_timeout_s | double | `1.0` | s | `/diagnostics` reports the IMU as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x IMU period)` of silence. |
 | input_timeout_periods | double | `5.0` | count | IMU periods of silence before the IMU counts as stopped. |
