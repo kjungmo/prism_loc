@@ -69,8 +69,8 @@ It also asserts poses at a 0.1x simulated clock with scans stamped ahead of
 odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
-GoogleTest cases: 42 in `prism_loc_core`, 15 in `prism_loc_fusion`, 14 in
-`prism_loc`, 4 in `prism_loc_fusion_ros` (75 in total).
+GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 14 in
+`prism_loc`, 5 in `prism_loc_fusion_ros` (79 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
