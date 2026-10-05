@@ -291,7 +291,9 @@ bbs_verify_min_rotation: 0.3      # rad, so in-place turns also count
 
 makes a scan count only after that much odometry motion since the last counted
 one; the verifier then stays pending while the robot stands still and decides on
-the move. The code default and the shipped YAML keep `0.0` (every scan counts, the
+the move. Meanwhile `/diagnostics` WARNs `"relocalization pending: waiting for motion
+(N scans skipped)"` and reports `relocalization_scans_used` /
+`relocalization_scans_skipped`. The code default and the shipped YAML keep `0.0` (every scan counts, the
 v0.1 behaviour) until this is adopted as the default.
 
 ## 🔌 Interface
