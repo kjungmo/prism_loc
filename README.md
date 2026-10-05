@@ -65,12 +65,12 @@ synthetic world (ray-cast scans, drifting odometry) and asserts position error
 0–0.15 s, and no TF gap over 0.5 s; after a 7 s scan gap, `map→odom` resumes
 within 1 s and the position error is ≤ 0.15 m from 15 s after the gap
 (re-convergence measured 3–12 s; a 3 s bound is not met by the current filter).
-It also asserts poses at a 0.1x simulated clock with scans stamped ahead of
-odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
+It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
+0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
-GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 14 in
-`prism_loc`, 5 in `prism_loc_fusion_ros` (79 in total).
+GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 15 in
+`prism_loc`, 5 in `prism_loc_fusion_ros` (80 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -80,10 +80,12 @@ bash src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
 python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc/params/laser2d.yaml
 ```
 
-**TF waits.** A lookup of `odom→base_link` at a scan's stamp waits up to 0.1 s of
-ROS time for odometry to catch up, at playback rates down to 0.1x; below that the
-1 s steady cap shortens it; a frozen clock cannot hang the node (the wait gives up
-after 0.1 s of steady time when the ROS clock does not move).
+**TF waits.** A lookup of `odom→base_link` at a scan's stamp waits for odometry to
+catch up: 0.1 s of ROS time, capped at 1 s of steady time; a clock unchanged for 1 s
+is treated as frozen and no longer waited on. "Unchanged" is judged across waits, so
+a coarse `/clock` (for example 10 Hz of sim time at 0.5x) still gets its full 0.1 s.
+A clock that has just stopped can hold one callback for up to the 1 s cap before it
+is recognised as frozen; after that waits return immediately.
 
 ## 📄 Paper
 
@@ -95,7 +97,9 @@ PDF under [`docs/paper/`](docs/paper/)):
 > with Middleware-Free Estimator Cores** — [PDF](docs/paper/main.pdf)
 
 The paper describes commit cdb81bf; later commits add tests and the `/diagnostics`
-status without changing default-parameter estimates.
+status, and with default parameters leave the estimates unchanged except that scans
+and clouds with a zero header stamp are now dropped; fusion3d's `~/odometry` linear
+twist is now expressed in `base_link` (it was the world frame).
 
 If `prism_loc` is useful in your research, please cite it
 (see also [`CITATION.cff`](CITATION.cff)):
@@ -206,7 +210,8 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
-`seconds_since_last_update`, `relocalization` (laser2d/ndt3d); `imu_rate_hz`,
+`seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
+`relocalization_scans_skipped` (laser2d/ndt3d); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame`,
 `map_to_base_fallback_active` (fusion3d). A fusion3d robot without odometry that
@@ -293,8 +298,9 @@ makes a scan count only after that much odometry motion since the last counted
 one; the verifier then stays pending while the robot stands still and decides on
 the move. Meanwhile `/diagnostics` WARNs `"relocalization pending: waiting for motion
 (N scans skipped)"` and reports `relocalization_scans_used` /
-`relocalization_scans_skipped`. The code default and the shipped YAML keep `0.0` (every scan counts, the
-v0.1 behaviour) until this is adopted as the default.
+`relocalization_scans_skipped`. The code default is `0.0` and the shipped YAML does
+not set these keys (every scan counts, the v0.1 behaviour) until this is adopted as
+the default.
 
 ## 🔌 Interface
 

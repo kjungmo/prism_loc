@@ -26,3 +26,6 @@ compile_commands.json
 Testing/
 *.gcda
 *.gcno
+
+# Python
+__pycache__/

@@ -25,6 +25,7 @@
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include "prism_loc_core/bbs.hpp"
 #include "prism_loc_core/relocalization.hpp"
+#include "prism_loc/tf_wait_rule.hpp"
 
 namespace prism_loc {
 
@@ -97,6 +98,7 @@ class LocalizationNode : public rclcpp::Node {
   // steady_clock_ so they keep firing when the ROS clock is stuck (use_sim_time, no /clock).
   using Steady = std::chrono::steady_clock;
   rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
+  TfWaitRule tf_wait_rule_;  // remembers when the ROS clock last changed, across TF waits
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
   rclcpp::TimerBase::SharedPtr diag_timer_;
   double startup_timeout_s_{30.0}, input_timeout_s_{1.0}, input_timeout_periods_{5.0};
