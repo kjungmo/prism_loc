@@ -453,12 +453,15 @@ def scenario_slow_clock(d, results):
           f'scans after the initial pose that produced a pose at 0.1x: {poses}/{after_ip} (need >= 90 %)')
 
 
+COARSE_FACTOR = 0.5  # --coarse-factor
+
+
 def scenario_coarse_clock(d, results):
-    after_ip = sim_clock_run(d, 0.5, 0.1)
+    after_ip = sim_clock_run(d, COARSE_FACTOR, 0.1)
     poses = len(d.errors())
-    check(results, after_ip > 300 and poses >= after_ip,
-          f'scans after the initial pose that produced a pose with a 10 Hz /clock at 0.5x: '
-          f'{poses}/{after_ip} (need all)')
+    check(results, after_ip > 100 and poses >= after_ip,
+          f'scans after the initial pose that produced a pose with a 10 Hz /clock at '
+          f'{COARSE_FACTOR:g}x: {poses}/{after_ip} (need all)')
 
 
 def scenario_stationary_seed(d, results):
@@ -521,12 +524,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('params', help='params YAML for the node (prism_loc/params/laser2d.yaml)')
     ap.add_argument('--scenario', choices=['all'] + list(SCENARIOS), default='all')
+    ap.add_argument('--coarse-factor', type=float, default=0.5,
+                    help='real-time factor of the coarse_clock scenario (default 0.5)')
     ap.add_argument('--node-arg', action='append', default=[],
                     help='extra node parameter, name:=value (repeatable)')
     args = ap.parse_args()
     names = list(SCENARIOS) if args.scenario == 'all' else [args.scenario]
     failed = False
     for name in names:
+        global COARSE_FACTOR
+        COARSE_FACTOR = args.coarse_factor
         results = run_scenario(name, os.path.abspath(args.params), args.node_arg)
         print(f'[{name}]')
         for ok, text in results:

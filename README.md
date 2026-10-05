@@ -69,8 +69,8 @@ It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
 0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
-GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 15 in
-`prism_loc`, 5 in `prism_loc_fusion_ros` (80 in total).
+GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 18 in
+`prism_loc`, 5 in `prism_loc_fusion_ros` (83 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -81,11 +81,14 @@ python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc
 ```
 
 **TF waits.** A lookup of `odom→base_link` at a scan's stamp waits for odometry to
-catch up: 0.1 s of ROS time, capped at 1 s of steady time; a clock unchanged for 1 s
-is treated as frozen and no longer waited on. "Unchanged" is judged across waits, so
+catch up: 0.1 s of ROS time (plus up to 30 ms when a stepped clock reaches the budget
+in one jump), capped at 1 s of steady time. Limits: a `/clock` that changes less often
+than once per second of wall time counts as frozen and is not waited on; below 0.1x
+the 1 s cap ends the wait before 0.1 s of ROS time; the callback in which a clock
+stops can hold up to the cap. Whether the clock is frozen is judged across waits, so
 a coarse `/clock` (for example 10 Hz of sim time at 0.5x) still gets its full 0.1 s.
-A clock that has just stopped can hold one callback for up to the 1 s cap before it
-is recognised as frozen; after that waits return immediately.
+The buffer is polled every 10 ms as in `tf2_ros`; a live clock never gets the 30 ms
+step grace, so a live robot behaves as with `tf2_ros`.
 
 ## 📄 Paper
 
