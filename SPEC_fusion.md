@@ -110,7 +110,7 @@ prism_loc_fusion_ros/                   # ROS 2 Humble node, depends prism_loc_f
 (optional), TF `odom→base` (optional). **Out:** `/tf` `map→odom` (REP-105; falls
 back to `map→base_link` with a warning if no `odom→base`), `~/pose`
 (PoseWithCovarianceStamped, 6×6 from ESKF P), `~/odometry` (`nav_msgs/Odometry`,
-velocity).
+linear velocity expressed in `base_link`, the message's `child_frame_id`).
 
 ## 9. Parameters (fusion3d)
 

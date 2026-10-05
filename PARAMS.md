@@ -70,6 +70,8 @@ node with an error naming the parameter.
 | bbs_verify_nms_yaw | double | `0.35` | rad | Yaw radius of a mode. |
 | bbs_verify_track_linear_window | double | `0.3` | m | ± per-axis window of each hypothesis' local re-match per scan. |
 | bbs_verify_track_angular_window | double | `0.1` | rad | ± yaw window of the local re-match. |
+| bbs_verify_min_translation | double | `0.0` | m | Motion gate: a scan counts toward `bbs_verify_scans` only once odometry has moved this far since the last counted scan (or turned `bbs_verify_min_rotation`); skipped scans only carry their odometry forward. `0` disables the criterion. Recommended `0.3` (see README, Global localization). |
+| bbs_verify_min_rotation | double | `0.0` | rad | Motion gate, rotation criterion (an in-place turn this large counts). `0` disables it. Recommended `0.3`. With both gate values `0` (default) every scan counts, as in v0.1. |
 | startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing map, missing input or missing pose seed is reported as ERROR (drivers can be slow to start). |
 | input_timeout_s | double | `1.0` | s | `/diagnostics` reports the scans/clouds as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x observed input period)` of silence. |
 | input_timeout_periods | double | `5.0` | count | Input periods of silence (period measured on the steady clock) before input counts as stopped. |

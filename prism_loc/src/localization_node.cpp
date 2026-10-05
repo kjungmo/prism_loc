@@ -115,6 +115,11 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
         declare_parameter<double>("bbs_verify_track_linear_window", rv.track_linear_window);
     reloc_params_.track_angular_window =
         declare_parameter<double>("bbs_verify_track_angular_window", rv.track_angular_window);
+    // Motion gate: count a verification scan only after this much odometry motion since
+    // the last counted one (0 = every scan counts, the v0.1 behaviour).
+    reloc_params_.min_translation =
+        declare_parameter<double>("bbs_verify_min_translation", rv.min_translation);
+    reloc_params_.min_rotation = declare_parameter<double>("bbs_verify_min_rotation", rv.min_rotation);
     validateBbsParams(bbs_params_, reloc_params_);
     global_loc_srv_ = create_service<std_srvs::srv::Empty>(
         "~/global_localization",

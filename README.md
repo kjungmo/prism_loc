@@ -241,6 +241,28 @@ then hand the result to `prism_loc`:
 4. Point `map_pcd_path:=/path/to/map.pcd` at it for `ndt3d.launch.py` /
    `fusion3d.launch.py`.
 
+### Global localization: counting only scans taken after the robot moved
+
+Verification (`bbs_verify_scans`, default 9) multiplies the evidence of every
+scan it counts. The shipped values were selected in
+[`experiments/bbs_verify.cpp`](experiments/bbs_verify.cpp) with **0.3 m** of travel
+between scans, but by default the node counts every incoming scan. A stationary
+robot then feeds near-identical scans: no new information arrives, yet the
+posterior of whichever hypothesis the first scan slightly preferred grows until it
+is committed (the unit test
+`RelocVerifierMotionGate.StationaryRepeatsCommitToTheWrongRoomWithoutGate`
+reproduces a commit to the wrong one of two aliased rooms). Setting
+
+```yaml
+bbs_verify_min_translation: 0.3   # m, the step the defaults were selected with
+bbs_verify_min_rotation: 0.3      # rad, so in-place turns also count
+```
+
+makes a scan count only after that much odometry motion since the last counted
+one; the verifier then stays pending while the robot stands still and decides on
+the move. The code default and the shipped YAML keep `0.0` (every scan counts, the
+v0.1 behaviour) until this is adopted as the default.
+
 ## 🔌 Interface
 
 | Backend | Package | Input | Output |
@@ -254,7 +276,9 @@ All backends also publish `/diagnostics` (see [Runtime status](#runtime-status-d
 `odom→base_link` transform exists (`map_to_base_fallback`, default `true`). If wheel
 odometry or an EKF publishes `odom→base_link` and may start after `fusion3d`, set
 `map_to_base_fallback: false`; otherwise `base_link` briefly has two parents in the
-TF tree.
+TF tree. `~/odometry` (`nav_msgs/Odometry`, `frame_id` = `map`, `child_frame_id` =
+`base_link`) carries its linear twist in `base_link`, as the message definition
+specifies; the angular twist is not filled.
 
 ## 📚 Documentation
 
