@@ -16,6 +16,8 @@
     update_min_d: 0.2                 # m: min translation before a filter update runs
     update_min_a: 0.2                 # rad: min rotation before a filter update runs
     transform_tolerance: 0.1          # s: future-dating added to the map->odom TF stamp
+    tf_broadcast: true                # bool: broadcast map->odom (false when another node owns it)
+    seed: 42                          # count: RNG seed for the particle filter
     alpha1: 0.2                       # unitless: odometry noise, rotation from rotation
     alpha2: 0.2                       # unitless: odometry noise, rotation from translation
     alpha3: 0.2                       # unitless: odometry noise, translation from translation
@@ -48,3 +50,7 @@
     bbs_verify_nms_yaw: 0.35          # rad: yaw radius of a mode
     bbs_verify_track_linear_window: 0.3   # m: +/- per-axis local re-match window per hypothesis per scan
     bbs_verify_track_angular_window: 0.1  # rad: +/- yaw local re-match window
+    startup_timeout_s: 30.0           # s: /diagnostics grace before a missing map/input/pose seed is an ERROR
+    input_timeout_s: 1.0              # s: /diagnostics ERROR when input stops for max(this, periods x input period)
+    input_timeout_periods: 5.0        # count: input periods of silence before /diagnostics reports input stopped
+    min_neff_fraction: 0.005          # fraction: /diagnostics WARN when Neff/N at an update falls below this (0 = off)

@@ -64,3 +64,32 @@ jobs:
         run: |
           source /opt/ros/humble/setup.bash
           colcon test-result --verbose
+
+      - name: script deps
+        run: apt-get install -y --no-install-recommends python3-numpy python3-yaml
+
+      # Each shipped launch file starts headless on generated maps; every key of its
+      # params YAML must be declared and applied by the running node (ROS 2 ignores
+      # undeclared keys silently), and the node must publish its /diagnostics status.
+      - name: launch files + parameter binding
+        shell: bash
+        env:
+          ROS_DOMAIN_ID: "92"
+        run: |
+          source install/setup.bash
+          mkdir -p ci_logs && cd ci_logs
+          bash ../src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
+
+      # laser2d over real topics/TF on a synthetic world: convergence, map->odom stamp
+      # and cadence, recovery after a scan gap, and the /diagnostics status for stopped
+      # scans, missing odometry, zero-stamped scans and a stuck ROS clock.
+      - name: synthetic end-to-end (laser2d)
+        shell: bash
+        env:
+          ROS_DOMAIN_ID: "92"
+        run: |
+          source install/setup.bash
+          mkdir -p ci_logs && cd ci_logs
+          timeout 900 python3 ../src/prism_loc/scripts/synthetic_e2e.py \
+            ../install/prism_loc/share/prism_loc/params/laser2d.yaml \
+            || { for f in e2e_*.log; do echo "--- $f"; tail -n 40 "$f"; done; exit 1; }

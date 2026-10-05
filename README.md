@@ -55,7 +55,17 @@ libraries (`prism_loc_core`, `prism_loc_fusion`) with **no ROS and no PCL**,
 unit-tested deterministically with gtest and a seedable RNG. `rclcpp`, `tf2`,
 and PCL appear only in the two thin node packages (`prism_loc`,
 `prism_loc_fusion_ros`). CI builds both paths: the bare-`cmake` cores and the
-full `colcon` workspace in a `ros:humble` container.
+full `colcon` workspace in a `ros:humble` container. It then runs the nodes over
+real ROS topics: each shipped launch file starts headless on generated maps and
+[`scripts/check_param_binding.py`](scripts/check_param_binding.py) fails if any
+YAML key is not declared and applied, and
+[`scripts/synthetic_e2e.py`](scripts/synthetic_e2e.py) drives `laser2d` on a
+synthetic world (ray-cast scans, drifting odometry) and asserts position error
+≤ 0.15 m and yaw error ≤ 0.05 rad after 10 s, a `map→odom` stamp lead of
+0–0.15 s, no TF gap over 0.5 s, recovery to ≤ 0.15 m within 3 s after a 7 s scan
+gap, and the `/diagnostics` status for stopped scans, missing odometry,
+zero-stamped scans and a stuck ROS clock. This is a ROS-path check on synthetic
+data, not a field result.
 
 ## 📄 Paper
 
@@ -160,6 +170,25 @@ Expected startup log lines (`RCLCPP_INFO`, from
 If any of these don't show up, or the pose/TF commands above hang or print
 nothing, see [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
 
+### Runtime status (`/diagnostics`)
+
+Both nodes publish a `diagnostic_msgs/DiagnosticArray` on `/diagnostics` once per
+second from a wall-clock timer, so the status keeps coming when inputs stop or the
+ROS clock is stuck. Status names are `prism_loc: localization` and
+`prism_loc_fusion: fusion` (hardware_id = node namespace); watch them with
+`ros2 topic echo /diagnostics` or `rqt_robot_monitor`.
+
+| Level | `prism_loc` (laser2d / ndt3d) | `prism_loc_fusion` (fusion3d) |
+|---|---|---|
+| ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped |
+| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; no `odom->base_link` (map->base_link fallback or no TF); IMU gaps; ROS clock not advancing under `use_sim_time` |
+
+Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
+`covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
+`seconds_since_last_update`, `relocalization` (laser2d/ndt3d); `imu_rate_hz`,
+`imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
+`ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame` (fusion3d).
+
 ## 📊 Evaluation (synthetic)
 
 The paper ships a **fully reproducible synthetic evaluation**: three
@@ -220,13 +249,20 @@ then hand the result to `prism_loc`:
 | **ndt3d** | `prism_loc` | `/points`, `map.pcd`, `/initialpose`, TF `odom→base` | same |
 | **fusion3d** | `prism_loc_fusion_ros` | `/points`, `/imu`, `/gnss` (NavSatFix), `map.pcd`, `/initialpose` | `/tf` `map→odom`, `~/pose`, `~/odometry` |
 
+All backends also publish `/diagnostics` (see [Runtime status](#runtime-status-diagnostics)).
+`fusion3d` broadcasts `map→base_link` instead of `map→odom` while no
+`odom→base_link` transform exists (`map_to_base_fallback`, default `true`). If wheel
+odometry or an EKF publishes `odom→base_link` and may start after `fusion3d`, set
+`map_to_base_fallback: false`; otherwise `base_link` briefly has two parents in the
+TF tree.
+
 ## 📚 Documentation
 
 | Document | Contents |
 |---|---|
 | [`docs/paper/main.pdf`](docs/paper/main.pdf) | Systems paper: architecture, estimator cores, interface contract, synthetic evaluation |
 | [`PARAMS.md`](PARAMS.md) | Every `laser2d`/`ndt3d`/`fusion3d` parameter, its default, and its meaning |
-| [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Symptom → cause → fix for every silent failure mode |
+| [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Symptom → cause → fix for the common failure modes, with the `/diagnostics` message each one produces |
 | [`SPEC.md`](SPEC.md) / [`SPEC_fusion.md`](SPEC_fusion.md) | Full design specifications |
 | [`experiments/README.md`](experiments/README.md) | How to rebuild and rerun the synthetic evaluation |
 

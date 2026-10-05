@@ -28,3 +28,9 @@
     gnss_max_pos_cov: 25.0            # m^2: reject GNSS fixes whose x position variance exceeds this
     initial_yaw: 0.0                  # rad: assumed initial heading when seeding attitude from accel
     transform_tolerance: 0.1          # s: future-dating added to the map->odom TF stamp
+    map_to_base_fallback: true        # bool: publish map->base_link while odom->base_link is missing (false if an EKF/odometry owns odom->base_link)
+    imu_queue_depth: 200              # count: IMU subscription queue (best effort); holds IMU samples while a cloud is registered
+    startup_timeout_s: 30.0           # s: /diagnostics grace before missing IMU or no initialization is an ERROR
+    input_timeout_s: 1.0              # s: /diagnostics ERROR when the IMU stops for max(this, periods x IMU period)
+    input_timeout_periods: 5.0        # count: IMU periods of silence before /diagnostics reports the IMU stopped
+    correction_timeout_s: 5.0         # s: /diagnostics WARN when no NDT correction was accepted for this long

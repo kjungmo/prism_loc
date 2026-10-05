@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -21,6 +22,7 @@
 #include "prism_loc_core/occupancy_grid.hpp"
 #include "prism_loc_core/ndt_map.hpp"
 #include <std_srvs/srv/empty.hpp>
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include "prism_loc_core/bbs.hpp"
 #include "prism_loc_core/relocalization.hpp"
 
@@ -46,6 +48,8 @@ class LocalizationNode : public rclcpp::Node {
   void onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
   void onInitialPose(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   void onWatchdog();
+  void onDiagnostics();
+  void noteInput();
   void runUpdate(const rclcpp::Time& stamp);
   bool lookupOdom(const rclcpp::Time& stamp, prism_loc_core::Pose2D& odom_base);
   bool lookupSensor(const std::string& sensor_frame, prism_loc_core::Pose2D& sensor_in_base);
@@ -88,6 +92,28 @@ class LocalizationNode : public rclcpp::Node {
   // Startup watchdog: track whether each required input has been seen at least once.
   bool scan_seen_{false}, map_seen_{false}, points_seen_{false};
   rclcpp::TimerBase::SharedPtr watchdog_timer_;
+
+  // /diagnostics (1 Hz wall timer) and steady-clock bookkeeping. Throttled warnings use
+  // steady_clock_ so they keep firing when the ROS clock is stuck (use_sim_time, no /clock).
+  using Steady = std::chrono::steady_clock;
+  rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diag_pub_;
+  rclcpp::TimerBase::SharedPtr diag_timer_;
+  double tf_timeout_s_{0.1};
+  double startup_timeout_s_{30.0}, input_timeout_s_{1.0}, input_timeout_periods_{5.0};
+  double min_neff_fraction_{0.005};
+  Steady::time_point start_wall_, last_input_wall_, last_update_wall_;
+  bool any_input_{false}, any_update_{false};
+  double input_period_s_{0.0};  // smoothed scan/cloud inter-arrival time (steady clock)
+  long input_count_{0};
+  long odom_tf_failures_{0}, sensor_tf_failures_{0}, zero_stamp_inputs_{0};  // since last status
+  std::string last_tf_error_;
+  double last_neff_{0.0};
+  size_t last_n_{0};
+  std::string reloc_state_{"idle"};
+  rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};
+  int ros_clock_stuck_ticks_{0};
+
   prism_loc_core::Pose2D last_odom_, map_odom_;
   Eigen::Matrix<double, 6, 6> last_cov_ = Eigen::Matrix<double, 6, 6>::Zero();
 
