@@ -33,6 +33,10 @@ Scenarios (--scenario, default all):
               time, each scan stamped 30 ms of sim time ahead of the latest odometry:
               at least 90 % of the scans after the initial pose produce a pose (the TF
               wait budget is ROS time, not wall time)
+  coarse_clock use_sim_time on, /clock at 0.5x real time but stepped at 10 Hz of sim
+              time (one step per 0.2 s of wall time), odometry and scans as in
+              slow_clock: every scan after the initial pose produces a pose (a clock
+              that ticks coarsely must not be mistaken for a frozen one)
   stationary_seed  robot standing still, /initialpose as from RViz: poses are published
               and /diagnostics never WARNs about a low effective particle count
 
@@ -347,7 +351,7 @@ def scenario_gap(d, results):
     ok_t = [d.rel(m) for m, s in d.diags if d.rel(m) > g1 and level_of(s) != ERROR]
     check(results, bool(ok_t) and ok_t[0] - g1 <= 3.0,
           f'"scans stopped" ERROR cleared {ok_t[0] - g1:.1f} s after scans returned' if ok_t
-          else 'no OK status after scans returned')
+          else '"scans stopped" ERROR did not clear after scans returned')
     post = [e for e in errs if e[0] > g1 + RECOVERY_S]
     check(results, len(post) > 20 and max(e[1] for e in post) <= 0.15,
           f'max position error from {RECOVERY_S:.0f} s after the gap: '
@@ -380,10 +384,13 @@ def scenario_stuck_clock(d, results):
     check(results, bool(w), 'WARN that the ROS clock is not advancing' + ('' if w else ' missing'))
 
 
-def scenario_slow_clock(d, results):
+def sim_clock_run(d, factor, clock_step):
+    """Publishes /clock at `factor` x real time (stepped by clock_step s of sim time if
+    > 0), odometry TF at 20 Hz of sim time and, with each odometry, a scan stamped 30 ms
+    of sim time ahead of it. Returns the number of scans sent after the initial pose."""
     from rosgraph_msgs.msg import Clock
     clock_pub = d.n.create_publisher(Clock, '/clock', 10)
-    factor, sim0, ahead = 0.1, 1000.0, 0.03
+    sim0, ahead = 1000.0, 0.03
     od = Odom()
     w0 = time.monotonic()
     d.t0 = w0
@@ -395,7 +402,7 @@ def scenario_slow_clock(d, results):
     while time.monotonic() - w0 < 36.0:
         ts = factor * (time.monotonic() - w0)
         c = Clock()
-        c.clock = stamp_of(sim0 + ts)
+        c.clock = stamp_of(sim0 + (math.floor(ts / clock_step) * clock_step if clock_step > 0 else ts))
         clock_pub.publish(c)
         if ts >= next_tick:
             next_tick += 0.05  # odometry at 20 Hz of sim time
@@ -431,9 +438,22 @@ def scenario_slow_clock(d, results):
     end = time.monotonic() + 2.0
     while time.monotonic() < end:
         rclpy.spin_once(d.n, timeout_sec=0.01)
+    return after_ip
+
+
+def scenario_slow_clock(d, results):
+    after_ip = sim_clock_run(d, 0.1, 0.0)
     poses = len(d.errors())
     check(results, after_ip > 30 and poses >= 0.9 * after_ip,
           f'scans after the initial pose that produced a pose at 0.1x: {poses}/{after_ip} (need >= 90 %)')
+
+
+def scenario_coarse_clock(d, results):
+    after_ip = sim_clock_run(d, 0.5, 0.1)
+    poses = len(d.errors())
+    check(results, after_ip > 300 and poses >= after_ip,
+          f'scans after the initial pose that produced a pose with a 10 Hz /clock at 0.5x: '
+          f'{poses}/{after_ip} (need all)')
 
 
 def scenario_stationary_seed(d, results):
@@ -445,12 +465,13 @@ def scenario_stationary_seed(d, results):
 
 SCENARIOS = {'track': scenario_track, 'gap': scenario_gap, 'no_odom': scenario_no_odom,
              'zero_stamp': scenario_zero_stamp, 'stuck_clock': scenario_stuck_clock,
-             'slow_clock': scenario_slow_clock, 'stationary_seed': scenario_stationary_seed}
+             'slow_clock': scenario_slow_clock, 'coarse_clock': scenario_coarse_clock,
+             'stationary_seed': scenario_stationary_seed}
 
 
 def run_scenario(name, params, node_args):
     args = ['ros2', 'run', 'prism_loc', 'prism_loc_node_main', '--ros-args', '--params-file', params]
-    sim = name in ('stuck_clock', 'slow_clock')
+    sim = name in ('stuck_clock', 'slow_clock', 'coarse_clock')
     for a in node_args + (['use_sim_time:=true'] if sim else []):
         args += ['-p', a]
     log = open(f'e2e_{name}.log', 'w')

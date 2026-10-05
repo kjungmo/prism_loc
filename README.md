@@ -65,12 +65,12 @@ synthetic world (ray-cast scans, drifting odometry) and asserts position error
 0–0.15 s, and no TF gap over 0.5 s; after a 7 s scan gap, `map→odom` resumes
 within 1 s and the position error is ≤ 0.15 m from 15 s after the gap
 (re-convergence measured 3–12 s; a 3 s bound is not met by the current filter).
-It also asserts poses at a 0.1x simulated clock with scans stamped ahead of
-odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
+It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
+0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
-GoogleTest cases: 42 in `prism_loc_core`, 15 in `prism_loc_fusion`, 14 in
-`prism_loc`, 4 in `prism_loc_fusion_ros` (75 in total).
+GoogleTest cases: 42 in `prism_loc_core`, 15 in `prism_loc_fusion`, 15 in
+`prism_loc`, 4 in `prism_loc_fusion_ros` (76 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -80,10 +80,12 @@ bash src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
 python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc/params/laser2d.yaml
 ```
 
-**TF waits.** A lookup of `odom→base_link` at a scan's stamp waits up to 0.1 s of
-ROS time for odometry to catch up, at playback rates down to 0.1x; below that the
-1 s steady cap shortens it; a frozen clock cannot hang the node (the wait gives up
-after 0.1 s of steady time when the ROS clock does not move).
+**TF waits.** A lookup of `odom→base_link` at a scan's stamp waits for odometry to
+catch up: 0.1 s of ROS time, capped at 1 s of steady time; a clock unchanged for 1 s
+is treated as frozen and no longer waited on. "Unchanged" is judged across waits, so
+a coarse `/clock` (for example 10 Hz of sim time at 0.5x) still gets its full 0.1 s.
+A clock that has just stopped can hold one callback for up to the 1 s cap before it
+is recognised as frozen; after that waits return immediately.
 
 ## 📄 Paper
 
@@ -95,7 +97,8 @@ PDF under [`docs/paper/`](docs/paper/)):
 > with Middleware-Free Estimator Cores** — [PDF](docs/paper/main.pdf)
 
 The paper describes commit cdb81bf; later commits add tests and the `/diagnostics`
-status without changing default-parameter estimates.
+status, and with default parameters leave the estimates unchanged except that scans
+and clouds with a zero header stamp are now dropped.
 
 If `prism_loc` is useful in your research, please cite it
 (see also [`CITATION.cff`](CITATION.cff)):

@@ -366,7 +366,7 @@ void LocalizationNode::onMap(const nav_msgs::msg::OccupancyGrid::SharedPtr msg) 
 bool LocalizationNode::lookupOdom(const rclcpp::Time& stamp, Pose2D& odom_base) {
   try {
     auto tf = lookupTransformWait(*tf_buffer_, odom_frame_, base_frame_,
-                                  tf2_ros::fromRclcpp(stamp), *get_clock());
+                                  tf2_ros::fromRclcpp(stamp), *get_clock(), tf_wait_rule_);
     odom_base = toPose2D(tf.transform);
     return true;
   } catch (const std::exception& e) {
