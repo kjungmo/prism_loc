@@ -6,11 +6,11 @@ namespace prism_loc {
 // When to stop waiting for a TF lookup at a message stamp. ROS-free so it can be
 // unit-tested; steady time is passed in seconds and ROS time in integer nanoseconds.
 //
-// The rule: 0.1 s of ROS time (plus up to 30 ms when a stepped clock reaches the budget
-// in one jump), capped at 1 s of steady time. Limits: a /clock that changes less often
-// than once per second of wall time counts as frozen and is not waited on; below 0.1x
-// the 1 s cap ends the wait before 0.1 s of ROS time; the callback in which a clock
-// stops can hold up to the cap. "Frozen" is judged across waits (TfWaitRule remembers
+// The rule: 0.1 s of ROS time (plus up to 30 ms when the clock moved 30 ms or more in
+// the poll that reaches the budget), capped at 1 s of steady time. Limits: a /clock
+// that changes less often than once per second of wall time counts as frozen and is
+// not waited on; below 0.1x the 1 s cap ends the wait before 0.1 s of ROS time; the
+// callback in which a clock stops can hold up to the cap. "Frozen" is judged across waits (TfWaitRule remembers
 // when the ROS clock last changed), so a coarse /clock (e.g. 10 Hz of sim time at 0.5x,
 // one step per 0.2 s of wall time) still gets its full budget.
 //
@@ -20,7 +20,8 @@ namespace prism_loc {
 // is retried for step_grace_s (30 ms) more of steady time. The node polls every 10 ms
 // (as tf2_ros does), so 30 ms gives at least two more polls even with scheduling
 // jitter. A live clock or smooth playback below 3x moves about 10 ms or less per poll
-// and stops at the budget, so a live robot behaves exactly as with tf2_ros.
+// and stops at the budget, so a live robot behaves as with tf2_ros unless a poll is
+// delayed by 30 ms or more; smooth playback at about 3x or faster always gets the grace.
 
 // Parameters plus the "when did the ROS clock last change" state shared by all waits.
 class TfWaitRule {
