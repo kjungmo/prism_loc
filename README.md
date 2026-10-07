@@ -81,14 +81,16 @@ python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc
 ```
 
 **TF waits.** A lookup of `odom→base_link` at a scan's stamp waits for odometry to
-catch up: 0.1 s of ROS time (plus up to 30 ms when a stepped clock reaches the budget
-in one jump), capped at 1 s of steady time. Limits: a `/clock` that changes less often
+catch up: 0.1 s of ROS time (plus up to 30 ms when the clock moved 30 ms or more in
+the poll that reaches the budget), capped at 1 s of steady time. Limits: a `/clock` that changes less often
 than once per second of wall time counts as frozen and is not waited on; below 0.1x
 the 1 s cap ends the wait before 0.1 s of ROS time; the callback in which a clock
 stops can hold up to the cap. Whether the clock is frozen is judged across waits, so
 a coarse `/clock` (for example 10 Hz of sim time at 0.5x) still gets its full 0.1 s.
-The buffer is polled every 10 ms as in `tf2_ros`; a live clock never gets the 30 ms
-step grace, so a live robot behaves as with `tf2_ros`.
+The buffer is polled every 10 ms as in `tf2_ros`; a live clock (about 10 ms per poll)
+gets the 30 ms grace only when that poll is delayed by 30 ms or more, so a live robot
+otherwise behaves as with `tf2_ros`. Smooth playback at about 3x or faster moves 30 ms
+or more per poll and always gets the grace.
 
 ## 📄 Paper
 

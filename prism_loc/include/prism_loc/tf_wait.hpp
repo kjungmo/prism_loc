@@ -12,8 +12,8 @@ namespace prism_loc {
 
 // Looks up target <- source at `stamp`, polling the buffer every 10 ms (as tf2_ros does)
 // until the transform resolves or the rule says to stop: 0.1 s of ROS time (plus up to
-// 30 ms when a stepped clock reaches the budget in one jump), capped at 1 s of steady
-// time; see TfWaitRule / TfWait for the limits. Pass the same rule object every time:
+// 30 ms when the clock moved 30 ms or more in the poll that reaches the budget), capped
+// at 1 s of steady time; see TfWaitRule / TfWait for the limits. Pass the same rule object every time:
 // it carries the "last changed" state of the ROS clock across calls. tf2_ros::Buffer's
 // own timeout loops on the ROS clock alone and never ends under use_sim_time without
 // /clock. Throws tf2::TransformException like tf2_ros::Buffer::lookupTransform.
