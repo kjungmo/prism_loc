@@ -9,6 +9,7 @@ shared middleware-free estimator cores, one standard `map → odom` contract.**
 [![License](https://img.shields.io/github/license/kjungmo/prism_loc?color=blue)](LICENSE)
 ![ROS 2 Humble](https://img.shields.io/badge/ROS_2-Humble-22314E?logo=ros&logoColor=white)
 [![Paper](https://img.shields.io/badge/Paper-PDF-b31b1b)](docs/paper/main.pdf)
+[![Preprint DOI](https://img.shields.io/badge/DOI-10.20944%2Fpreprints202610.0391.v1-blue)](https://doi.org/10.20944/preprints202610.0391.v1)
 [![Sponsor](https://img.shields.io/github/sponsors/kjungmo?logo=githubsponsors&color=ea4aaa)](https://github.com/sponsors/kjungmo)
 
 [Overview](#overview) &nbsp;·&nbsp; [Paper](#-paper) &nbsp;·&nbsp;
@@ -29,6 +30,8 @@ already know.
 
 ## 📢 News
 
+- **2026-10** — Preprint posted on Preprints.org (version 1, not peer
+  reviewed): [doi:10.20944/preprints202610.0391.v1](https://doi.org/10.20944/preprints202610.0391.v1).
 - **2026-07** — `v0.1` released: `laser2d`, `ndt3d`, and `fusion3d` backends,
   branch-and-bound global relocalization, and a systems-paper draft with a
   fully reproducible synthetic evaluation
@@ -64,19 +67,24 @@ synthetic evaluation are described in the systems-paper draft (LaTeX sources +
 PDF under [`docs/paper/`](docs/paper/)):
 
 > **PRISM-Loc: Three LiDAR Localization Backends Behind One ROS 2 Contract,
-> with Middleware-Free Estimator Cores** — [PDF](docs/paper/main.pdf)
+> with Middleware-Free Estimator Cores** — Jungmo Kang.
+> [Preprint (Preprints.org, v1)](https://doi.org/10.20944/preprints202610.0391.v1) ·
+> [PDF](docs/paper/main.pdf) (repository draft)
 
 If `prism_loc` is useful in your research, please cite it
 (see also [`CITATION.cff`](CITATION.cff)):
 
 ```bibtex
-@unpublished{kang2026prismloc,
-  author = {Kang, Jung Mo},
-  title  = {{PRISM-Loc}: Three {LiDAR} Localization Backends Behind One
-            {ROS}~2 Contract, with Middleware-Free Estimator Cores},
-  year   = {2026},
-  note   = {Draft manuscript, available at
-            \url{https://github.com/kjungmo/prism_loc} under docs/paper/},
+@article{kang2026prismloc,
+  author  = {Kang, Jungmo},
+  title   = {{PRISM-Loc}: Three {LiDAR} Localization Backends Behind One
+             {ROS}~2 Contract, with Middleware-Free Estimator Cores},
+  journal = {Preprints},
+  year    = {2026},
+  doi     = {10.20944/preprints202610.0391.v1},
+  url     = {https://doi.org/10.20944/preprints202610.0391.v1},
+  note    = {Preprint, version 1, not peer reviewed. Source and code at
+             \url{https://github.com/kjungmo/prism_loc}},
 }
 ```
 
