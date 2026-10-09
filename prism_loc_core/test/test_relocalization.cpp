@@ -215,3 +215,84 @@ TEST(RelocVerifier, EmptyScanYieldsNoCandidate) {
   RelocalizationVerifier ver(m, verifierParams(5, 5));
   EXPECT_EQ(ver.start(scan), RelocStatus::kNoCandidate);
 }
+
+// ---------------------------------------------------------------------------
+// Motion gate
+// ---------------------------------------------------------------------------
+
+// The alias fixture of MultiScanResolvesAliasThatFoolsSingleScan, but the robot
+// stands still: the node feeds every scan, so without a motion gate the verifier
+// re-scores the same view verify_scans times, multiplies the first scan's small
+// preference for the wrong room into a near-certain posterior and commits to B.
+static GridMap aliasMap() {
+  GridMap map = twinRooms();
+  block(map, 128, 36, 131, 39);    // small box mapped in B only
+  return map;
+}
+static GridMap aliasWorld() {
+  GridMap world = aliasMap();
+  block(world, 8, 36, 11, 39);     // the same box, unmapped, in A
+  return world;
+}
+
+TEST(RelocVerifierMotionGate, StationaryRepeatsCommitToTheWrongRoomWithoutGate) {
+  GridMap map = aliasMap(), world = aliasWorld();
+  BranchAndBoundMatcher m(map, params());
+  const Pose2D here{2.55, 2.55, 0.0};
+  RelocalizationVerifier ver(m, verifierParams(5, 9));
+  RelocStatus st = ver.start(test::raycastScan(world, here, Pose2D{}, kBeams, kRange));
+  ASSERT_EQ(st, RelocStatus::kPending);
+  const double first = ver.bestPosterior();
+  ASSERT_LT(first, verifierParams(5, 9).min_posterior) << "one scan alone must not decide";
+  for (int i = 0; i < 20 && st == RelocStatus::kPending; ++i)
+    st = ver.update(Pose2D{}, test::raycastScan(world, here, Pose2D{}, kBeams, kRange));
+  // No new information arrived, yet the verifier became certain - of the wrong room.
+  EXPECT_EQ(st, RelocStatus::kAccepted);
+  EXPECT_GT(ver.pose().x, 12.0);
+  EXPECT_GE(ver.bestPosterior(), verifierParams(5, 9).min_posterior);
+}
+
+TEST(RelocVerifierMotionGate, GateHoldsStationaryRobotPendingThenResolvesOnTheMove) {
+  GridMap map = aliasMap(), world = aliasWorld();
+  BranchAndBoundMatcher m(map, params());
+  RelocVerifierParams vp = verifierParams(5, 10);
+  vp.min_translation = 0.45;  // 0.1 m steps: every fifth scan counts
+  vp.min_rotation = 0.3;
+  RelocalizationVerifier ver(m, vp);
+  const std::vector<Pose2D> path = straightPath(Pose2D{2.55, 2.55, 0.0}, 0.1, 46);
+  RelocStatus st = ver.start(test::raycastScan(world, path[0], Pose2D{}, kBeams, kRange));
+  // Standing still: every scan is skipped, nothing is decided.
+  for (int i = 0; i < 20; ++i)
+    st = ver.update(Pose2D{}, test::raycastScan(world, path[0], Pose2D{}, kBeams, kRange));
+  EXPECT_EQ(st, RelocStatus::kPending);
+  EXPECT_EQ(ver.scansUsed(), 1);
+  EXPECT_EQ(ver.scansSkipped(), 20);
+  // Driving 0.1 m per scan: only every fifth scan counts (0.5 m apart, the spacing of
+  // the moving test above), and the odometry of the skipped ones is carried into the
+  // counted one.
+  for (size_t i = 1; i < path.size() && st == RelocStatus::kPending; ++i)
+    st = ver.update(compose(inverse(path[i - 1]), path[i]),
+                    test::raycastScan(world, path[i], Pose2D{}, kBeams, kRange));
+  ASSERT_EQ(st, RelocStatus::kAccepted);
+  EXPECT_EQ(ver.scansUsed(), 10);
+  EXPECT_LT(ver.pose().x, 12.0) << "must end in room A";
+  EXPECT_LT(std::hypot(ver.pose().x - path[45].x, ver.pose().y - path[45].y), 0.3);
+}
+
+TEST(RelocVerifierMotionGate, RotationAloneOpensTheGate) {
+  GridMap g = twinRooms();
+  BranchAndBoundMatcher m(g, params());
+  RelocVerifierParams vp = verifierParams(5, 5);
+  vp.min_translation = 0.3;
+  vp.min_rotation = 0.3;
+  RelocalizationVerifier ver(m, vp);
+  Pose2D p{20.05, 2.25, 1.0};
+  ASSERT_EQ(ver.start(test::raycastScan(g, p, Pose2D{}, kBeams, kRange)), RelocStatus::kPending);
+  const Pose2D turn{0.0, 0.0, 0.2};
+  p.yaw += 0.2;
+  ver.update(turn, test::raycastScan(g, p, Pose2D{}, kBeams, kRange));
+  EXPECT_EQ(ver.scansUsed(), 1);  // 0.2 rad: below the gate
+  p.yaw += 0.2;
+  ver.update(turn, test::raycastScan(g, p, Pose2D{}, kBeams, kRange));
+  EXPECT_EQ(ver.scansUsed(), 2);  // 0.4 rad accumulated: counted
+}

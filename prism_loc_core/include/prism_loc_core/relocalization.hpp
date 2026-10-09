@@ -32,6 +32,13 @@ struct RelocVerifierParams {
   double min_posterior{0.9};
   double track_linear_window{0.3};
   double track_angular_window{0.1};
+  // Motion gate for update(): a scan counts as verification evidence only once the
+  // odometry has moved at least min_translation (m) or min_rotation (rad) since the
+  // last counted scan; uncounted scans only accumulate the odometry increment. A
+  // stationary robot otherwise re-scores near-identical scans and the posterior grows
+  // from repetition alone. 0 disables a criterion; both 0 (default) counts every scan.
+  double min_translation{0.0};
+  double min_rotation{0.0};
 };
 
 enum class RelocStatus { kIdle, kPending, kAccepted, kAmbiguous, kNoCandidate };
@@ -61,6 +68,8 @@ class RelocalizationVerifier {
   void reset();
 
   RelocStatus status() const { return status_; }
+  // Scans given to update() that the motion gate did not count.
+  int scansSkipped() const { return skipped_; }
   // Tracked pose of the most probable hypothesis (valid after start()).
   const Pose2D& pose() const { return best_pose_; }
   double bestPosterior() const { return best_posterior_; }
@@ -77,6 +86,8 @@ class RelocalizationVerifier {
   Pose2D best_pose_;
   double best_posterior_{0.0};
   int scans_{0};
+  int skipped_{0};
+  Pose2D pending_delta_;  // odometry since the last counted scan
 };
 
 }  // namespace prism_loc_core

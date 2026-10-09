@@ -78,5 +78,9 @@ TEST(ParamValidation, NodeAndVerifierRangesRejected) {
   rv = {};
   rv.verify_scans = 0;
   expectRejects([&] { validateBbsParams(prism_loc_core::BbsParams{}, rv); }, "bbs_verify_scans");
+  rv = {};
+  rv.min_translation = -0.3;
+  expectRejects([&] { validateBbsParams(prism_loc_core::BbsParams{}, rv); },
+                "bbs_verify_min_translation");
   expectRejects([&] { validateNdtParams(0.0, 5, prism_loc_core::NdtParams{}); }, "ndt_resolution");
 }

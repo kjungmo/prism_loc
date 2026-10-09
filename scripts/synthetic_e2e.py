@@ -39,6 +39,11 @@ Scenarios (--scenario, default all):
               that ticks coarsely must not be mistaken for a frozen one)
   stationary_seed  robot standing still, /initialpose as from RViz: poses are published
               and /diagnostics never WARNs about a low effective particle count
+  reloc_gate  try_global_localization with the verification motion gate on
+              (bbs_verify_min_translation/rotation 0.3), robot standing still, no
+              /initialpose: /diagnostics WARNs "relocalization pending: waiting for
+              motion (N scans skipped)" with relocalization_scans_used 1 and
+              relocalization_scans_skipped > 0
 
 This is a ROS-path test (topics -> node -> pose/TF/diagnostics) on a synthetic world
 whose sensor model matches the filter's assumptions; it is not a field result.
@@ -216,7 +221,7 @@ class Driver:
         return fut.done() and fut.result() is not None
 
     def run(self, duration, gap=None, odom=True, zero_from=None, probe_params_at=(),
-            stationary=False):
+            stationary=False, initial_pose=True):
         od = Odom()
         self.t0 = time.monotonic()
         tl, sent_ip, k = 0.0, False, 0
@@ -232,7 +237,7 @@ class Driver:
             stamp = self.n.get_clock().now().to_msg()  # wall clock, as a live sensor driver stamps
             if odom:
                 self.tfb.sendTransform(tf_msg(stamp, 'odom', 'base_link', ox, oy, oth))
-            if t > 1.0 and not sent_ip:
+            if t > 1.0 and not sent_ip and initial_pose:
                 ip = PoseWithCovarianceStamped()
                 ip.header.frame_id = 'map'
                 ip.header.stamp = stamp
@@ -466,16 +471,32 @@ def scenario_stationary_seed(d, results):
     check(results, not w, f'WARN "low effective particle count" after /initialpose: {len(w)} status(es) (need 0)')
 
 
+def scenario_reloc_gate(d, results):
+    d.run(12.0, stationary=True, initial_pose=False)
+    w = [s for m, s in d.diags if level_of(s) == WARN and 'waiting for motion' in s.message]
+    check(results, bool(w), 'WARN "relocalization pending: waiting for motion"'
+          + (f' ("{w[-1].message}")' if w else ' missing'))
+    vals = {kv.key: kv.value for kv in w[-1].values} if w else {}
+    used = int(vals.get('relocalization_scans_used', -1))
+    skipped = int(vals.get('relocalization_scans_skipped', -1))
+    check(results, used == 1 and skipped > 0,
+          f'relocalization_scans_used {used} (need 1), relocalization_scans_skipped {skipped} (need > 0)')
+
+
+SCENARIO_ARGS = {'reloc_gate': ['try_global_localization:=true', 'bbs_verify_min_translation:=0.3',
+                                'bbs_verify_min_rotation:=0.3']}
+
+
 SCENARIOS = {'track': scenario_track, 'gap': scenario_gap, 'no_odom': scenario_no_odom,
              'zero_stamp': scenario_zero_stamp, 'stuck_clock': scenario_stuck_clock,
              'slow_clock': scenario_slow_clock, 'coarse_clock': scenario_coarse_clock,
-             'stationary_seed': scenario_stationary_seed}
+             'stationary_seed': scenario_stationary_seed, 'reloc_gate': scenario_reloc_gate}
 
 
 def run_scenario(name, params, node_args):
     args = ['ros2', 'run', 'prism_loc', 'prism_loc_node_main', '--ros-args', '--params-file', params]
     sim = name in ('stuck_clock', 'slow_clock', 'coarse_clock')
-    for a in node_args + (['use_sim_time:=true'] if sim else []):
+    for a in node_args + SCENARIO_ARGS.get(name, []) + (['use_sim_time:=true'] if sim else []):
         args += ['-p', a]
     log = open(f'e2e_{name}.log', 'w')
     proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)

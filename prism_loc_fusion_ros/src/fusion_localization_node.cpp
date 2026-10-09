@@ -513,7 +513,9 @@ void FusionLocalizationNode::publish(const rclcpp::Time& stamp) {
   nav_msgs::msg::Odometry od;
   od.header.stamp = stamp; od.header.frame_id = global_frame_; od.child_frame_id = base_frame_;
   od.pose = ps.pose;
-  od.twist.twist.linear.x = x.v.x(); od.twist.twist.linear.y = x.v.y(); od.twist.twist.linear.z = x.v.z();
+  // Twist in child_frame_id (base_link) as nav_msgs/Odometry specifies.
+  const Eigen::Vector3d v_b = bodyVelocity(x.q, x.v);
+  od.twist.twist.linear.x = v_b.x(); od.twist.twist.linear.y = v_b.y(); od.twist.twist.linear.z = v_b.z();
   odom_pub_->publish(od);
 }
 

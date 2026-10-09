@@ -115,6 +115,11 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
         declare_parameter<double>("bbs_verify_track_linear_window", rv.track_linear_window);
     reloc_params_.track_angular_window =
         declare_parameter<double>("bbs_verify_track_angular_window", rv.track_angular_window);
+    // Motion gate: count a verification scan only after this much odometry motion since
+    // the last counted one (0 = every scan counts, the v0.1 behaviour).
+    reloc_params_.min_translation =
+        declare_parameter<double>("bbs_verify_min_translation", rv.min_translation);
+    reloc_params_.min_rotation = declare_parameter<double>("bbs_verify_min_rotation", rv.min_rotation);
     validateBbsParams(bbs_params_, reloc_params_);
     global_loc_srv_ = create_service<std_srvs::srv::Empty>(
         "~/global_localization",
@@ -338,6 +343,10 @@ void LocalizationNode::onDiagnostics() {
   kv("seconds_since_last_update", num(any_update_ ? secs(last_update_wall_) : since_start, "%.2f"));
   kv("odom_tf_failures", std::to_string(odom_tf_failures_));
   kv("relocalization", reloc_state_);
+  kv("relocalization_scans_used",
+     std::to_string(reloc_verifier_ ? reloc_verifier_->scansUsed() : 0));
+  kv("relocalization_scans_skipped",
+     std::to_string(reloc_verifier_ ? reloc_verifier_->scansSkipped() : 0));
   kv("use_sim_time", sim_time ? "true" : "false");
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
@@ -442,18 +451,25 @@ void LocalizationNode::runRelocalization(const prism_loc_core::LaserScan2D& scan
     reloc_verifier_ =
         std::make_unique<prism_loc_core::RelocalizationVerifier>(*bbs_matcher_, reloc_params_);
   RelocStatus st;
+  bool skipped = false;
   if (!reloc_active_) {
     st = bbs_global_window_ ? reloc_verifier_->start(scan)
                             : reloc_verifier_->start(scan, bbs_center_);
   } else {
+    const int skipped_before = reloc_verifier_->scansSkipped();
     st = reloc_verifier_->update(
         prism_loc_core::compose(prism_loc_core::inverse(reloc_last_odom_), odom), scan);
+    skipped = reloc_verifier_->scansSkipped() > skipped_before;
   }
   reloc_last_odom_ = odom;
   reloc_active_ = st == RelocStatus::kPending;
   switch (st) {
     case RelocStatus::kPending:
-      reloc_state_ = "pending";
+      // With the motion gate on, a standing robot adds no evidence: say so.
+      reloc_state_ = skipped ? "pending: waiting for motion (" +
+                                   std::to_string(reloc_verifier_->scansSkipped()) +
+                                   " scans skipped)"
+                             : std::string("pending");
       RCLCPP_INFO_THROTTLE(get_logger(), steady_clock_, 1000,
                            "global localization: verifying %zu hypotheses (%d/%d scans, best "
                            "posterior %.3f) - keep the robot moving",

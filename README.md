@@ -69,8 +69,8 @@ It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
 0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
-GoogleTest cases: 42 in `prism_loc_core`, 15 in `prism_loc_fusion`, 18 in
-`prism_loc`, 4 in `prism_loc_fusion_ros` (79 in total).
+GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 18 in
+`prism_loc`, 5 in `prism_loc_fusion_ros` (83 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -103,7 +103,8 @@ PDF under [`docs/paper/`](docs/paper/)):
 
 The paper describes commit cdb81bf; later commits add tests and the `/diagnostics`
 status, and with default parameters leave the estimates unchanged except that scans
-and clouds with a zero header stamp are now dropped.
+and clouds with a zero header stamp are now dropped; fusion3d's `~/odometry` linear
+twist is now expressed in `base_link` (it was the world frame).
 
 If `prism_loc` is useful in your research, please cite it
 (see also [`CITATION.cff`](CITATION.cff)):
@@ -214,7 +215,8 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
-`seconds_since_last_update`, `relocalization` (laser2d/ndt3d); `imu_rate_hz`,
+`seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
+`relocalization_scans_skipped` (laser2d/ndt3d); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame`,
 `map_to_base_fallback_active` (fusion3d). A fusion3d robot without odometry that
@@ -280,6 +282,31 @@ then hand the result to `prism_loc`:
 4. Point `map_pcd_path:=/path/to/map.pcd` at it for `ndt3d.launch.py` /
    `fusion3d.launch.py`.
 
+### Global localization: counting only scans taken after the robot moved
+
+Verification (`bbs_verify_scans`, default 9) multiplies the evidence of every
+scan it counts. The shipped values were selected in
+[`experiments/bbs_verify.cpp`](experiments/bbs_verify.cpp) with **0.3 m** of travel
+between scans, but by default the node counts every incoming scan. A stationary
+robot then feeds near-identical scans: no new information arrives, yet the
+posterior of whichever hypothesis the first scan slightly preferred grows until it
+is committed (the unit test
+`RelocVerifierMotionGate.StationaryRepeatsCommitToTheWrongRoomWithoutGate`
+reproduces a commit to the wrong one of two aliased rooms). Setting
+
+```yaml
+bbs_verify_min_translation: 0.3   # m, the step the defaults were selected with
+bbs_verify_min_rotation: 0.3      # rad, so in-place turns also count
+```
+
+makes a scan count only after that much odometry motion since the last counted
+one; the verifier then stays pending while the robot stands still and decides on
+the move. Meanwhile `/diagnostics` WARNs `"relocalization pending: waiting for motion
+(N scans skipped)"` and reports `relocalization_scans_used` /
+`relocalization_scans_skipped`. The code default is `0.0` and the shipped YAML does
+not set these keys (every scan counts, the v0.1 behaviour) until this is adopted as
+the default.
+
 ## 🔌 Interface
 
 | Backend | Package | Input | Output |
@@ -293,7 +320,9 @@ All backends also publish `/diagnostics` (see [Runtime status](#runtime-status-d
 `odom→base_link` transform exists (`map_to_base_fallback`, default `true`). If wheel
 odometry or an EKF publishes `odom→base_link` and may start after `fusion3d`, set
 `map_to_base_fallback: false`; otherwise `base_link` briefly has two parents in the
-TF tree.
+TF tree. `~/odometry` (`nav_msgs/Odometry`, `frame_id` = `map`, `child_frame_id` =
+`base_link`) carries its linear twist in `base_link`, as the message definition
+specifies; the angular twist is not filled.
 
 ## 📚 Documentation
 

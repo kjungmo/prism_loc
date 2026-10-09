@@ -83,6 +83,8 @@ void validateBbsParams(const prism_loc_core::BbsParams& bp,
           rv.track_linear_window, ">= 0");
   require(rv.track_angular_window >= 0.0, "bbs_verify_track_angular_window",
           rv.track_angular_window, ">= 0");
+  require(rv.min_translation >= 0.0, "bbs_verify_min_translation", rv.min_translation, ">= 0");
+  require(rv.min_rotation >= 0.0, "bbs_verify_min_rotation", rv.min_rotation, ">= 0");
 }
 
 void validateNdtParams(double ndt_resolution, int voxel_min_points,

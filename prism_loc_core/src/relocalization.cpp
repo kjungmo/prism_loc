@@ -25,6 +25,8 @@ void RelocalizationVerifier::reset() {
   best_pose_ = Pose2D{};
   best_posterior_ = 0.0;
   scans_ = 0;
+  skipped_ = 0;
+  pending_delta_ = Pose2D{};
 }
 
 RelocStatus RelocalizationVerifier::start(const LaserScan2D& scan) {
@@ -62,10 +64,24 @@ RelocStatus RelocalizationVerifier::seed(const std::vector<BbsResult>& modes) {
 
 RelocStatus RelocalizationVerifier::update(const Pose2D& odom_delta, const LaserScan2D& scan) {
   if (status_ != RelocStatus::kPending) return status_;
+  pending_delta_ = compose(pending_delta_, odom_delta);
+  const bool gate_t = params_.min_translation > 0.0;
+  const bool gate_r = params_.min_rotation > 0.0;
+  if (gate_t || gate_r) {
+    const bool moved_t =
+        gate_t && std::hypot(pending_delta_.x, pending_delta_.y) >= params_.min_translation;
+    const bool moved_r = gate_r && std::fabs(pending_delta_.yaw) >= params_.min_rotation;
+    if (!moved_t && !moved_r) {
+      ++skipped_;
+      return status_;
+    }
+  }
+  const Pose2D delta = pending_delta_;
+  pending_delta_ = Pose2D{};
   bool informative = false;
   for (RelocHypothesis& h : hyps_) {
     if (!h.alive) continue;
-    const Pose2D pred = compose(h.pose, odom_delta);
+    const Pose2D pred = compose(h.pose, delta);
     const BbsResult r = matcher_.matchLocal(scan, pred, params_.track_linear_window,
                                             params_.track_angular_window);
     if (r.used_beams <= 0) { h.pose = pred; continue; }  // empty scan: no evidence
