@@ -55,7 +55,42 @@ libraries (`prism_loc_core`, `prism_loc_fusion`) with **no ROS and no PCL**,
 unit-tested deterministically with gtest and a seedable RNG. `rclcpp`, `tf2`,
 and PCL appear only in the two thin node packages (`prism_loc`,
 `prism_loc_fusion_ros`). CI builds both paths: the bare-`cmake` cores and the
-full `colcon` workspace in a `ros:humble` container.
+full `colcon` workspace in a `ros:humble` container. It then runs the nodes over
+real ROS topics: each shipped launch file starts headless on generated maps and
+[`scripts/check_param_binding.py`](scripts/check_param_binding.py) fails if any
+YAML key is not declared and applied, and
+[`scripts/synthetic_e2e.py`](scripts/synthetic_e2e.py) drives `laser2d` on a
+synthetic world (ray-cast scans, drifting odometry) and asserts position error
+≤ 0.15 m and yaw error ≤ 0.05 rad after 10 s, a `map→odom` stamp lead of
+0–0.15 s, and no TF gap over 0.5 s; after a 7 s scan gap, `map→odom` resumes
+within 1 s and the position error is ≤ 0.15 m from 15 s after the gap
+(re-convergence measured 3–12 s; a 3 s bound is not met by the current filter).
+It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
+0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
+`/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
+stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
+GoogleTest cases: 42 in `prism_loc_core`, 15 in `prism_loc_fusion`, 18 in
+`prism_loc`, 4 in `prism_loc_fusion_ros` (79 in total).
+
+Run the same checks locally from a built workspace (`rosdep install` as below,
+plus `sudo apt-get install python3-numpy python3-yaml`):
+```bash
+source install/setup.bash
+bash src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
+python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc/params/laser2d.yaml
+```
+
+**TF waits.** A lookup of `odom→base_link` at a scan's stamp waits for odometry to
+catch up: 0.1 s of ROS time (plus up to 30 ms when the clock moved 30 ms or more in
+the poll that reaches the budget), capped at 1 s of steady time. Limits: a `/clock` that changes less often
+than once per second of wall time counts as frozen and is not waited on; below 0.1x
+the 1 s cap ends the wait before 0.1 s of ROS time; the callback in which a clock
+stops can hold up to the cap. Whether the clock is frozen is judged across waits, so
+a coarse `/clock` (for example 10 Hz of sim time at 0.5x) still gets its full 0.1 s.
+The buffer is polled every 10 ms as in `tf2_ros`; a live clock (about 10 ms per poll)
+gets the 30 ms grace only when that poll is delayed by 30 ms or more, so a live robot
+otherwise behaves as with `tf2_ros`. Smooth playback at about 3x or faster moves 30 ms
+or more per poll and always gets the grace.
 
 ## 📄 Paper
 
@@ -65,6 +100,10 @@ PDF under [`docs/paper/`](docs/paper/)):
 
 > **PRISM-Loc: Three LiDAR Localization Backends Behind One ROS 2 Contract,
 > with Middleware-Free Estimator Cores** — [PDF](docs/paper/main.pdf)
+
+The paper describes commit cdb81bf; later commits add tests and the `/diagnostics`
+status, and with default parameters leave the estimates unchanged except that scans
+and clouds with a zero header stamp are now dropped.
 
 If `prism_loc` is useful in your research, please cite it
 (see also [`CITATION.cff`](CITATION.cff)):
@@ -160,6 +199,35 @@ Expected startup log lines (`RCLCPP_INFO`, from
 If any of these don't show up, or the pose/TF commands above hang or print
 nothing, see [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
 
+### Runtime status (`/diagnostics`)
+
+Both nodes publish a `diagnostic_msgs/DiagnosticArray` on `/diagnostics` once per
+second from a wall-clock timer, so the status keeps coming when inputs stop or the
+ROS clock is stuck. Status names are `prism_loc: localization` and
+`prism_loc_fusion: fusion` (hardware_id = node namespace); watch them with
+`ros2 topic echo /diagnostics` or `rqt_robot_monitor`.
+
+| Level | `prism_loc` (laser2d / ndt3d) | `prism_loc_fusion` (fusion3d) |
+|---|---|---|
+| ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped |
+| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time` |
+
+Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
+`covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
+`seconds_since_last_update`, `relocalization` (laser2d/ndt3d); `imu_rate_hz`,
+`imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
+`ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame`,
+`map_to_base_fallback_active` (fusion3d). A fusion3d robot without odometry that
+runs on the `map→base_link` fallback by design reports OK with
+`map_to_base_fallback_active=true`; it WARNs only when `odom→base_link` was seen and
+then lost, or when odometry appears while the fallback was being broadcast (two
+parents for `base_link`).
+
+Status names follow the `diagnostic_updater` convention: `<node name>: ...` with the
+namespace as `hardware_id`. In a multi-robot setup either namespace or remap
+`/diagnostics` per robot or give each node a unique name, or the statuses of
+different robots carry the same name.
+
 ## 📊 Evaluation (synthetic)
 
 The paper ships a **fully reproducible synthetic evaluation**: three
@@ -220,13 +288,20 @@ then hand the result to `prism_loc`:
 | **ndt3d** | `prism_loc` | `/points`, `map.pcd`, `/initialpose`, TF `odom→base` | same |
 | **fusion3d** | `prism_loc_fusion_ros` | `/points`, `/imu`, `/gnss` (NavSatFix), `map.pcd`, `/initialpose` | `/tf` `map→odom`, `~/pose`, `~/odometry` |
 
+All backends also publish `/diagnostics` (see [Runtime status](#runtime-status-diagnostics)).
+`fusion3d` broadcasts `map→base_link` instead of `map→odom` while no
+`odom→base_link` transform exists (`map_to_base_fallback`, default `true`). If wheel
+odometry or an EKF publishes `odom→base_link` and may start after `fusion3d`, set
+`map_to_base_fallback: false`; otherwise `base_link` briefly has two parents in the
+TF tree.
+
 ## 📚 Documentation
 
 | Document | Contents |
 |---|---|
 | [`docs/paper/main.pdf`](docs/paper/main.pdf) | Systems paper: architecture, estimator cores, interface contract, synthetic evaluation |
 | [`PARAMS.md`](PARAMS.md) | Every `laser2d`/`ndt3d`/`fusion3d` parameter, its default, and its meaning |
-| [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Symptom → cause → fix for every silent failure mode |
+| [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Symptom → cause → fix for the common failure modes, with the `/diagnostics` message each one produces |
 | [`SPEC.md`](SPEC.md) / [`SPEC_fusion.md`](SPEC_fusion.md) | Full design specifications |
 | [`experiments/README.md`](experiments/README.md) | How to rebuild and rerun the synthetic evaluation |
 

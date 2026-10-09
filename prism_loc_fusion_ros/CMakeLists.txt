@@ -13,6 +13,8 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(tf2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters registration)
@@ -20,10 +22,12 @@ find_package(Eigen3 REQUIRED)
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-set(deps prism_loc_fusion rclcpp tf2 tf2_ros sensor_msgs nav_msgs geometry_msgs pcl_conversions)
+set(deps prism_loc_fusion rclcpp tf2 tf2_ros sensor_msgs nav_msgs geometry_msgs diagnostic_msgs tf2_msgs
+  pcl_conversions)
 
 add_library(fusion_node SHARED
   src/ndt_registration.cpp
+  src/param_validation.cpp
   src/fusion_localization_node.cpp)
 target_include_directories(fusion_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -49,6 +53,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_ndt_registration test/test_ndt_registration.cpp)
   target_link_libraries(test_ndt_registration fusion_node)
   ament_target_dependencies(test_ndt_registration ${deps})
+  ament_add_gtest(test_fusion_param_validation test/test_param_validation.cpp)
+  target_link_libraries(test_fusion_param_validation fusion_node)
+  ament_target_dependencies(test_fusion_param_validation ${deps})
 endif()
 
 ament_package()

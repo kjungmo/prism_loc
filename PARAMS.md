@@ -9,6 +9,13 @@ Units column legend: `str` = string, `bool` = boolean, `count` = dimensionless
 integer, `unitless`/`fraction`/`weight`/`score`/`enum` = dimensionless double,
 otherwise an SI unit.
 
+Every parameter is declared unconditionally (also `initial_pose_*` and `datum_*`,
+which are used only when their switch is on), so `ros2 param list` shows it and a
+YAML value always binds; `scripts/check_param_binding.py` checks this in CI for the
+three shipped YAML files. Values are range-checked at startup: an out-of-range value
+(for example `min_particles > max_particles`, a non-positive `sigma_hit`) aborts the
+node with an error naming the parameter.
+
 ## laser2d backend (`prism_loc` node, `backend: "laser2d"`)
 
 | name | type | default | unit | description |
@@ -63,6 +70,10 @@ otherwise an SI unit.
 | bbs_verify_nms_yaw | double | `0.35` | rad | Yaw radius of a mode. |
 | bbs_verify_track_linear_window | double | `0.3` | m | ± per-axis window of each hypothesis' local re-match per scan. |
 | bbs_verify_track_angular_window | double | `0.1` | rad | ± yaw window of the local re-match. |
+| startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing map, missing input or missing pose seed is reported as ERROR (drivers can be slow to start). |
+| input_timeout_s | double | `1.0` | s | `/diagnostics` reports the scans/clouds as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x observed input period)` of silence. |
+| input_timeout_periods | double | `5.0` | count | Input periods of silence (period measured on the steady clock) before input counts as stopped. |
+| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Healthy tracking measured >= 0.025 in the synthetic e2e `track` runs (not asserted). Not judged on the update forced by a reseed (`/initialpose`, `set_initial_pose`, accepted relocalization). |
 
 ## ndt3d backend (`prism_loc` node, `backend: "ndt3d"`)
 
@@ -98,6 +109,10 @@ otherwise an SI unit.
 | initial_pose_x | double | `0.0` | m | Initial pose x (when `set_initial_pose` is true). |
 | initial_pose_y | double | `0.0` | m | Initial pose y (when `set_initial_pose` is true). |
 | initial_pose_yaw | double | `0.0` | rad | Initial pose yaw (when `set_initial_pose` is true). |
+| startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing map, missing input or missing pose seed is reported as ERROR (drivers can be slow to start). |
+| input_timeout_s | double | `1.0` | s | `/diagnostics` reports the scans/clouds as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x observed input period)` of silence. |
+| input_timeout_periods | double | `5.0` | count | Input periods of silence (period measured on the steady clock) before input counts as stopped. |
+| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Healthy tracking measured >= 0.025 in the synthetic e2e `track` runs (not asserted). Not judged on the update forced by a reseed (`/initialpose`, `set_initial_pose`, accepted relocalization). |
 
 ## fusion3d backend (`prism_loc_fusion` node)
 
@@ -131,6 +146,12 @@ otherwise an SI unit.
 | gnss_min_status | int | `0` | enum | Min `NavSatFix.status.status` accepted (>= this value). |
 | gnss_max_pos_cov | double | `25.0` | m^2 | Reject GNSS fixes whose x position variance exceeds this. |
 | initial_yaw | double | `0.0` | rad | Assumed initial heading when seeding attitude from accel. |
+| map_to_base_fallback | bool | `true` | bool | While `odom_frame -> base_frame` is unavailable, broadcast `map -> base_link` instead of `map -> odom`. Set `false` when wheel odometry or an EKF owns `odom -> base_link`: if that node starts after this one, `base_link` would otherwise have two parents in the TF tree. With `false` no TF is broadcast until odometry appears; the pose topics still publish. |
+| imu_queue_depth | int | `5` | count | Depth of the best-effort IMU subscription queue (`5` = the `SensorDataQoS` depth used before this parameter existed). IMU messages wait in it while a point cloud is being registered on the same executor; raise it (recommended `200`) when `/diagnostics` reports IMU gaps. |
+| startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing IMU or a filter that never initialized is reported as ERROR. |
+| input_timeout_s | double | `1.0` | s | `/diagnostics` reports the IMU as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x IMU period)` of silence. |
+| input_timeout_periods | double | `5.0` | count | IMU periods of silence before the IMU counts as stopped. |
+| correction_timeout_s | double | `5.0` | s | `/diagnostics` WARNs when no NDT correction has been accepted for this long (the pose is then dead-reckoning on the IMU). |
 
 ## Launch arguments
 

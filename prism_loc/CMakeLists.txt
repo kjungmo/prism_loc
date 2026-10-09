@@ -20,6 +20,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io)
 find_package(Eigen3 REQUIRED)
@@ -28,10 +29,11 @@ add_definitions(${PCL_DEFINITIONS})
 
 set(deps
   prism_loc_core rclcpp rclcpp_components tf2 tf2_ros tf2_geometry_msgs
-  sensor_msgs nav_msgs geometry_msgs std_msgs std_srvs nav2_msgs pcl_conversions)
+  sensor_msgs nav_msgs geometry_msgs std_msgs std_srvs nav2_msgs diagnostic_msgs pcl_conversions)
 
 add_library(prism_loc_node SHARED
   src/localization_node.cpp
+  src/param_validation.cpp
   src/laser_adapter.cpp
   src/pointcloud_adapter.cpp)
 target_include_directories(prism_loc_node PUBLIC
@@ -58,6 +60,11 @@ if(BUILD_TESTING)
   ament_add_gtest(test_laser_adapter test/test_laser_adapter.cpp)
   target_link_libraries(test_laser_adapter prism_loc_node)
   ament_target_dependencies(test_laser_adapter ${deps})
+  ament_add_gtest(test_param_validation test/test_param_validation.cpp)
+  target_link_libraries(test_param_validation prism_loc_node)
+  ament_target_dependencies(test_param_validation ${deps})
+  ament_add_gtest(test_tf_wait test/test_tf_wait.cpp)
+  target_include_directories(test_tf_wait PRIVATE include)
 endif()
 
 ament_package()
