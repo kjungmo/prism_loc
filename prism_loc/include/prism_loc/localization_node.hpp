@@ -26,6 +26,7 @@
 #include "prism_loc_core/bbs.hpp"
 #include "prism_loc_core/relocalization.hpp"
 #include "prism_loc/tf_wait_rule.hpp"
+#include "prism_loc/ndt_status.hpp"
 
 namespace prism_loc {
 
@@ -53,7 +54,9 @@ class LocalizationNode : public rclcpp::Node {
   void noteInput();
   void runUpdate(const rclcpp::Time& stamp);
   bool lookupOdom(const rclcpp::Time& stamp, prism_loc_core::Pose2D& odom_base);
-  bool lookupSensor(const std::string& sensor_frame, prism_loc_core::Pose2D& sensor_in_base);
+  // `full`, when given, receives the whole transform (sensor_in_base keeps x, y, yaw only).
+  bool lookupSensor(const std::string& sensor_frame, prism_loc_core::Pose2D& sensor_in_base,
+                    geometry_msgs::msg::Transform* full = nullptr);
   void publish(const rclcpp::Time& stamp, const prism_loc_core::Pose2D& odom_base);
 
   std::string backend_, global_frame_, odom_frame_, base_frame_;
@@ -111,6 +114,13 @@ class LocalizationNode : public rclcpp::Node {
   std::string last_tf_error_;
   double last_neff_{0.0};
   size_t last_n_{0};  // particles at the last motion update; 0 = n_eff not judged yet
+  // ndt3d: scan-to-map match of the last motion updates (see ndt_status.hpp), and the
+  // one-time check of the parts of the sensor transform that ndt3d ignores.
+  double min_match_fraction_{kDefaultMinMatchFraction};
+  MatchMonitor match_;
+  int last_match_points_{0};       // scan points scored at the last motion update
+  double base_height_{0.0};
+  std::string sensor_tf_checked_;  // cloud frame whose transform has been checked
   std::string reloc_state_{"idle"};
   rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};
   int ros_clock_stuck_ticks_{0};

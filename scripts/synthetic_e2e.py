@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end check of the laser2d node on a synthetic world, over real ROS topics and TF.
+"""End-to-end check of the laser2d and ndt3d nodes on a synthetic world, over real ROS topics and TF.
 
 The script starts `prism_loc_node_main` with a params YAML, then plays the robot:
   * /map       -- a 20 x 15 m occupancy grid (walls plus five boxes, no symmetry),
@@ -45,14 +45,43 @@ Scenarios (--scenario, default all):
               motion (N scans skipped)" with relocalization_scans_used 1 and
               relocalization_scans_skipped > 0
 
+With an ndt3d params YAML (backend: "ndt3d") the same world is used in 3D: walls and boxes
+2.5 m high on a ground plane, written to e2e_world3d.pcd as the prior map, and a 16-ring
+lidar (360 azimuths, 10 Hz, 1 cm range noise) mounted 0.2 m ahead of and 0.5 m above
+base_link, turned 0.3 rad about z. The node runs with base_height 0.5 (the lidar's z in
+the map frame). Thresholds were written down before the scenarios were first run in this
+form; the status thresholds come from the runs listed in PARAMS.md (min_match_fraction).
+  ndt3d_track  40 s of tracking: position error <= 0.5 m (mean <= 0.15) for every pose
+              after t = 10 s and <= 0.25 m after t = 30 s (pulling in the 0.36 m error of
+              the initial pose took up to 20 s in the seeded runs), yaw <= 0.05 rad;
+              every /diagnostics status after t = 10 s is OK with match_fraction >= 0.65;
+              no startup WARN about the sensor transform
+  ndt3d_kidnap  at t = 20 s the robot is moved (the clouds come from another place, the
+              odometry does not notice): statuses before are OK; WARN "low scan-to-map
+              match" within 6 s and in >= 80 % of the statuses from then on
+  ndt3d_off_map  /initialpose 100 m off the map; the robot stands for 6 s, then drives:
+              while it stands after the reseed the match is not judged (match_fraction
+              n/a, no WARN); once it moves, WARN "low scan-to-map match: 0.000" in every
+              status from t = 9 s, while n_eff / particles is >= 0.99
+  ndt3d_base_height  base_height left at 0 with the lidar 0.5 m up (and
+              min_match_fraction 0.9): one startup WARN in the node log naming the
+              ignored TF z, and WARN "low scan-to-map match ... min_match_fraction 0.900"
+              in every status from t = 6 s
+  ndt3d_tilt  lidar pitched 0.1 rad, YAML without min_neff_fraction and
+              min_match_fraction: one startup WARN in the node log naming the tilt; the
+              node's own defaults for ndt3d are min_neff_fraction 0 and
+              min_match_fraction 0.65
+
 This is a ROS-path test (topics -> node -> pose/TF/diagnostics) on a synthetic world
 whose sensor model matches the filter's assumptions; it is not a field result.
 
 Usage: synthetic_e2e.py PARAMS_YAML [--scenario NAME] [--node-arg name:=value ...]
+       (--scenario all, the default, runs the scenarios of the YAML's backend)
 """
 import argparse
 import math
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -60,12 +89,13 @@ import time
 
 import numpy as np
 import rclpy
+import yaml
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
 from nav_msgs.msg import OccupancyGrid
 from rcl_interfaces.srv import GetParameters
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, PointCloud2, PointField
 from tf2_msgs.msg import TFMessage
 from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
 
@@ -483,8 +513,286 @@ def scenario_reloc_gate(d, results):
           f'relocalization_scans_used {used} (need 1), relocalization_scans_skipped {skipped} (need > 0)')
 
 
+# ----------------------------------------------------------------------------------------
+# ndt3d: the same world in 3D. The grid's walls and boxes are extruded to WALL_H on a
+# ground plane at map z = GROUND_Z; base_link rides at map z = 0. The lidar (16 rings,
+# -15 .. +15 deg, 360 azimuths, 10 Hz, 1 cm range noise) is mounted LIDAR_XYZ from
+# base_link and turned LIDAR_YAW about z; its z in the map frame is LIDAR_XYZ[2], which is
+# what base_height has to be.
+GROUND_Z, WALL_H = -0.1, 2.5
+LIDAR_XYZ, LIDAR_YAW = (0.2, 0.0, 0.5), 0.3
+ELEV = np.radians(np.arange(-15.0, 15.1, 2.0))
+N_AZ = 360
+AZ = np.linspace(-math.pi, math.pi, N_AZ, endpoint=False)
+KIDNAP_SHIFT_S = 25.0   # a kidnapped robot is where the trajectory would be this much later
+
+
+def write_world_pcd(path):
+    """Prior map: the ground plane and every wall face, sampled at 0.1 m (ASCII PCD)."""
+    occ = GRID > 50
+    pts = [((ix + 0.5) * RES, (iy + 0.5) * RES, GROUND_Z)
+           for iy in range(0, H, 2) for ix in range(0, W, 2) if not occ[iy, ix]]
+    free = ~occ
+    border = np.zeros_like(occ)
+    border[1:, :] |= occ[1:, :] & free[:-1, :]
+    border[:-1, :] |= occ[:-1, :] & free[1:, :]
+    border[:, 1:] |= occ[:, 1:] & free[:, :-1]
+    border[:, :-1] |= occ[:, :-1] & free[:, 1:]
+    for iy, ix in zip(*np.nonzero(border)):
+        for k in range(int(round(WALL_H / 0.1)) + 1):
+            pts.append(((ix + 0.5) * RES, (iy + 0.5) * RES, GROUND_Z + 0.1 * k))
+    with open(path, 'w') as f:
+        f.write('VERSION .7\nFIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\n'
+                f'WIDTH {len(pts)}\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS {len(pts)}\nDATA ascii\n')
+        for p in pts:
+            f.write('%.3f %.3f %.3f\n' % p)
+    return len(pts)
+
+
+def scan3d(x, y, th, rng):
+    """One sweep from base pose (x, y, th), as points in the lidar frame (N x 3 float32)."""
+    lx = x + LIDAR_XYZ[0] * math.cos(th) - LIDAR_XYZ[1] * math.sin(th)
+    ly = y + LIDAR_XYZ[0] * math.sin(th) + LIDAR_XYZ[1] * math.cos(th)
+    sensor_h = LIDAR_XYZ[2] - GROUND_Z                  # lidar height above the ground
+    rh = raycast(lx, ly, th, n=N_AZ)                    # horizontal distance to the first wall
+    hit_wall = rh < RANGES[-1] - 1e-6
+    out = []
+    for e in ELEV:
+        t = math.tan(e)
+        z_at_wall = rh * t                              # relative to the lidar
+        r = np.full(N_AZ, np.nan)
+        zrel = np.full(N_AZ, np.nan)
+        wall_ok = hit_wall & (z_at_wall > -sensor_h) & (z_at_wall < WALL_H - sensor_h)
+        r[wall_ok], zrel[wall_ok] = rh[wall_ok], z_at_wall[wall_ok]
+        if e < 0:
+            rg = sensor_h / -t                          # where the ray meets the ground
+            ground = (~hit_wall | (z_at_wall <= -sensor_h)) & (rg < 12.0)
+            r[ground], zrel[ground] = rg, -sensor_h
+        ok = ~np.isnan(r)
+        slant = np.hypot(r[ok], zrel[ok])
+        k = (slant + rng.normal(0.0, 0.01, slant.shape)) / slant      # range noise along the ray
+        # azimuths are measured from the robot's heading; the lidar frame is turned by LIDAR_YAW
+        a = AZ[ok] - LIDAR_YAW
+        out.append(np.stack([r[ok] * np.cos(a) * k, r[ok] * np.sin(a) * k, zrel[ok] * k], axis=1))
+    return np.concatenate(out).astype(np.float32)
+
+
+def cloud_msg(stamp, pts):
+    m = PointCloud2()
+    m.header.stamp, m.header.frame_id = stamp, 'lidar'
+    m.height, m.width = 1, len(pts)
+    m.fields = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1) for i, n in enumerate('xyz')]
+    m.is_bigendian, m.point_step, m.row_step, m.is_dense = False, 12, 12 * len(pts), True
+    m.data = pts.tobytes()
+    return m
+
+
+class Driver3D(Driver):
+    def __init__(self, node, lidar_pitch=0.0):
+        super().__init__(node)
+        self.pts_pub = node.create_publisher(PointCloud2, '/points', qos_profile_sensor_data)
+        lidar = tf_msg(node.get_clock().now().to_msg(), 'base_link', 'lidar', LIDAR_XYZ[0], LIDAR_XYZ[1], LIDAR_YAW)
+        lidar.transform.translation.z = LIDAR_XYZ[2]
+        if lidar_pitch:                                  # q = qz(LIDAR_YAW) * qy(pitch)
+            cy, sy, cp, sp = (math.cos(LIDAR_YAW / 2), math.sin(LIDAR_YAW / 2), math.cos(lidar_pitch / 2),
+                              math.sin(lidar_pitch / 2))
+            r = lidar.transform.rotation
+            r.x, r.y, r.z, r.w = -sy * sp, cy * sp, sy * cp, cy * cp
+        self.stb.sendTransform([tf_msg(node.get_clock().now().to_msg(), 'base_link', 'laser', LASER_X, 0.0, 0.0),
+                                lidar])
+
+    def wait_for_node(self, timeout):
+        end = time.monotonic() + timeout
+        while self.pts_pub.get_subscription_count() == 0:
+            if time.monotonic() > end:
+                sys.exit('FAIL: the node did not subscribe to /points')
+            rclpy.spin_once(self.n, timeout_sec=0.05)
+        end = time.monotonic() + 2.0                     # let the static TF arrive
+        while time.monotonic() < end:
+            rclpy.spin_once(self.n, timeout_sec=0.05)
+
+    def run3d(self, duration, kidnap_at=None, ip_offset=(0.3, -0.2, 0.1), move_at=0.0):
+        """Like run(): odometry TF, /initialpose at t = 1 s, one cloud per tick. The robot
+        stands at the start of the trajectory until move_at. From kidnap_at on the clouds
+        come from where the trajectory is KIDNAP_SHIFT_S later, while the odometry
+        carries on as if nothing had happened."""
+        od = Odom()
+        self.t0 = time.monotonic()
+        tl, sent_ip, k = 0.0, False, 0
+        while True:
+            t = time.monotonic() - self.t0
+            if t >= duration:
+                break
+            x, y, th = truth(max(0.0, t - move_at))
+            ox, oy, oth = od.step(x, y, th, t - tl)
+            tl = t
+            stamp = self.n.get_clock().now().to_msg()
+            self.tfb.sendTransform(tf_msg(stamp, 'odom', 'base_link', ox, oy, oth))
+            if t > 1.0 and not sent_ip:
+                ip = PoseWithCovarianceStamped()
+                ip.header.frame_id = 'map'
+                ip.header.stamp = stamp
+                ip.pose.pose.position.x = x + ip_offset[0]
+                ip.pose.pose.position.y = y + ip_offset[1]
+                ip.pose.pose.orientation.z = math.sin((th + ip_offset[2]) / 2)
+                ip.pose.pose.orientation.w = math.cos((th + ip_offset[2]) / 2)
+                self.ip_pub.publish(ip)
+                sent_ip = True
+            if kidnap_at is not None and t >= kidnap_at:
+                x, y, th = truth(t + KIDNAP_SHIFT_S)
+            self.truth_at[(stamp.sec, stamp.nanosec)] = (t, x, y, th)
+            self.pts_pub.publish(cloud_msg(stamp, scan3d(x, y, th, self.rng)))
+            end = self.t0 + (k + 1) / RATE
+            k += 1
+            while time.monotonic() < end:
+                rclpy.spin_once(self.n, timeout_sec=0.01)
+
+    def statuses(self, t_from, t_to=float('inf')):
+        return [s for m, s in self.diags if t_from < self.rel(m) <= t_to]
+
+    def get_params(self, names, timeout=5.0):
+        """Values of double parameters of the node, or None when it does not answer."""
+        req = GetParameters.Request()
+        req.names = list(names)
+        fut = self.param_cli.call_async(req)
+        end = time.monotonic() + timeout
+        while not fut.done() and time.monotonic() < end:
+            rclpy.spin_once(self.n, timeout_sec=0.02)
+        if not fut.done() or fut.result() is None:
+            return None
+        return [v.double_value if v.type == 3 else None for v in fut.result().values]
+
+
+LOW_MATCH = 'low scan-to-map match'
+
+
+def values_of(status):
+    return {kv.key: kv.value for kv in status.values}
+
+
+def node_log(name):
+    with open(f'e2e_{name}.log') as f:
+        return f.read()
+
+
+def scenario_ndt3d_track(d, results):
+    d.run3d(40.0)
+    errs = [e for e in d.errors() if e[0] > 10.0]
+    check(results, len(errs) > 100, f'poses after t = 10 s: {len(errs)} (need > 100)')
+    if errs:
+        mp, my = max(e[1] for e in errs), max(e[2] for e in errs)
+        mean = sum(e[1] for e in errs) / len(errs)
+        late = [e[1] for e in errs if e[0] > 30.0]
+        check(results, mp <= 0.5, f'max position error after 10 s: {mp:.3f} m (need <= 0.5)')
+        check(results, mean <= 0.15, f'mean position error after 10 s: {mean:.3f} m (need <= 0.15)')
+        check(results, bool(late) and max(late) <= 0.25,
+              f'max position error after 30 s: {max(late) if late else float("nan"):.3f} m (need <= 0.25)')
+        check(results, my <= 0.05, f'max yaw error after 10 s: {my:.4f} rad (need <= 0.05)')
+    late = d.statuses(10.0)
+    bad = sorted({(level_of(s), s.message) for s in late if level_of(s) != OK})
+    check(results, len(late) >= 25 and not bad,
+          f'/diagnostics statuses after t = 10 s that are not OK: {sum(1 for s in late if level_of(s) != OK)} of '
+          f'{len(late)} (need 0 of >= 25): {bad[:3] if bad else "none"}')
+    mf = [float(values_of(s)['match_fraction']) for s in late if values_of(s).get('match_fraction', 'n/a') != 'n/a']
+    check(results, len(mf) == len(late) and bool(mf) and min(mf) >= 0.65,
+          f'match_fraction in those statuses: min {min(mf) if mf else float("nan"):.3f}, '
+          f'median {sorted(mf)[len(mf) // 2] if mf else float("nan"):.3f} over {len(mf)} (need >= 0.65 in all)')
+    ne = [float(values_of(s)['n_eff']) / float(values_of(s)['particles']) for s in late
+          if values_of(s).get('n_eff', 'n/a') != 'n/a' and float(values_of(s).get('particles', 0)) > 0]
+    if ne:
+        print(f'  n_eff / particles in those statuses (not a health signal for ndt3d): min {min(ne):.4f}, '
+              f'median {sorted(ne)[len(ne) // 2]:.4f}, max {max(ne):.4f}')
+    log = node_log('ndt3d_track')
+    check(results, 'but ndt3d uses only' not in log,
+          'no startup WARN about the sensor transform (lidar level, TF z = base_height, yaw 0.3 rad)'
+          + ('' if 'but ndt3d uses only' not in log else ': the WARN was logged'))
+
+
+def scenario_ndt3d_kidnap(d, results):
+    t_k, end = 20.0, 34.0
+    d.run3d(end, kidnap_at=t_k)
+    before = d.statuses(10.0, t_k)
+    bad = [s.message for s in before if level_of(s) != OK]
+    check(results, len(before) >= 8 and not bad,
+          f'statuses from t = 10 s to the kidnap that are not OK: {len(bad)} of {len(before)} (need 0 of >= 8)'
+          + (f' ("{bad[0]}")' if bad else ''))
+    errs = [e[1] for e in d.errors() if e[0] > t_k + 2.0]
+    check(results, bool(errs) and min(errs) > 1.0,
+          f'the pose is wrong after the kidnap: smallest position error {min(errs) if errs else float("nan"):.2f} m (need > 1.0)')
+    w = [t for t in d.diag_times(WARN, LOW_MATCH) if t > t_k]
+    check(results, bool(w) and w[0] - t_k <= 6.0,
+          f'WARN "{LOW_MATCH}" {w[0] - t_k:.1f} s after the kidnap (need <= 6)' if w
+          else f'no WARN "{LOW_MATCH}" after the kidnap')
+    after = d.statuses(t_k + 6.0)
+    n_warn = sum(1 for s in after if level_of(s) == WARN and LOW_MATCH in s.message)
+    check(results, len(after) >= 6 and n_warn >= 0.8 * len(after),
+          f'statuses from 6 s after the kidnap that WARN "{LOW_MATCH}": {n_warn} of {len(after)} (need >= 80 % of >= 6)'
+          + (f' ("{after[-1].message}")' if after else ''))
+
+
+def scenario_ndt3d_off_map(d, results):
+    move_at = 6.0
+    d.run3d(15.0, ip_offset=(100.0, 0.0, 0.0), move_at=move_at)
+    standing = d.statuses(2.5, move_at)
+    judged = [s for s in standing if values_of(s).get('match_fraction') != 'n/a' or LOW_MATCH in s.message]
+    check(results, len(standing) >= 2 and not judged,
+          f'standing after /initialpose (only the reseed update has run): statuses with a match_fraction or the WARN: '
+          f'{len(judged)} of {len(standing)} (need 0 of >= 2)'
+          + (f' ("{judged[0].message}", match_fraction {values_of(judged[0]).get("match_fraction")})' if judged else ''))
+    late = d.statuses(move_at + 3.0)
+    n_warn = sum(1 for s in late if level_of(s) == WARN and LOW_MATCH + ': 0.000' in s.message)
+    check(results, len(late) >= 4 and n_warn == len(late),
+          f'pose seeded 100 m off the map, driving: statuses from t = {move_at + 3.0:g} s that WARN "{LOW_MATCH}: 0.000": '
+          f'{n_warn} of {len(late)} (need all of >= 4)' + (f' ("{late[-1].message}")' if late else ''))
+    pts = re.search(r'(\d+) points at the last one', late[-1].message) if late else None
+    check(results, pts is not None and int(pts.group(1)) >= 100,
+          f'scan points scored at the last update, as the WARN reports them: {pts.group(1) if pts else "none"} (need >= 100)')
+    v = values_of(late[-1]) if late else {}
+    ratio = float(v['n_eff']) / float(v['particles']) if v.get('n_eff', 'n/a') != 'n/a' else float('nan')
+    check(results, ratio >= 0.99, f'n_eff / particles there: {ratio:.3f} (need >= 0.99: every particle weighs the same, '
+          'which is why n_eff cannot flag this)')
+
+
+def scenario_ndt3d_base_height(d, results):
+    d.run3d(12.0)
+    log = node_log('ndt3d_base_height')
+    n = log.count('but ndt3d uses only')
+    check(results, n == 1 and 'has z 0.500 m' in log and 'base_height = 0.000 m' in log
+          and 'differs from base_height' in log and 'The tilt is ignored' not in log,
+          f'startup WARN about the ignored TF z (z 0.500 m against base_height 0.000 m), logged once, no tilt: {n} time(s)')
+    late = d.statuses(6.0)
+    n_warn = sum(1 for s in late if level_of(s) == WARN and LOW_MATCH in s.message and 'base_height' in s.message
+                 and 'min_match_fraction 0.900)' in s.message)
+    check(results, len(late) >= 4 and n_warn == len(late),
+          f'base_height left at 0 with the lidar at 0.5 m: statuses from t = 6 s that WARN "{LOW_MATCH} ... '
+          f'min_match_fraction 0.900": {n_warn} of {len(late)} (need all of >= 4)'
+          + (f' ("{late[-1].message}")' if late else ''))
+
+
+def scenario_ndt3d_tilt(d, results):
+    d.run3d(5.0)
+    log = node_log('ndt3d_tilt')
+    n = log.count('but ndt3d uses only')
+    check(results, n == 1 and 'pitch 0.100 rad' in log and 'The tilt is ignored' in log
+          and 'differs from base_height' not in log,
+          f'startup WARN about the ignored tilt (lidar pitched 0.1 rad, z = base_height), logged once: {n} time(s)')
+    got = d.get_params(['min_neff_fraction', 'min_match_fraction'])
+    check(results, got == [0.0, 0.65],
+          f'in-code defaults for ndt3d (YAML without the two keys): min_neff_fraction, min_match_fraction = {got} '
+          '(need [0.0, 0.65])')
+
+
+NDT3D_SCENARIOS = {'ndt3d_track': scenario_ndt3d_track, 'ndt3d_kidnap': scenario_ndt3d_kidnap,
+                   'ndt3d_off_map': scenario_ndt3d_off_map, 'ndt3d_base_height': scenario_ndt3d_base_height,
+                   'ndt3d_tilt': scenario_ndt3d_tilt}
+WORLD_PCD = 'e2e_world3d.pcd'
+
+
 SCENARIO_ARGS = {'reloc_gate': ['try_global_localization:=true', 'bbs_verify_min_translation:=0.3',
-                                'bbs_verify_min_rotation:=0.3']}
+                                'bbs_verify_min_rotation:=0.3'],
+                 'ndt3d_base_height': ['base_height:=0.0', 'min_match_fraction:=0.9']}
+# YAML keys left out for a scenario, so that the node's own defaults apply.
+SCENARIO_DROP_KEYS = {'ndt3d_tilt': ['min_neff_fraction', 'min_match_fraction']}
 
 
 SCENARIOS = {'track': scenario_track, 'gap': scenario_gap, 'no_odom': scenario_no_odom,
@@ -494,20 +802,40 @@ SCENARIOS = {'track': scenario_track, 'gap': scenario_gap, 'no_odom': scenario_n
 
 
 def run_scenario(name, params, node_args):
+    if name in SCENARIO_DROP_KEYS:
+        with open(params, encoding='utf-8') as f:
+            doc = yaml.safe_load(f)
+        for section in doc.values():
+            for key in SCENARIO_DROP_KEYS[name]:
+                del section['ros__parameters'][key]     # KeyError: the shipped YAML no longer has it
+        params = os.path.abspath(f'e2e_{name}.yaml')
+        with open(params, 'w', encoding='utf-8') as f:
+            yaml.safe_dump(doc, f)
     args = ['ros2', 'run', 'prism_loc', 'prism_loc_node_main', '--ros-args', '--params-file', params]
     sim = name in ('stuck_clock', 'slow_clock', 'coarse_clock')
+    ndt3d = name in NDT3D_SCENARIOS
+    if ndt3d:
+        if not os.path.exists(WORLD_PCD):
+            print(f'  prior map {WORLD_PCD}: {write_world_pcd(WORLD_PCD)} points')
+        # base_height first, so that a scenario's own value (SCENARIO_ARGS) replaces it
+        node_args = [f'map_pcd_path:={os.path.abspath(WORLD_PCD)}', f'base_height:={LIDAR_XYZ[2]}'] + node_args
     for a in node_args + SCENARIO_ARGS.get(name, []) + (['use_sim_time:=true'] if sim else []):
         args += ['-p', a]
     log = open(f'e2e_{name}.log', 'w')
-    proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    # The ndt3d scenarios read the node log while the node runs: keep its stream unbuffered.
+    env = dict(os.environ, RCUTILS_LOGGING_BUFFERED_STREAM='0') if ndt3d else None
+    proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=env)
     rclpy.init()
     node = rclpy.create_node(f'prism_loc_e2e_{name}')
-    d = Driver(node)
+    d = Driver3D(node, lidar_pitch=0.1 if name == 'ndt3d_tilt' else 0.0) if ndt3d else Driver(node)
     results = []
     try:
         d.wait_for_node(30.0)
-        d.publish_map()
-        SCENARIOS[name](d, results)
+        if ndt3d:
+            NDT3D_SCENARIOS[name](d, results)
+        else:
+            d.publish_map()
+            SCENARIOS[name](d, results)
     finally:
         node.destroy_node()
         rclpy.shutdown()
@@ -522,14 +850,20 @@ def run_scenario(name, params, node_args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('params', help='params YAML for the node (prism_loc/params/laser2d.yaml)')
-    ap.add_argument('--scenario', choices=['all'] + list(SCENARIOS), default='all')
+    ap.add_argument('params', help='params YAML for the node (prism_loc/params/laser2d.yaml or ndt3d.yaml)')
+    ap.add_argument('--scenario', choices=['all'] + list(SCENARIOS) + list(NDT3D_SCENARIOS), default='all')
     ap.add_argument('--coarse-factor', type=float, default=0.5,
                     help='real-time factor of the coarse_clock scenario (default 0.5)')
     ap.add_argument('--node-arg', action='append', default=[],
                     help='extra node parameter, name:=value (repeatable)')
     args = ap.parse_args()
-    names = list(SCENARIOS) if args.scenario == 'all' else [args.scenario]
+    with open(args.params, encoding='utf-8') as f:
+        backend = next(iter(yaml.safe_load(f).values()))['ros__parameters'].get('backend', 'laser2d')
+    table = NDT3D_SCENARIOS if backend == 'ndt3d' else SCENARIOS
+    if args.scenario != 'all' and args.scenario not in table:
+        sys.exit(f'FAIL: scenario {args.scenario} is not for backend "{backend}" (the backend of {args.params}); '
+                 f'its scenarios are: {", ".join(table)}')
+    names = list(table) if args.scenario == 'all' else [args.scenario]
     failed = False
     for name in names:
         global COARSE_FACTOR

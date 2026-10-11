@@ -4,6 +4,7 @@
 #include "prism_loc_core/motion_model.hpp"
 #include "prism_loc_core/particle_filter.hpp"
 #include "prism_loc_core/relocalization.hpp"
+#include "prism_loc/ndt_status.hpp"
 
 // Range checks run once at node construction. Each throws std::invalid_argument naming
 // the offending parameter, so a bad YAML aborts startup instead of running with a
@@ -24,6 +25,7 @@ void validateLaserParams(const prism_loc_core::LaserParams& lp, double laser_min
 void validateBbsParams(const prism_loc_core::BbsParams& bp,
                        const prism_loc_core::RelocVerifierParams& rv);
 void validateNdtParams(double ndt_resolution, int voxel_min_points,
-                       const prism_loc_core::NdtParams& np);
+                       const prism_loc_core::NdtParams& np,
+                       double min_match_fraction = kDefaultMinMatchFraction);
 
 }  // namespace prism_loc

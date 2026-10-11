@@ -68,14 +68,19 @@ within 1 s and the position error is ≤ 0.15 m from 15 s after the gap
 It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
 0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
-stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
+stuck ROS clock. With `ndt3d.yaml` the same script drives `ndt3d` in the 3D version of
+that world (16-ring lidar, prior map sampled from the same surfaces) and asserts position
+error ≤ 0.5 m after 10 s and ≤ 0.25 m after 30 s, yaw error ≤ 0.05 rad, an OK status
+throughout healthy tracking, and the `low scan-to-map match` WARN after a kidnap, for a
+pose off the map and for a wrong `base_height`. This is a ROS-path check on synthetic
+data, not a field result.
 [`scripts/fusion_extrinsic_check.py`](scripts/fusion_extrinsic_check.py) feeds `fusion3d`
 a robot that stands, or turns on the spot, with its lidar, IMU and GNSS antenna mounted
 off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad, and the
 `/diagnostics` status when a mount is missing from TF (see
 [Sensor frames](#sensor-frames-fusion3d)).
-GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 18 in
-`prism_loc`, 22 in `prism_loc_fusion_ros` (100 in total).
+GoogleTest cases: 50 in `prism_loc_core`, 15 in `prism_loc_fusion`, 28 in
+`prism_loc`, 22 in `prism_loc_fusion_ros` (115 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -83,6 +88,7 @@ plus `sudo apt-get install python3-numpy python3-yaml`):
 source install/setup.bash
 bash src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
 python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc/params/laser2d.yaml
+python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc/params/ndt3d.yaml   # needs a Release build
 python3 src/prism_loc/scripts/fusion_extrinsic_check.py install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml
 ```
 
@@ -163,6 +169,9 @@ cmake --build build/fusion -j && ( cd build/fusion && ctest --output-on-failure 
 #    place this repo at <ws>/src/prism_loc, then:
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
+#    For ndt3d or fusion3d on a robot add  --cmake-args -DCMAKE_BUILD_TYPE=Release :
+#    built without optimization (-O0), one ndt3d filter update or one fusion3d NDT
+#    registration took over a second here, and the node could not follow its inputs.
 colcon test --packages-select prism_loc_core prism_loc prism_loc_fusion prism_loc_fusion_ros
 
 # 3. Run — 2D LiDAR (MCL):
@@ -220,12 +229,12 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 | Level | `prism_loc` (laser2d / ndt3d) | `prism_loc_fusion` (fusion3d) |
 |---|---|---|
 | ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped; IMU not used after `startup_timeout_s` because its mount is unknown (empty `frame_id`, or no transform `base_link -> <imu frame>`) |
-| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time`; point clouds or GNSS fixes not used because their mount is unknown (the IMU likewise, within `startup_timeout_s`) |
+| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction` (laser2d; off by default for ndt3d); ndt3d: scan-to-map match below `min_match_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time`; point clouds or GNSS fixes not used because their mount is unknown (the IMU likewise, within `startup_timeout_s`) |
 
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
-`relocalization_scans_skipped` (laser2d/ndt3d); `imu_rate_hz`,
+`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
@@ -235,6 +244,33 @@ runs on the `map→base_link` fallback by design reports OK with
 `map_to_base_fallback_active=true`; it WARNs only when `odom→base_link` was seen and
 then lost, or when odometry appears while the fallback was being broadcast (two
 parents for `base_link`).
+
+**ndt3d status.** The effective particle count is not a health signal for `ndt3d`: with
+the NDT likelihood one particle takes nearly all the weight at every update of a healthy
+run, and when no scan point falls in a map cell all particles weigh the same. `ndt3d`
+therefore reports `match_fraction`: the share of the scored scan points that lie within
+3 standard deviations of the NDT cell they fall in, at the published pose, averaged over
+the last 5 filter updates (it is not judged on the update forced by `/initialpose`). The
+status WARNs `low scan-to-map match` while it is below `min_match_fraction` (0.65).
+Measured with the `ndt3d` model and the shipped parameters on the 3D synthetic world
+that `scripts/synthetic_e2e.py` uses (75 s runs made outside CI; statuses after t = 10 s):
+
+| Run | `match_fraction` | n_eff / particles | Status |
+|---|---|---|---|
+| healthy, 4 seeds (largest pose error after 10 s 0.09 – 0.43 m, after 30 s ≤ 0.17 m) | 0.747 – 0.883 | 0.002 – 0.004 | OK in 260 of 260 |
+| healthy, prior map with 2 cm of noise | 0.972 – 0.998 | 0.002 – 0.004 | OK in 65 of 65 |
+| kidnapped (2 runs; pose error 2 – 8 m), from 5 s after the kidnap | 0.331 – 0.626 | 0.002 – 0.007 | WARN in 70 of 70; first WARN at most 2.0 s after the kidnap; OK in 50 of 50 before it |
+| initial pose 3.6 m and 1 rad off | 0.229 – 0.561 | 0.002 – 0.005 | WARN in 65 of 65 |
+| pose off the map (no overlap) | 0.000 | 1.000 | WARN in 65 of 65 |
+| `base_height` 0.5 m too low (pose error still ≤ 0.24 m) | 0.345 – 0.443 | 0.002 – 0.002 | WARN in 65 of 65 |
+
+Limits: these are 11 runs of one synthetic world; a pose error under about half
+an NDT cell is not detected (an initial pose 1.3 m and 0.35 rad off stayed more than
+0.3 m off for 15 s, up to 0.47 m after t = 10 s, with `match_fraction`
+0.763 – 0.851 and status OK); the value is that of
+the last filter update, so it does not change while the robot stands still; and objects
+that are not in the map lower the healthy value, so read `match_fraction` on a known-good
+run at your site and set `min_match_fraction` below it.
 
 Status names follow the `diagnostic_updater` convention: `<node name>: ...` with the
 namespace as `hardware_id`. In a multi-robot setup either namespace or remap
