@@ -94,6 +94,20 @@ jobs:
             ../install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml \
             fusion_fix/map.pcd || { tail -n 40 fusion_fallback.log; exit 1; }
 
+      # fusion3d with the lidar, the IMU and the GNSS antenna mounted off base_link (static
+      # TF): the pose is that of base_link within 0.05 m and 0.02 rad; an input whose mount
+      # is missing is left out and /diagnostics says so; *_frame overrides the frame name.
+      - name: fusion3d sensor mounts
+        shell: bash
+        env:
+          ROS_DOMAIN_ID: "92"
+        run: |
+          source install/setup.bash
+          mkdir -p ci_logs && cd ci_logs
+          timeout 600 python3 ../src/prism_loc/scripts/fusion_extrinsic_check.py \
+            ../install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml \
+            || { for f in fusion_extrinsic_*.log; do echo "--- $f"; tail -n 40 "$f"; done; exit 1; }
+
       # laser2d over real topics/TF on a synthetic world: convergence, map->odom stamp
       # and cadence, recovery after a scan gap, poses at a 0.1x sim clock, no low-n_eff
       # warning after /initialpose, and the /diagnostics status for stopped scans,

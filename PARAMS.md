@@ -122,7 +122,10 @@ node with an error naming the parameter.
 |------|------|---------|------|-------------|
 | global_frame | str | `"map"` | str | Fixed map frame the fused pose is expressed in. |
 | odom_frame | str | `"odom"` | str | Odometry frame (child of map in the TF tree). |
-| base_frame | str | `"base_link"` | str | Robot body frame the pose estimate refers to. |
+| base_frame | str | `"base_link"` | str | Robot body frame the pose estimate refers to. Inputs measured in another frame need the transform `base_frame -> frame` on TF (README, Sensor frames). |
+| points_frame | str | `""` | str | Frame the point clouds are expressed in. Empty: each cloud's `header.frame_id`. Equal to `base_frame`: used as it is. Any other frame: the full transform `base_frame -> frame` is looked up on TF and the lidar pose from NDT is converted to the pose of `base_frame`; without it the cloud is not used. |
+| imu_frame | str | `""` | str | Frame of the IMU. Empty: each message's `header.frame_id`. Any frame other than `base_frame` needs `base_frame -> frame` on TF; only its rotation is applied (the lever arm is not compensated). Without it the IMU is not used. |
+| gnss_frame | str | `""` | str | Frame of the GNSS antenna. Empty: each fix's `header.frame_id`. Any frame other than `base_frame` needs `base_frame -> frame` on TF; only its translation is applied (with the current attitude estimate). Without it the fix is not used. |
 | transform_tolerance | double | `0.1` | s | Future-dating added to the `map->odom` TF stamp. |
 | imu_topic | str | `"/imu"` | str | sensor_msgs/Imu input topic (subscribed BEST_EFFORT / SensorDataQoS). |
 | points_topic | str | `"/points"` | str | PointCloud2 input topic (subscribed BEST_EFFORT / SensorDataQoS). |

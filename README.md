@@ -69,8 +69,13 @@ It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
 0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
+[`scripts/fusion_extrinsic_check.py`](scripts/fusion_extrinsic_check.py) feeds `fusion3d`
+a robot that stands, or turns on the spot, with its lidar, IMU and GNSS antenna mounted
+off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad, and the
+`/diagnostics` status when a mount is missing from TF (see
+[Sensor frames](#sensor-frames-fusion3d)).
 GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 18 in
-`prism_loc`, 5 in `prism_loc_fusion_ros` (83 in total).
+`prism_loc`, 22 in `prism_loc_fusion_ros` (100 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -78,6 +83,7 @@ plus `sudo apt-get install python3-numpy python3-yaml`):
 source install/setup.bash
 bash src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
 python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc/params/laser2d.yaml
+python3 src/prism_loc/scripts/fusion_extrinsic_check.py install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml
 ```
 
 **TF waits.** A lookup of `odom→base_link` at a scan's stamp waits for odometry to
@@ -104,7 +110,10 @@ PDF under [`docs/paper/`](docs/paper/)):
 The paper describes commit cdb81bf; later commits add tests and the `/diagnostics`
 status, and with default parameters leave the estimates unchanged except that scans
 and clouds with a zero header stamp are now dropped; fusion3d's `~/odometry` linear
-twist is now expressed in `base_link` (it was the world frame).
+twist is now expressed in `base_link` (it was the world frame); and fusion3d now applies
+the mount of a sensor whose frame is not `base_link` (it used every input as if it were
+measured at `base_link`; inputs already in `base_link` give the same values as before, see
+[Sensor frames](#sensor-frames-fusion3d)).
 
 If `prism_loc` is useful in your research, please cite it
 (see also [`CITATION.cff`](CITATION.cff)):
@@ -210,8 +219,8 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 
 | Level | `prism_loc` (laser2d / ndt3d) | `prism_loc_fusion` (fusion3d) |
 |---|---|---|
-| ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped |
-| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time` |
+| ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped; IMU not used after `startup_timeout_s` because its mount is unknown (empty `frame_id`, or no transform `base_link -> <imu frame>`) |
+| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time`; point clouds or GNSS fixes not used because their mount is unknown (the IMU likewise, within `startup_timeout_s`) |
 
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
@@ -219,7 +228,9 @@ Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `relocalization_scans_skipped` (laser2d/ndt3d); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame`,
-`map_to_base_fallback_active` (fusion3d). A fusion3d robot without odometry that
+`map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
+mount reads `identity (frame base_link)`, `base_link -> lidar xyz ... rpy ...`,
+`missing (frame lidar)`, `missing (empty frame_id)` or `no message yet`). A fusion3d robot without odometry that
 runs on the `map→base_link` fallback by design reports OK with
 `map_to_base_fallback_active=true`; it WARNs only when `odom→base_link` was seen and
 then lost, or when odometry appears while the fallback was being broadcast (two
@@ -313,7 +324,7 @@ the default.
 |---|---|---|---|
 | **laser2d** | `prism_loc` | `/scan`, `/map`, `/initialpose`, TF `odom→base` | `/tf` `map→odom`, `~/pose`, `~/particle_cloud` |
 | **ndt3d** | `prism_loc` | `/points`, `map.pcd`, `/initialpose`, TF `odom→base` | same |
-| **fusion3d** | `prism_loc_fusion_ros` | `/points`, `/imu`, `/gnss` (NavSatFix), `map.pcd`, `/initialpose` | `/tf` `map→odom`, `~/pose`, `~/odometry` |
+| **fusion3d** | `prism_loc_fusion_ros` | `/points`, `/imu`, `/gnss` (NavSatFix), `map.pcd`, `/initialpose`, TF `base→sensor` for every input not in `base_link` | `/tf` `map→odom`, `~/pose`, `~/odometry` |
 
 All backends also publish `/diagnostics` (see [Runtime status](#runtime-status-diagnostics)).
 `fusion3d` broadcasts `map→base_link` instead of `map→odom` while no
@@ -323,6 +334,43 @@ odometry or an EKF publishes `odom→base_link` and may start after `fusion3d`, 
 TF tree. `~/odometry` (`nav_msgs/Odometry`, `frame_id` = `map`, `child_frame_id` =
 `base_link`) carries its linear twist in `base_link`, as the message definition
 specifies; the angular twist is not filled.
+
+### Sensor frames (`fusion3d`)
+
+The pose `fusion3d` estimates and publishes is that of `base_frame` (`base_link`). Each
+input is taken to be measured in the frame its `header.frame_id` names; `points_frame`,
+`imu_frame` and `gnss_frame` replace that name when set (for a driver that leaves
+`frame_id` empty or wrong).
+
+| Input | Frame is `base_frame` | Any other frame | What is applied |
+|---|---|---|---|
+| `/points` | used as it is, no TF needed | transform `base_frame → frame` must be on TF | all 6 DoF: registration starts from and returns the pose of the lidar, `T_map_base = T_map_lidar · T_base_lidar⁻¹` |
+| `/imu` | used as it is, no TF needed | transform must be on TF | rotation only: angular velocity and specific force are rotated into `base_frame` |
+| `/gnss` | used as it is, no TF needed | transform must be on TF | translation only: `p_base = p_antenna − R_map_base · t_base_antenna`, with the attitude the filter holds at that moment |
+
+- **Not compensated.** The IMU's lever arm: the specific force is the one at the IMU, which
+  differs from the one at the `base_frame` origin by `α × r + ω × (ω × r)` (0.3 m/s² for
+  r = 0.3 m at 1 rad/s); put `base_frame` near the IMU if that matters. The measurement
+  noise (`pose_pos_std`, the NavSatFix covariance) is used unchanged for the pose of
+  `base_frame`: with a lever arm `t`, an attitude error `δ` adds about `|t|·δ` of position
+  error that the filter does not model, and the GNSS update does not correct attitude
+  through the lever arm.
+- **Missing mount.** With an empty frame name or no transform, that input is not used
+  (nothing is assumed): the log says so every 5 s and `/diagnostics` reports
+  `point clouds not used: ...`, `GNSS not used: ...` (WARN) or `IMU not used: ...` (WARN
+  within `startup_timeout_s`, ERROR after: without the IMU there is no pose). The status
+  clears with the first message after the transform appears.
+- **Lookup.** The latest available transform is used (a mount is rigid; nothing is waited
+  for), read again once per second, and kept if TF later loses it. A sensor on a moving
+  joint is not supported.
+- **Unchanged case.** Data already in `base_frame` (the frame name equals `base_frame`, or
+  the transform on TF is exactly the identity) goes through no arithmetic at all; the
+  values are bit-identical to those of earlier versions
+  (`prism_loc_fusion_ros/test/test_extrinsic.cpp`).
+- **Changed case.** Earlier versions ignored `frame_id` and used every input as if it were
+  measured at `base_frame`. A robot whose frames differ from `base_frame` and that relied
+  on that gets the old behaviour with `points_frame`, `imu_frame`, `gnss_frame` set to
+  the value of `base_frame`.
 
 ## 📚 Documentation
 

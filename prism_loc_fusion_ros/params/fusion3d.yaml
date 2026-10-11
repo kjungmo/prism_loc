@@ -3,6 +3,9 @@
     global_frame: "map"               # str: fixed map frame that the fused pose is expressed in
     odom_frame: "odom"                # str: odometry frame (child of map in the TF tree)
     base_frame: "base_link"           # str: robot body frame the pose estimate refers to
+    points_frame: ""                  # str: frame of the clouds; "" = header.frame_id. Not base_frame: base_frame -> this frame must be on TF
+    imu_frame: ""                     # str: frame of the IMU; "" = header.frame_id. Only the rotation of base_frame -> this frame is applied
+    gnss_frame: ""                    # str: frame of the GNSS antenna; "" = header.frame_id. Only the translation of base_frame -> this frame is applied
     imu_topic: "/imu"                 # str: sensor_msgs/Imu input topic (subscribed BEST_EFFORT)
     points_topic: "/points"           # str: PointCloud2 input topic (subscribed BEST_EFFORT)
     gnss_topic: "/gnss"               # str: sensor_msgs/NavSatFix input topic (subscribed BEST_EFFORT)
