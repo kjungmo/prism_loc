@@ -6,7 +6,7 @@ boxes; surfaces sampled at random with 5 cm of noise, written to fusion_extrinsi
 `fusion_node_main` is started once per scenario and fed synthetic sensors built from that
 truth, each expressed in its own frame:
   * /points  other random samples of the same surfaces as seen from a lidar mounted at
-             LIDAR on base_link (5 Hz)
+             LIDAR on base_link (2 Hz)
   * /imu     the specific force of a level, resting robot as measured by an IMU mounted
              with the rotation IMU on base_link (100 Hz)
   * /gnss    the position of an antenna mounted at ANTENNA on base_link (5 Hz, datum fixed)
@@ -72,6 +72,9 @@ DATUM = (37.0, 127.0, 0.0)
 # a fifth of its area (a large flat floor pulls the registration toward the cell lattice),
 # and the room placed so that no wall or floor lies on a cell border.
 SURF_NOISE, FLOOR_SHARE = 0.05, 0.2
+# Kept small on purpose: the node registers a cloud on the thread that also takes the IMU,
+# so a large map or a fast cloud stream starves the IMU on a slow machine.
+MAP_POINTS, CLOUD_POINTS = 20000, 3000
 IP_OFFSET = (0.04, -0.03, 0.01)                     # /initialpose off the truth: x, y (m), yaw (rad)
 
 
@@ -154,7 +157,7 @@ class Rig:
                                  lambda m: self.poses.append((time.monotonic(), m)), 200)
         rng = np.random.default_rng(5)
         # clouds are prepared up front (sampling one takes long enough to stall the 100 Hz IMU)
-        self.clouds = [(surfaces(rng, 8000) - BASE_XYZ) @ R_BASE for _ in range(5)]   # in base_link
+        self.clouds = [(surfaces(rng, CLOUD_POINTS) - BASE_XYZ) @ R_BASE for _ in range(5)]   # in base_link
         self.sent_clouds = 0
         self.turned = 0.0        # yaw the robot has turned so far (rad), as the gyro reported it
         self.last_imu_s = None   # stamp of the previous IMU sample
@@ -233,17 +236,17 @@ class Rig:
         self.gnss_pub.publish(m)
 
     def stream(self, seconds, imu=('base_link', None), cloud=None, gnss=None, yaw_rate=0.0):
-        """100 Hz IMU; every 20th tick (5 Hz) a cloud and a fix, when given as (frame, mount)."""
+        """100 Hz IMU; every 20th tick (5 Hz) a fix and every 50th (2 Hz) a cloud, when given as
+        (frame, mount)."""
         end = time.monotonic() + seconds
         k = 0
         while time.monotonic() < end:
             if imu is not None:
                 self.send_imu(*imu, yaw_rate=yaw_rate)
-            if k % 20 == 0:
-                if cloud is not None:
-                    self.send_cloud(*cloud)
-                if gnss is not None:
-                    self.send_gnss(*gnss)
+            if k % 50 == 0 and cloud is not None:
+                self.send_cloud(*cloud)
+            if k % 20 == 0 and gnss is not None:
+                self.send_gnss(*gnss)
             k += 1
             tick = time.monotonic() + 0.01
             while time.monotonic() < tick:
@@ -537,7 +540,7 @@ def main():
     ap.add_argument('--scenario', choices=['all'] + list(SCENARIOS), default='all')
     args = ap.parse_args()
     pcd = os.path.abspath('fusion_extrinsic_map.pcd')
-    write_pcd(pcd, surfaces(np.random.default_rng(1), 80000))
+    write_pcd(pcd, surfaces(np.random.default_rng(1), MAP_POINTS))
     failed = False
     for name in (list(SCENARIOS) if args.scenario == 'all' else [args.scenario]):
         results = run_scenario(name, os.path.abspath(args.params), pcd)
