@@ -17,6 +17,7 @@
 #include <tf2_msgs/msg/tf_message.hpp>
 #include "prism_loc_fusion/eskf.hpp"
 #include "prism_loc_fusion/geodetic.hpp"
+#include "prism_loc_fusion_ros/mount.hpp"
 #include "prism_loc_fusion_ros/ndt_registration.hpp"
 namespace prism_loc_fusion_ros {
 class FusionLocalizationNode : public rclcpp::Node {
@@ -32,6 +33,12 @@ class FusionLocalizationNode : public rclcpp::Node {
   void onTfWatch(const tf2_msgs::msg::TFMessage::SharedPtr msg);
   bool tryInitialize();
   void publish(const rclcpp::Time& stamp);
+
+  // Mounts of the sensors on base_frame (see mount.hpp). resolveMount() returns false
+  // when the message must not be used, and logs a mount that is new or has changed.
+  bool resolveMount(Mount& m, const std::string& msg_frame, const std::string& topic);
+  Mount points_mount_, imu_mount_, gnss_mount_;
+  MountLookup mount_lookup_;
 
   std::string global_frame_, odom_frame_, base_frame_;
   std::string imu_topic_, points_topic_, gnss_topic_;

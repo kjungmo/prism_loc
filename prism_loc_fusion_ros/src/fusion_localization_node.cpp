@@ -37,6 +37,12 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   gnss_min_status_ = declare_parameter<int>("gnss_min_status", 0);
   gnss_max_pos_cov_ = declare_parameter<double>("gnss_max_pos_cov", 25.0);
   initial_yaw_ = declare_parameter<double>("initial_yaw", 0.0);
+  // Sensor frames. Empty (default): use each message's header.frame_id. A frame other
+  // than base_frame needs the transform base_frame -> frame on TF; set a parameter to
+  // base_frame's value to declare that sensor's data as already expressed in base_frame.
+  points_mount_.override_frame = declare_parameter<std::string>("points_frame", "");
+  imu_mount_.override_frame = declare_parameter<std::string>("imu_frame", "");
+  gnss_mount_.override_frame = declare_parameter<std::string>("gnss_frame", "");
 
   prism_loc_fusion::EskfParams ep;
   ep.sigma_acc = declare_parameter<double>("sigma_acc", 1e-2);
@@ -107,6 +113,22 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+  // A mount is rigid: take the latest transform, never wait for one at a stamp.
+  mount_lookup_ = [this](const std::string& frame, Eigen::Isometry3d& T, std::string& error) {
+    try {
+      const auto t = tf_buffer_->lookupTransform(base_frame_, frame, tf2::TimePointZero);
+      T = Eigen::Isometry3d::Identity();
+      T.translation() = Eigen::Vector3d(t.transform.translation.x, t.transform.translation.y,
+                                        t.transform.translation.z);
+      T.linear() = Eigen::Quaterniond(t.transform.rotation.w, t.transform.rotation.x,
+                                      t.transform.rotation.y, t.transform.rotation.z)
+                       .normalized().toRotationMatrix();
+      return true;
+    } catch (const std::exception& e) {
+      error = e.what();
+      return false;
+    }
+  };
   pose_pub_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("~/pose", 10);
   odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("~/odometry", 10);
 
@@ -181,6 +203,17 @@ void FusionLocalizationNode::onTfWatch(const tf2_msgs::msg::TFMessage::SharedPtr
   }
 }
 
+bool FusionLocalizationNode::resolveMount(Mount& m, const std::string& msg_frame,
+                                          const std::string& topic) {
+  bool changed = false;
+  const double now_s = std::chrono::duration<double>(Steady::now().time_since_epoch()).count();
+  const bool ok = m.resolve(msg_frame, base_frame_, now_s, mount_lookup_, &changed);
+  if (changed)
+    RCLCPP_INFO(get_logger(), "fusion3d: %s uses the mount %s", topic.c_str(),
+                m.describe(base_frame_).c_str());
+  return ok;
+}
+
 // 1 Hz wall timer. Only reads state under the mutex; no TF lookups or registration here.
 void FusionLocalizationNode::onDiagnostics() {
   std::lock_guard<std::mutex> lk(mutex_);
@@ -209,6 +242,17 @@ void FusionLocalizationNode::onDiagnostics() {
                   "(GNSS on %s or /initialpose)", gnss_topic_.c_str());
     errors.emplace_back(buf);
   }
+  // A sensor whose mount on base_frame is unknown is not used. Without the IMU nothing
+  // propagates the pose: an ERROR once the startup grace is over, a WARN before.
+  if (imu_mount_.seen() && !imu_mount_.resolved())
+    (since_start > startup_timeout_s_ ? errors : warnings)
+        .emplace_back("IMU not used: " + imu_mount_.problem(base_frame_, imu_topic_, "imu_frame"));
+  if (points_mount_.seen() && !points_mount_.resolved())
+    warnings.emplace_back("point clouds not used: " +
+                          points_mount_.problem(base_frame_, points_topic_, "points_frame"));
+  if (gnss_mount_.seen() && !gnss_mount_.resolved())
+    warnings.emplace_back("GNSS not used: " +
+                          gnss_mount_.problem(base_frame_, gnss_topic_, "gnss_frame"));
 
   // Warnings: the pose is dead-reckoning on the IMU or the TF tree is incomplete.
   if (filter_init_) {
@@ -290,6 +334,9 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("tf_child_frame", tf_child_);
   kv("map_to_base_fallback_active", fallback_active ? "true" : "false");
   kv("use_sim_time", sim_time ? "true" : "false");
+  kv("points_mount", points_mount_.describe(base_frame_));
+  kv("imu_mount", imu_mount_.describe(base_frame_));
+  kv("gnss_mount", gnss_mount_.describe(base_frame_));
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
   arr.status.push_back(st);
@@ -320,8 +367,19 @@ void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
   imu_seen_ = true;
   last_imu_wall_ = Steady::now();
-  const Eigen::Vector3d acc(msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z);
-  const Eigen::Vector3d gyro(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z);
+  if (!resolveMount(imu_mount_, msg->header.frame_id, imu_topic_)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onImu: sample not used - %s",
+                         imu_mount_.problem(base_frame_, imu_topic_, "imu_frame").c_str());
+    return;
+  }
+  // Specific force and angular velocity expressed in base_frame (rotation of the mount
+  // only; the lever arm between the IMU and the base_frame origin is not compensated).
+  const Eigen::Vector3d acc = vectorInBase(
+      imu_mount_.ext(), Eigen::Vector3d(msg->linear_acceleration.x, msg->linear_acceleration.y,
+                                        msg->linear_acceleration.z));
+  const Eigen::Vector3d gyro = vectorInBase(
+      imu_mount_.ext(),
+      Eigen::Vector3d(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z));
   if (!have_attitude_) { init_attitude_ = attitudeFromAccel(acc, initial_yaw_); have_attitude_ = true; }
   const rclcpp::Time stamp(msg->header.stamp, get_clock()->get_clock_type());
   if (!last_imu_valid_) { last_imu_time_ = stamp; last_imu_valid_ = true; return; }
@@ -344,6 +402,11 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   std::lock_guard<std::mutex> lk(mutex_);
   points_seen_ = true;
   last_points_wall_ = Steady::now();
+  if (!resolveMount(points_mount_, msg->header.frame_id, points_topic_)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onPoints: cloud not used - %s",
+                         points_mount_.problem(base_frame_, points_topic_, "points_frame").c_str());
+    return;
+  }
   if (!ndt_ || !ndt_->hasTarget()) {
     RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
                          "onPoints: NDT target map not set - map_pcd_path failed to load; "
@@ -369,7 +432,9 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   Eigen::Isometry3d guess = Eigen::Isometry3d::Identity();
   guess.translation() = eskf_->state().p;
   guess.linear() = eskf_->state().q.toRotationMatrix();
-  NdtResult r = ndt_->align(src, guess);
+  // The cloud is in the sensor frame: registration starts from, and returns, the pose of
+  // the sensor in the map; the filter state is the pose of base_frame.
+  NdtResult r = ndt_->align(src, sensorPoseFromBasePose(points_mount_.ext(), guess));
   if (!r.converged || r.fitness > ndt_max_fitness_) {
     ++ndt_rejected_;
     RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 2000, "fusion3d: NDT rejected (conv=%d fit=%.3f)",
@@ -379,7 +444,8 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   Eigen::Matrix<double, 6, 6> R = Eigen::Matrix<double, 6, 6>::Identity();
   R.topLeftCorner<3, 3>() *= pose_pos_std_ * pose_pos_std_;
   R.bottomRightCorner<3, 3>() *= pose_rot_std_ * pose_rot_std_;
-  eskf_->updatePose(r.pose.translation(), Eigen::Quaterniond(r.pose.linear()), R);
+  const Eigen::Isometry3d base_pose = basePoseFromSensorPose(points_mount_.ext(), r.pose);
+  eskf_->updatePose(base_pose.translation(), Eigen::Quaterniond(base_pose.linear()), R);
   any_ndt_ = true;
   last_ndt_wall_ = Steady::now();
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
@@ -406,16 +472,32 @@ void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr
                          msg->position_covariance[0], gnss_max_pos_cov_);
     return;
   }
+  if (!resolveMount(gnss_mount_, msg->header.frame_id, gnss_topic_)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onGnss: fix not used - %s",
+                         gnss_mount_.problem(base_frame_, gnss_topic_, "gnss_frame").c_str());
+    return;
+  }
   const prism_loc_fusion::GeoPoint gp{msg->latitude, msg->longitude, msg->altitude};
   if (!geo_.hasDatum()) geo_.setDatum(gp);
+  // The fix is the antenna's position. Seeding: move it to the base_frame origin with the
+  // attitude the filter will start from. (Identity mount: enu is returned untouched.)
   const Eigen::Vector3d enu = geo_.toEnu(gp);
-  if (!have_position_) { init_position_ = enu; have_position_ = true; }
+  if (!have_position_) {
+    const Eigen::Quaterniond q_init =
+        have_attitude_ ? init_attitude_
+                       : Eigen::Quaterniond(Eigen::AngleAxisd(initial_yaw_, Eigen::Vector3d::UnitZ()));
+    init_position_ = basePositionFromAntenna(gnss_mount_.ext(), q_init, enu);
+    have_position_ = true;
+  }
   if (!filter_init_) { tryInitialize(); return; }
   Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
   R(0, 0) = std::max(msg->position_covariance[0], 1e-4);
   R(1, 1) = std::max(msg->position_covariance[4], 1e-4);
   R(2, 2) = std::max(msg->position_covariance[8], 1.0);
-  eskf_->updatePosition(enu, R);
+  // Updating: an antenna off the base_frame origin is fused as what it is, a point at the
+  // lever arm, so that the attitude it depends on is part of the update. With a zero lever
+  // arm (fix in base_frame) this is the plain position update.
+  eskf_->updatePositionLever(enu, gnss_mount_.ext().T.translation(), R);
   any_gnss_fix_ = true;
   last_gnss_wall_ = Steady::now();
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));

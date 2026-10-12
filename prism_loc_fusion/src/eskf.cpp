@@ -51,6 +51,38 @@ void Eskf::updatePosition(const Eigen::Vector3d& p_meas, const Eigen::Matrix3d& 
   inject(dx);
 }
 
+Eigen::Vector3d Eskf::leverArmPosition(const NominalState& x, const Eigen::Vector3d& lever) {
+  return x.p + x.q.toRotationMatrix() * lever;
+}
+
+Eigen::Matrix<double, 3, 15> Eskf::leverArmJacobian(const Eigen::Quaterniond& q,
+                                                    const Eigen::Vector3d& lever) {
+  Eigen::Matrix<double, 3, 15> H = Eigen::Matrix<double, 3, 15>::Zero();
+  H.block<3, 3>(0, 0) = Eigen::Matrix3d::Identity();
+  H.block<3, 3>(0, 6) = -q.toRotationMatrix() * skew(lever);
+  return H;
+}
+
+void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vector3d& lever,
+                               const Eigen::Matrix3d& R) {
+  if (lever.isZero(0.0)) {  // the body origin itself: the plain position update, bit for bit
+    updatePosition(p_meas, R);
+    return;
+  }
+  const Eigen::Matrix<double, 3, 15> H = leverArmJacobian(x_.q, lever);
+  const Eigen::Vector3d y = p_meas - leverArmPosition(x_, lever);
+  const Eigen::Matrix3d S = H * P_ * H.transpose() + R;
+  Eigen::Matrix<double, 15, 3> K = P_ * H.transpose() * S.inverse();
+  // Consider states: no gain for the attitude and the gyro bias.
+  K.block<3, 3>(6, 0).setZero();
+  K.block<3, 3>(12, 0).setZero();
+  const Vec15 dx = K * y;
+  // Joseph form: valid for a gain that is not the optimal one.
+  const Mat15 A = Mat15::Identity() - K * H;
+  P_ = A * P_ * A.transpose() + K * R * K.transpose();
+  inject(dx);
+}
+
 void Eskf::updatePose(const Eigen::Vector3d& p_meas, const Eigen::Quaterniond& q_meas,
                       const Eigen::Matrix<double, 6, 6>& R) {
   Eigen::Matrix<double, 6, 15> H = Eigen::Matrix<double, 6, 15>::Zero();

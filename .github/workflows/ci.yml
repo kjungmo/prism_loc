@@ -94,6 +94,31 @@ jobs:
             ../install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml \
             fusion_fix/map.pcd || { tail -n 40 fusion_fallback.log; exit 1; }
 
+      # fusion3d with the lidar, the IMU and the GNSS antenna mounted off base_link (static
+      # TF): the pose is that of base_link within 0.05 m and 0.02 rad; an input whose mount
+      # is missing is left out and /diagnostics says so; *_frame overrides the frame name;
+      # GNSS and IMU alone with sensor noise stay consistent for 30 s.
+      # The workspace above is built without optimization; one NDT registration then takes
+      # over a second on the thread that also takes the IMU and /diagnostics reports
+      # "IMU stopped". The two fusion packages are rebuilt optimized for this step so that
+      # the check can demand an OK status. --tolerate-imu-gaps: on this two-core runner
+      # the script's own 100 Hz loop can stall for a few samples (a WARN about IMU gaps
+      # only; "IMU stopped" and every other status still fail).
+      - name: fusion3d sensor mounts
+        shell: bash
+        env:
+          ROS_DOMAIN_ID: "92"
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install --packages-select prism_loc_fusion prism_loc_fusion_ros \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release
+          source install/setup.bash
+          mkdir -p ci_logs && cd ci_logs
+          timeout 900 python3 ../src/prism_loc/scripts/fusion_extrinsic_check.py \
+            ../install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml \
+            --tolerate-imu-gaps \
+            || { for f in fusion_extrinsic_*.log; do echo "--- $f"; tail -n 40 "$f"; done; exit 1; }
+
       # laser2d over real topics/TF on a synthetic world: convergence, map->odom stamp
       # and cadence, recovery after a scan gap, poses at a 0.1x sim clock, no low-n_eff
       # warning after /initialpose, and the /diagnostics status for stopped scans,

@@ -40,7 +40,7 @@ prior maps.
 |---|---|---|---|
 | IMU | `sensor_msgs/Imu` (`/imu`) | 100–400 Hz | **predict**: nominal integration + `P = F P Fᵀ + Q` |
 | 3D LiDAR | `sensor_msgs/PointCloud2` (`/points`) | ~10 Hz | **updatePose**: PCL NDT registers live cloud → PCD map (init = current ESKF pose) → 6-DoF pose measurement |
-| RTK-GNSS | `sensor_msgs/NavSatFix` (`/gnss`) | 1–10 Hz | **updatePosition**: lat/lon/alt → ENU (datum) → 3-DoF position, gated by fix status/covariance |
+| RTK-GNSS | `sensor_msgs/NavSatFix` (`/gnss`) | 1–10 Hz | **updatePosition** (**updatePositionLever** when the antenna is off `base_frame`, §8.1): lat/lon/alt → ENU (datum) → 3-DoF position, gated by fix status/covariance |
 | `/initialpose` | `PoseWithCovarianceStamped` | — | optional manual seed (else auto-init, §6) |
 
 ## 4. ESKF math
@@ -55,6 +55,12 @@ prior maps.
 
 **updatePosition** (`p_z`, `R₃`): `H=[I₃ 0…]`; `y=p_z−p`; `K=P Hᵀ(H P Hᵀ+R)⁻¹`;
 `δx=K y`; `P=(I−K H)P`; inject+reset.
+
+**updatePositionLever** (`p_z`, lever `t`, `R₃`), for a fix of a point at `t` in the body
+frame (GNSS antenna off `base_frame`): `h = p + R·t`; `H=[I₃ 0 −R[t]× 0 0]` (local attitude
+error, `q ← q⊗Exp(δθ)`); `y=p_z−h`; `K=P Hᵀ(H P Hᵀ+R)⁻¹` with the rows of `δθ` and
+`δb_g` set to zero (attitude and gyro bias are consider states: counted in `H P Hᵀ`,
+not corrected); `P=(I−K H)P(I−K H)ᵀ+K R Kᵀ`; inject+reset. A zero lever is `updatePosition`.
 
 **updatePose** (`p_z`, `q_z`, `R₆`): `H` selects `δp` (rows 0:3 ↔ cols 0:3 = I₃),
 `δθ` (rows 3:6 ↔ cols 6:9 = I₃); residual `y[0:3]=p_z−p`,
@@ -107,16 +113,38 @@ prism_loc_fusion_ros/                   # ROS 2 Humble node, depends prism_loc_f
 ## 8. I/O contract (fusion3d node)
 
 **In:** `/imu` (Imu), `/points` (PointCloud2), `/gnss` (NavSatFix), `/initialpose`
-(optional), TF `odom→base` (optional). **Out:** `/tf` `map→odom` (REP-105; falls
+(optional), TF `odom→base` (optional), TF `base→sensor frame` for every input that is
+not expressed in `base_frame` (§8.1). **Out:** `/tf` `map→odom` (REP-105; falls
 back to `map→base_link` with a warning if no `odom→base`), `~/pose`
 (PoseWithCovarianceStamped, 6×6 from ESKF P), `~/odometry` (`nav_msgs/Odometry`,
 linear velocity expressed in `base_link`, the message's `child_frame_id`).
+
+### 8.1 Frames
+
+The state is the pose of `base_frame`. Every input carries a frame (`header.frame_id`, or
+the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that frame is
+`base_frame` the input is used as it is. Otherwise `T_bs` = TF `base_frame → frame`
+(latest available, re-read once per second, kept once found) is applied:
+
+- **LiDAR, 6 DoF.** NDT registers the cloud in its own frame, so the initial guess is
+  `T_map_base · T_bs` and the measurement fed to `updatePose` is `T_map_sensor · T_bs⁻¹`.
+- **IMU, rotation.** `ω_b = R_bs ω_s`, `f_b = R_bs f_s`. The lever-arm terms
+  `α × r + ω × (ω × r)` are not compensated.
+- **GNSS, translation.** The fix is fused with `updatePositionLever` (§4) at the lever
+  arm `t_bs`; with `t_bs = 0` or a fix in `base_frame`, with `updatePosition` as before.
+  The first fix seeds the position as `p_antenna − R(q₀) t_bs`, `q₀` being the attitude
+  the filter will start from.
+
+An input whose frame is empty or has no transform is not used, and `/diagnostics` says so
+(WARN; ERROR for the IMU once `startup_timeout_s` has passed). Earlier versions ignored
+the frames and used every input as measured at `base_frame`.
 
 ## 9. Parameters (fusion3d)
 
 `map_pcd_path`, `ndt_resolution`(1.0), `ndt_step_size`(0.1), `ndt_epsilon`(0.01),
 `ndt_max_iter`(30), `points_voxel_leaf`(0.5), `ndt_max_fitness`(2.0),
 `imu_topic`/`points_topic`/`gnss_topic`, `global_frame`/`odom_frame`/`base_frame`,
+`points_frame`/`imu_frame`/`gnss_frame`(empty = `header.frame_id`),
 `sigma_acc`/`sigma_gyro`/`sigma_acc_bias`/`sigma_gyro_bias`,
 `pose_pos_std`/`pose_rot_std`, `gnss_min_status`(0), `gnss_max_pos_cov`(25.0),
 `use_datum`/`datum_lat`/`datum_lon`/`datum_alt`, `transform_tolerance`(0.1).
@@ -132,11 +160,19 @@ linear velocity expressed in `base_link`, the message's `child_frame_id`).
 - **eskf predict constant accel:** `a_m=[ax,ay,az+9.81]` → `v=a_w·t`, `p=½a_w·t²`.
 - **updatePosition:** wrong init `p`; repeated GNSS at truth → `p`→truth.
 - **updatePose:** feed `(p_z,q_z)` → pose → measurement.
+- **updatePositionLever:** Jacobian against finite differences; the update equals the
+  consider gain with the Joseph covariance; closed-form position gain with a
+  position–heading covariance (fixes the sign of the Jacobian); attitude and gyro bias
+  untouched bit for bit; zero lever equals `updatePosition` bit for bit; GNSS-only for a
+  minute (standing, turning, two lever arms, 8 seeds, heading 0.1 rad off): height ≤ 0.1 m,
+  tilt ≤ 0.02 rad, heading kept, position NEES between 0.2 and 6.
 - **integration:** synthetic straight+turn trajectory emitting IMU (bias+noise) +
   periodic NDT pose + GNSS; ESKF tracks ground truth ≤0.3 m, ≤0.1 rad.
 
 `prism_loc_fusion_ros/test`: `test_tf_compose` (map→odom = map→base · inv(odom→base),
-SE(3)); `test_ndt_registration` (register a cloud onto a translated copy → recover
+SE(3)); `test_extrinsic` (sensor mounts of §8.1 against closed forms; the identity mount
+returns its input bit for bit); `test_mount` (which mount applies to a message: every
+state and transition of the table in `mount.hpp`); `test_ndt_registration` (register a cloud onto a translated copy → recover
 the shift within a few cm, via PCL NDT).
 
 CI gates: `prism_loc_fusion` plain-CMake + ctest green; `prism_loc_fusion_ros`
