@@ -225,3 +225,63 @@ TEST(Mount, DescribeRoundsAndNeverPrintsMinusZero) {
   EXPECT_TRUE(m.resolve("cam", kBase, 1.0, tf.lookup()));
   EXPECT_EQ(m.describe(kBase), "base_link -> cam xyz 0.000 0.000 -1.235 rpy -0.300 0.200 -2.500");
 }
+
+// Older drivers still put a leading "/" on frame_id; tf2 has no such frames. One leading
+// slash is dropped, so "/base_link" is base_link (no TF needed, as before mounts were
+// applied) and "/lidar" is looked up as "lidar".
+TEST(Mount, OneLeadingSlashIsDropped) {
+  FakeTf tf;
+  tf.frames["lidar"] = mountAt(0.2, 0.0, 0.5, 0.0);
+  Mount m;
+  EXPECT_TRUE(m.resolve("/base_link", kBase, 1.0, tf.lookup()));
+  EXPECT_TRUE(m.ext().identity);
+  EXPECT_EQ(tf.calls, 0);
+  EXPECT_EQ(m.describe(kBase), "identity (frame base_link)");
+  EXPECT_TRUE(m.resolve("base_link", "/base_link", 1.1, tf.lookup()));   // a slash on the parameter too
+  EXPECT_EQ(tf.calls, 0);
+  EXPECT_TRUE(m.resolve("/lidar", kBase, 1.2, tf.lookup()));
+  EXPECT_EQ(m.frame(), "lidar");
+  EXPECT_EQ(m.ext().T.translation().z(), 0.5);
+  Mount o;
+  o.override_frame = "/lidar";
+  EXPECT_TRUE(o.resolve("whatever", kBase, 1.0, tf.lookup()));
+  EXPECT_EQ(o.frame(), "lidar");
+  // only one slash, and a lone slash is an empty frame
+  EXPECT_FALSE(m.resolve("//lidar", kBase, 2.0, tf.lookup()));
+  EXPECT_EQ(m.describe(kBase), "missing (frame /lidar)");
+  EXPECT_FALSE(m.resolve("/", kBase, 2.1, tf.lookup()));
+  EXPECT_EQ(m.describe(kBase), "missing (empty frame_id)");
+}
+
+// The reason tf2 gives is kept on one line and whole up to kMaxReason characters.
+TEST(Mount, LookupReasonIsOneBoundedLine) {
+  Mount m;
+  const std::string reason = "Invalid argument \"cam\" passed to lookupTransform argument source_frame in tf2 "
+                             "frame_ids cannot be what this one is, for a reason that takes well over one hundred characters";
+  ASSERT_GT(reason.size(), 150u);
+  ASSERT_LT(reason.size(), Mount::kMaxReason);
+  MountLookup fails = [&](const std::string&, Eigen::Isometry3d&, std::string& error) {
+    error = reason + "\n         at line 95 in buffer_core.cpp";
+    return false;
+  };
+  EXPECT_FALSE(m.resolve("cam", kBase, 1.0, fails));
+  EXPECT_EQ(m.problem(kBase, "/points", "points_frame"),
+            "no transform base_link -> cam (frame of /points): publish it on TF, or set points_frame [" + reason + "]");
+  const std::string huge(Mount::kMaxReason + 50, 'x');
+  MountLookup fails_long = [&](const std::string&, Eigen::Isometry3d&, std::string& error) {
+    error = huge;
+    return false;
+  };
+  EXPECT_FALSE(m.resolve("cam", kBase, 1.1, fails_long));
+  const std::string msg = m.problem(kBase, "/points", "points_frame");
+  EXPECT_NE(msg.find("[" + std::string(Mount::kMaxReason, 'x') + "...]"), std::string::npos);
+  EXPECT_EQ(msg.find(std::string(Mount::kMaxReason + 1, 'x')), std::string::npos);
+  // a reason of exactly kMaxReason characters is kept whole, without the ellipsis
+  const std::string exact(Mount::kMaxReason, 'y');
+  MountLookup fails_exact = [&](const std::string&, Eigen::Isometry3d&, std::string& error) {
+    error = exact;
+    return false;
+  };
+  EXPECT_FALSE(m.resolve("cam", kBase, 1.2, fails_exact));
+  EXPECT_NE(m.problem(kBase, "/points", "points_frame").find("[" + exact + "]"), std::string::npos);
+}

@@ -16,7 +16,8 @@ using MountLookup = std::function<bool(const std::string& frame, Eigen::Isometry
 
 // Which mount (base_frame <- sensor frame) applies to the messages of one sensor.
 //
-// The sensor frame is override_frame when set, else the message's header.frame_id.
+// The sensor frame is override_frame when set, else the message's header.frame_id; one
+// leading "/" is dropped (tf2 has no such frames, older drivers still send them).
 //   frame                         result of resolve()   describe()
 //   empty                         false (not used)      missing (empty frame_id)
 //   base_frame                    true, identity        identity (frame <base>)
@@ -39,8 +40,8 @@ class Mount {
                const MountLookup& lookup, bool* changed = nullptr) {
     if (changed) *changed = false;
     seen_ = true;
-    const std::string& frame = override_frame.empty() ? msg_frame : override_frame;
-    if (frame.empty() || frame == base_frame) {
+    const std::string frame = unslashed(override_frame.empty() ? msg_frame : override_frame);
+    if (frame.empty() || frame == unslashed(base_frame)) {
       frame_ = frame;
       ext_ = Extrinsic{};
       source_ = frame.empty() ? Source::kNone : Source::kBaseFrame;  // base_frame: no TF, nothing applied
@@ -105,11 +106,18 @@ class Mount {
     if (frame_.empty())
       return "empty header.frame_id on " + topic + ": set " + param + " to the sensor's frame (to '" +
              base_frame + "' if the data is already expressed in it)";
+    // tf2's reason on one line, bounded (it can carry a source location on a second line)
+    std::string why = error_.substr(0, error_.find('\n'));
+    if (why.size() > kMaxReason) why = why.substr(0, kMaxReason) + "...";
     return "no transform " + base_frame + " -> " + frame_ + " (frame of " + topic +
-           "): publish it on TF, or set " + param + " [" + error_.substr(0, 100) + "]";
+           "): publish it on TF, or set " + param + " [" + why + "]";
   }
+  static constexpr std::size_t kMaxReason = 240;
 
  private:
+  static std::string unslashed(const std::string& f) {
+    return !f.empty() && f[0] == '/' ? f.substr(1) : f;
+  }
   // Where ext_ comes from: nowhere (the last message is not usable), the frame being
   // base_frame itself, or a transform found on TF.
   enum class Source { kNone, kBaseFrame, kTf };

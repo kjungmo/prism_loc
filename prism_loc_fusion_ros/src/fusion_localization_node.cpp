@@ -479,22 +479,25 @@ void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr
   }
   const prism_loc_fusion::GeoPoint gp{msg->latitude, msg->longitude, msg->altitude};
   if (!geo_.hasDatum()) geo_.setDatum(gp);
-  // The fix is the antenna's position; move it to the base_frame origin with the current
-  // attitude (before initialization: the attitude the filter will start from).
-  const Eigen::Quaterniond q_map_base =
-      filter_init_ ? eskf_->state().q
-                   : have_attitude_ ? init_attitude_
-                                    : Eigen::Quaterniond(Eigen::AngleAxisd(
-                                          initial_yaw_, Eigen::Vector3d::UnitZ()));
-  const Eigen::Vector3d enu =
-      basePositionFromAntenna(gnss_mount_.ext(), q_map_base, geo_.toEnu(gp));
-  if (!have_position_) { init_position_ = enu; have_position_ = true; }
+  // The fix is the antenna's position. Seeding: move it to the base_frame origin with the
+  // attitude the filter will start from. (Identity mount: enu is returned untouched.)
+  const Eigen::Vector3d enu = geo_.toEnu(gp);
+  if (!have_position_) {
+    const Eigen::Quaterniond q_init =
+        have_attitude_ ? init_attitude_
+                       : Eigen::Quaterniond(Eigen::AngleAxisd(initial_yaw_, Eigen::Vector3d::UnitZ()));
+    init_position_ = basePositionFromAntenna(gnss_mount_.ext(), q_init, enu);
+    have_position_ = true;
+  }
   if (!filter_init_) { tryInitialize(); return; }
   Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
   R(0, 0) = std::max(msg->position_covariance[0], 1e-4);
   R(1, 1) = std::max(msg->position_covariance[4], 1e-4);
   R(2, 2) = std::max(msg->position_covariance[8], 1.0);
-  eskf_->updatePosition(enu, R);
+  // Updating: an antenna off the base_frame origin is fused as what it is, a point at the
+  // lever arm, so that the attitude it depends on is part of the update. With a zero lever
+  // arm (fix in base_frame) this is the plain position update.
+  eskf_->updatePositionLever(enu, gnss_mount_.ext().T.translation(), R);
   any_gnss_fix_ = true;
   last_gnss_wall_ = Steady::now();
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
