@@ -27,6 +27,18 @@ so a mount that is ignored or applied the wrong way round fails.
                antenna is 0.36 m away horizontally and 1 m above)
   gnss_missing antenna frame without a transform, /initialpose: WARN "GNSS not used", no
                GNSS correction, and the pose stays where /initialpose put it
+  gnss_stand_a, gnss_stand_b, gnss_turn_a, gnss_turn_b
+               GNSS and IMU only, with sensor noise (accelerometer 0.02 m/s^2, gyro
+               0.002 rad/s, fix 0.02 m), 30 s, antenna at (0.5, 0, 1.0) (a) or
+               (-0.3, 0.2, 1.0) (b), standing or turning on the spot at 0.3 rad/s (4 s
+               of turning, 1 s still, repeated). At t = 10, 15, .. 30 s: height within 0.15 m, tilt within 0.03 rad, heading
+               within 0.05 rad of the truth, and the horizontal error within twice the
+               sigma the node reports (sqrt of covariance_trace_position). The fix does
+               not observe the heading here, so the horizontal error is not small: it
+               is bounded by what the filter says it is.
+  slash        frame_id "/base_link" on the IMU and the fix, "/lidar" on the cloud (with
+               base_link -> lidar on TF): one leading slash is dropped, pose within
+               tolerance
   missing      cloud frame without a transform: WARN "point clouds not used" naming
                base_link -> lidar, no correction applied; after the transform is
                published the warning is gone, the status is OK and the pose is right
@@ -40,7 +52,11 @@ so a mount that is ignored or applied the wrong way round fails.
                a frame without a transform: ERROR "IMU not used" (the only error now)
                and no new pose; back on the first frame the ERROR is gone again
 
-    fusion_extrinsic_check.py PARAMS_YAML [--scenario NAME]
+    fusion_extrinsic_check.py PARAMS_YAML [--scenario NAME] [--tolerate-imu-gaps]
+
+--tolerate-imu-gaps accepts a WARN that reports nothing but "IMU gap(s)" where the status
+has to be OK (never "IMU stopped", never an ERROR). CI passes it: on a two-core runner
+this script's own 100 Hz loop can stall for a few samples. Without it the status must be OK.
 """
 import argparse
 import math
@@ -67,7 +83,11 @@ BASE_XYZ, BASE_YAW = ROOM + np.array([1.0, -0.5, 0.3]), 0.6  # truth: base_link 
 LIDAR = ((0.2, 0.1, 0.5), (0.0, 0.2, 1.0))          # xyz, rpy of base_link -> lidar
 IMU = ((0.1, 0.0, 0.2), (0.3, -0.2, 1.2))           # base_link -> imu (only the rotation matters)
 ANTENNA = ((-0.3, 0.2, 1.0), (0.0, 0.0, 0.0))       # base_link -> gnss (only the translation matters)
+ANTENNA_A = ((0.5, 0.0, 1.0), (0.0, 0.0, 0.0))     # the two antenna mounts of the noisy GNSS-only scenarios
+ANTENNA_B = ANTENNA
+NOISE = {'acc': 0.02, 'gyro': 0.002, 'gnss': 0.02}  # m/s^2, rad/s, m (white, per axis)
 DATUM = (37.0, 127.0, 0.0)
+TOLERATE_IMU_GAPS = False                           # --tolerate-imu-gaps
 # The room is built for PCL NDT at the shipped 1 m cells: surfaces 5 cm thick (a thinner
 # wall attracts the registration only from within a few centimetres), the floor sampled at
 # a fifth of its area (a large flat floor pulls the registration toward the cell lattice),
@@ -161,6 +181,8 @@ class Rig:
         self.clouds = [(surfaces(rng, CLOUD_POINTS) - BASE_XYZ) @ R_BASE for _ in range(5)]   # in base_link
         self.sent_clouds = 0
         self.turned = 0.0        # yaw the robot has turned so far (rad), as the gyro reported it
+        self.noise = None        # NOISE to add white noise to the IMU and the fixes
+        self.noise_rng = np.random.default_rng(17)
         self.last_imu_s = None   # stamp of the previous IMU sample
         self.t0 = time.monotonic()
 
@@ -192,6 +214,9 @@ class Rig:
         if mount is not None:
             f = rot_rpy(*mount[1]).T @ f             # ... as the mounted IMU measures them
             w = rot_rpy(*mount[1]).T @ w
+        if self.noise:
+            f = f + self.noise_rng.normal(0.0, self.noise['acc'], 3)
+            w = w + self.noise_rng.normal(0.0, self.noise['gyro'], 3)
         m.linear_acceleration.x, m.linear_acceleration.y, m.linear_acceleration.z = f
         m.angular_velocity.x, m.angular_velocity.y, m.angular_velocity.z = w
         now_s = now.nanoseconds * 1e-9               # the filter integrates each sample over the time since the previous one
@@ -220,6 +245,8 @@ class Rig:
     def send_gnss(self, frame, mount):
         p = BASE_XYZ if mount is None else \
             BASE_XYZ + rot_rpy(0.0, 0.0, BASE_YAW + self.turned) @ np.array(mount[0])
+        if self.noise:
+            p = p + self.noise_rng.normal(0.0, self.noise['gnss'], 3)
         a, f = 6378137.0, 1.0 / 298.257223563
         e2 = f * (2.0 - f)
         sl = math.sin(math.radians(DATUM[0]))
@@ -294,20 +321,19 @@ def check_pose(rig, results, what, axes='xyzrpw'):
 
 
 def clean(st):
-    """True for a status that is OK or reports nothing but IMU timing ("IMU gap(s)",
-    "IMU stopped"). The node registers a cloud on the thread that also takes the IMU; in
-    an unoptimized build (CI) one registration takes over a second, the IMU callback
-    starves meanwhile and the status says so. That is not what this script checks."""
-    rest = re.sub(r'IMU stopped: none on \S+ for [\d.]+ s|\d+ IMU gap\(s\) in the last second \(samples lost; \d+ total\)',
-                  '', st.message)
-    return level_of(st) == OK or not rest.strip('; ')
+    """True for an OK status. With --tolerate-imu-gaps also for a WARN that reports nothing
+    but IMU gaps (this script's own 100 Hz loop stalling); "IMU stopped" never passes."""
+    if level_of(st) == OK:
+        return True
+    rest = re.sub(r'\d+ IMU gap\(s\) in the last second \(samples lost; \d+ total\)', '', st.message)
+    return TOLERATE_IMU_GAPS and level_of(st) == WARN and not rest.strip('; ')
 
 
 def check_clean(rig, results, what):
     st = rig.last_status()
     results.append((st is not None and clean(st),
                     f'{what}: /diagnostics level {level_of(st) if st else None} ("{st.message if st else ""}"; '
-                    'need OK, or nothing but IMU timing)'))
+                    'need OK' + (', or a WARN about IMU gaps only' if TOLERATE_IMU_GAPS else '') + ')'))
 
 
 def scenario_lidar(rig, results):
@@ -382,6 +408,53 @@ def scenario_gnss_missing(rig, results):
     results.append((ok, 'no transform: the pose stays at /initialpose, error '
                         + (f'x {e[0]:+.3f} y {e[1]:+.3f} z {e[2]:+.3f} m (need {IP_OFFSET[0]:+.2f}, {IP_OFFSET[1]:+.2f}, 0 '
                            f'within {POS_TOL} m; the antenna is 0.36 m and 1 m away)' if e else 'n/a: no pose')))
+
+
+def gnss_only_noisy(rig, results, mount, yaw_rate):
+    rig.noise = NOISE
+    rig.add_static('gnss', mount)
+    lever_xy = math.hypot(mount[0][0], mount[0][1])
+    rig.stream(5.0, gnss=('gnss', mount), yaw_rate=yaw_rate)
+    worst = {'z': 0.0, 'tilt': 0.0, 'yaw': 0.0, 'xy_over_sigma': 0.0, 'xy': 0.0}
+    n = 0
+    for _ in range(5):                                # t = 10, 15, .. 30 s
+        rig.stream(4.0, gnss=('gnss', mount), yaw_rate=yaw_rate)
+        rig.stream(1.0, gnss=('gnss', mount))         # hold still for the second the pose is read in
+        e = rig.pose_error(1.0)
+        trace = rig.values().get('covariance_trace_position', 'n/a')
+        if e is None or trace == 'n/a':
+            continue
+        n += 1
+        xy = math.hypot(e[0], e[1])
+        worst['z'] = max(worst['z'], abs(e[2]))
+        worst['tilt'] = max(worst['tilt'], math.hypot(e[3], e[4]))
+        worst['yaw'] = max(worst['yaw'], abs(e[5]))
+        worst['xy'] = max(worst['xy'], xy)
+        worst['xy_over_sigma'] = max(worst['xy_over_sigma'], xy / math.sqrt(float(trace)))
+    what = f'antenna {mount[0]}, {"turning" if yaw_rate else "standing"}, 30 s with noise'
+    results.append((n == 5, f'{what}: checkpoints with a pose and a covariance: {n} (need 5)'))
+    results.append((n == 5 and worst['z'] <= 0.15, f'{what}: largest height error {worst["z"]:.3f} m (need <= 0.15)'))
+    results.append((n == 5 and worst['tilt'] <= 0.03, f'{what}: largest tilt error {worst["tilt"]:.4f} rad (need <= 0.03)'))
+    results.append((n == 5 and worst['yaw'] <= 0.05, f'{what}: largest heading error {worst["yaw"]:.4f} rad (need <= 0.05)'))
+    results.append((n == 5 and worst['xy_over_sigma'] <= 2.0,
+                    f'{what}: largest horizontal error {worst["xy"]:.3f} m, at most {worst["xy_over_sigma"]:.2f} x the sigma the node '
+                    f'reports (need <= 2; the heading is not observed, the horizontal lever arm is {lever_xy:.2f} m)'))
+    v = rig.values()
+    results.append((v.get('gnss_mount', '').startswith('base_link -> gnss xyz'), f'{what}: gnss_mount "{v.get("gnss_mount")}"'))
+
+
+def scenario_slash(rig, results):
+    rig.add_static('lidar', LIDAR)
+    rig.stream(1.0, imu=('/base_link', None))
+    rig.initial_pose()
+    rig.stream(7.0, imu=('/base_link', None), cloud=('/lidar', LIDAR), gnss=('/base_link', None))
+    check_pose(rig, results, 'frame_id "/base_link" (IMU, fix) and "/lidar" (cloud)')
+    check_clean(rig, results, 'leading slashes')
+    v = rig.values()
+    mounts = [v.get(k, '') for k in ('points_mount', 'imu_mount', 'gnss_mount')]
+    results.append((mounts[0].startswith('base_link -> lidar xyz 0.200 0.100 0.500') and
+                    mounts[1:] == ['identity (frame base_link)'] * 2 and v.get('ndt_rejected_total') == '0',
+                    f'leading slashes: points_mount, imu_mount, gnss_mount {mounts}, ndt_rejected_total {v.get("ndt_rejected_total")}'))
 
 
 def scenario_missing(rig, results):
@@ -502,8 +575,14 @@ def scenario_imu_missing(rig, results):
 
 SCENARIOS = {'lidar': scenario_lidar, 'imu': scenario_imu, 'gnss': scenario_gnss, 'missing': scenario_missing,
              'empty_frame': scenario_empty_frame, 'override': scenario_override, 'imu_missing': scenario_imu_missing,
-             'gnss_missing': scenario_gnss_missing}
+             'gnss_missing': scenario_gnss_missing, 'slash': scenario_slash,
+             'gnss_stand_a': lambda r, res: gnss_only_noisy(r, res, ANTENNA_A, 0.0),
+             'gnss_stand_b': lambda r, res: gnss_only_noisy(r, res, ANTENNA_B, 0.0),
+             'gnss_turn_a': lambda r, res: gnss_only_noisy(r, res, ANTENNA_A, 0.3),
+             'gnss_turn_b': lambda r, res: gnss_only_noisy(r, res, ANTENNA_B, 0.3)}
 SCENARIO_ARGS = {'imu': [f'initial_yaw:={BASE_YAW}'], 'gnss': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_stand_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_b': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_turn_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_turn_b': [f'initial_yaw:={BASE_YAW}'],
                  'override': ['points_frame:=base_link', 'imu_frame:=base_link', 'gnss_frame:=base_link'],
                  'imu_missing': ['startup_timeout_s:=10.0']}
 
@@ -546,7 +625,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('params', help='prism_loc_fusion_ros/params/fusion3d.yaml')
     ap.add_argument('--scenario', choices=['all'] + list(SCENARIOS), default='all')
+    ap.add_argument('--tolerate-imu-gaps', action='store_true',
+                    help='where the status must be OK, also accept a WARN about IMU gaps only')
     args = ap.parse_args()
+    global TOLERATE_IMU_GAPS
+    TOLERATE_IMU_GAPS = args.tolerate_imu_gaps
     pcd = os.path.abspath('fusion_extrinsic_map.pcd')
     write_pcd(pcd, surfaces(np.random.default_rng(1), MAP_POINTS))
     failed = False

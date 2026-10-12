@@ -76,11 +76,14 @@ pose off the map and for a wrong `base_height`. This is a ROS-path check on synt
 data, not a field result.
 [`scripts/fusion_extrinsic_check.py`](scripts/fusion_extrinsic_check.py) feeds `fusion3d`
 a robot that stands, or turns on the spot, with its lidar, IMU and GNSS antenna mounted
-off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad, and the
-`/diagnostics` status when a mount is missing from TF (see
-[Sensor frames](#sensor-frames-fusion3d)).
-GoogleTest cases: 50 in `prism_loc_core`, 15 in `prism_loc_fusion`, 28 in
-`prism_loc`, 22 in `prism_loc_fusion_ros` (115 in total).
+off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad, the
+`/diagnostics` status when a mount is missing from TF, and, on GNSS and IMU alone with
+sensor noise, height, tilt and heading within 0.15 m, 0.03 rad and 0.05 rad and a
+horizontal error within twice the reported sigma (see
+[Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build of the two
+fusion packages.
+GoogleTest cases: 50 in `prism_loc_core`, 20 in `prism_loc_fusion`, 29 in
+`prism_loc`, 24 in `prism_loc_fusion_ros` (123 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -382,15 +385,27 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
 |---|---|---|---|
 | `/points` | used as it is, no TF needed | transform `base_frame → frame` must be on TF | all 6 DoF: registration starts from and returns the pose of the lidar, `T_map_base = T_map_lidar · T_base_lidar⁻¹` |
 | `/imu` | used as it is, no TF needed | transform must be on TF | rotation only: angular velocity and specific force are rotated into `base_frame` |
-| `/gnss` | used as it is, no TF needed | transform must be on TF | translation only: `p_base = p_antenna − R_map_base · t_base_antenna`, with the attitude the filter holds at that moment |
+| `/gnss` | used as it is, no TF needed | transform must be on TF | translation only (the lever arm `t`): the fix is fused as the position of the antenna, `p + R·t`; the attitude uncertainty enters its innovation covariance through `∂/∂θ = −R[t]×` |
 
 - **Not compensated.** The IMU's lever arm: the specific force is the one at the IMU, which
   differs from the one at the `base_frame` origin by `α × r + ω × (ω × r)` (0.3 m/s² for
-  r = 0.3 m at 1 rad/s); put `base_frame` near the IMU if that matters. The measurement
-  noise (`pose_pos_std`, the NavSatFix covariance) is used unchanged for the pose of
-  `base_frame`: with a lever arm `t`, an attitude error `δ` adds about `|t|·δ` of position
-  error that the filter does not model, and the GNSS update does not correct attitude
-  through the lever arm.
+  r = 0.3 m at 1 rad/s); put `base_frame` near the IMU if that matters. The lidar's
+  measurement noise (`pose_pos_std`) is used unchanged for the pose of `base_frame`: with
+  a lever arm `t`, an error `δ` in the registered attitude adds about `|t|·δ` of position
+  error that the filter does not model.
+- **GNSS antenna off `base_frame`.** A fix corrects position, velocity and accelerometer
+  bias. It does not correct attitude or gyro bias (they are "consider" states of this
+  update: their uncertainty limits how far the fix is trusted, through the lever arm). A
+  single antenna does not observe the heading, and correcting attitude from it made the
+  heading drift and, right after a reseed, tilted the filter. Attitude is left to the IMU
+  and the lidar. What follows: the position of `base_frame` is known to about the
+  horizontal lever arm times the heading error, and the reported covariance says so.
+  Measured on the node with GNSS and IMU only (noise 0.02 m/s², 0.002 rad/s, 0.02 m; 30 s;
+  antennas at (0.5, 0, 1.0) and (−0.3, 0.2, 1.0); standing and turning; 16 runs, heading
+  exact at the start): height error ≤ 0.02 m, tilt ≤ 0.003 rad, heading ≤ 0.002 rad,
+  horizontal error ≤ 0.03 m. In the pairing runs with a 0.1 rad heading error the
+  horizontal error was 0.08 – 0.09 m for a 0.5 m lever arm. Seeding from the first fix
+  uses the attitude the filter starts with.
 - **Missing mount.** With an empty frame name or no transform, that input is not used
   (nothing is assumed): the log says so every 5 s and `/diagnostics` reports
   `point clouds not used: ...`, `GNSS not used: ...` (WARN) or `IMU not used: ...` (WARN

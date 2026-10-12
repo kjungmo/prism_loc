@@ -44,8 +44,9 @@ inline Eigen::Vector3d vectorInBase(const Extrinsic& e, const Eigen::Vector3d& v
 }
 
 // GNSS. The fix is the position of the antenna; the antenna sits at e.T.translation() in
-// base_frame, so p_base = p_antenna - R_map_base * t_base_antenna. q_map_base is the
-// current attitude estimate; the antenna frame's rotation is not used.
+// base_frame, so p_base = p_antenna - R_map_base * t_base_antenna. Used to seed the
+// filter's position from the first fix (later fixes are fused at the lever arm, see
+// Eskf::updatePositionLever). The antenna frame's rotation is not used.
 inline Eigen::Vector3d basePositionFromAntenna(const Extrinsic& e,
                                                const Eigen::Quaterniond& q_map_base,
                                                const Eigen::Vector3d& p_antenna) {
