@@ -31,4 +31,5 @@
     input_timeout_s: 1.0              # s: /diagnostics ERROR when input stops for max(this, periods x input period)
     input_timeout_periods: 5.0        # count: input periods of silence before /diagnostics reports input stopped
     min_neff_fraction: 0.0            # fraction: /diagnostics WARN when Neff/N at an update falls below this (0 = off; off for ndt3d, where Neff is 1 of 500 in healthy tracking)
-    min_match_fraction: 0.65          # fraction: /diagnostics WARN when the share of scan points on mapped surfaces (mean of the last 5 updates) falls below this (0 = off)
+    min_match_fraction: 0.65          # fraction: /diagnostics WARN when the share of scan points on mapped surfaces (mean of the last 5 updates) falls below this (0 = off). Set it just under the lowest match_fraction of a known-good run on your site
+    match_verify_updates: 15          # count: after /initialpose, /diagnostics WARNs "pose not verified" until this many filter updates have been judged (0 = off)

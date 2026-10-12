@@ -117,6 +117,7 @@ class LocalizationNode : public rclcpp::Node {
   // ndt3d: scan-to-map match of the last motion updates (see ndt_status.hpp), and the
   // one-time check of the parts of the sensor transform that ndt3d ignores.
   double min_match_fraction_{kDefaultMinMatchFraction};
+  int match_verify_updates_{kDefaultMatchVerifyUpdates};
   MatchMonitor match_;
   int last_match_points_{0};       // scan points scored at the last motion update
   double base_height_{0.0};

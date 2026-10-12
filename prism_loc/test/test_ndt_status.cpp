@@ -99,6 +99,34 @@ TEST(MatchMonitor, ReseedForgetsEverythingAndIsNotJudged) {
   EXPECT_FALSE(fresh.low(0.65));
 }
 
+// After a reseed the pose is not verified until n updates have been judged; a reseed
+// starts the count again; n = 0 switches the check off.
+TEST(MatchMonitor, VerifiedAfterNUpdatesSinceTheReseed) {
+  MatchMonitor m;
+  EXPECT_EQ(m.sinceReseed(), 0u);
+  EXPECT_FALSE(m.verified(15));
+  EXPECT_TRUE(m.verified(0));
+  m.update(true, 0.9);                    // the reseed update itself does not count
+  EXPECT_EQ(m.sinceReseed(), 0u);
+  for (int i = 0; i < 14; ++i) add(m, 0.9);
+  EXPECT_EQ(m.sinceReseed(), 14u);
+  EXPECT_FALSE(m.verified(15));           // one short
+  EXPECT_TRUE(m.verified(14));
+  add(m, 0.9);
+  EXPECT_TRUE(m.verified(15));
+  for (int i = 0; i < 100; ++i) add(m, 0.9);
+  EXPECT_EQ(m.sinceReseed(), 115u);       // not capped at the window
+  EXPECT_TRUE(m.verified(15));
+  m.update(true, 0.9);                    // /initialpose again
+  EXPECT_EQ(m.sinceReseed(), 0u);
+  EXPECT_FALSE(m.verified(15));
+  EXPECT_FALSE(m.verified(1));
+  add(m, 0.1);                            // a low match counts as judged: low() reports it
+  EXPECT_TRUE(m.verified(1));
+  EXPECT_TRUE(m.low(0.65));
+  EXPECT_EQ(prism_loc::kDefaultMatchVerifyUpdates, 15);
+}
+
 // A level lidar whose TF z equals base_height: nothing that ndt3d ignores matters.
 TEST(IgnoredSensorTf, LevelSensorAtBaseHeightIsFine) {
   EXPECT_FALSE(ignoredSensorTf(0.0, 0.0, 0.5, 0.5).any());

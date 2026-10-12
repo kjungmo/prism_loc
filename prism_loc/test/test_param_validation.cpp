@@ -94,4 +94,7 @@ TEST(ParamValidation, MinMatchFractionRange) {
   expectRejects([&] { validateNdtParams(1.0, 5, np, -0.01); }, "min_match_fraction");
   expectRejects([&] { validateNdtParams(1.0, 5, np, 1.01); }, "min_match_fraction");
   EXPECT_DOUBLE_EQ(prism_loc::kDefaultMinMatchFraction, 0.65);
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 0));
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 1000));
+  expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, -1); }, "match_verify_updates");
 }

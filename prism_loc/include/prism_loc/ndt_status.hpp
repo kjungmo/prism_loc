@@ -17,10 +17,20 @@ namespace prism_loc {
 //   mean of the last <= 5 >= threshold  false    the mean
 //   mean of the last <= 5 <  threshold  true     the mean
 //   threshold 0                         false    (check off: the mean is never negative)
+// A reseed also makes the pose "not verified": a wrong initial pose can match well for
+// several updates before the match collapses (measured: OK for 8 to 14 updates in a row
+// while 1.4 to 2.3 m off). verified(n) is false until n updates have been judged since
+// the last reseed; the node reports WARN "pose not verified" meanwhile (unless the match
+// is low, which is reported instead).
+//   updates judged since the reseed   verified(n)
+//   fewer than n                      false
+//   n or more                         true
+//   n = 0                             true (check off)
 // The effective particle count is no health signal for ndt3d: with the NDT likelihood one
 // particle takes all the weight at every update of a healthy run (n_eff 1 of 500), and
 // when no scan point falls in a map cell all particles weigh the same (n_eff = N).
 constexpr double kDefaultMinMatchFraction = 0.65;  // default of the min_match_fraction parameter
+constexpr int kDefaultMatchVerifyUpdates = 15;     // default of the match_verify_updates parameter
 
 // In-code default of min_neff_fraction: the laser2d check stays at 0.005; for ndt3d it
 // is off (0), min_match_fraction being its check.
@@ -38,12 +48,18 @@ class MatchMonitor {
     if (reseeded) {
       count_ = 0;
       next_ = 0;
+      since_reseed_ = 0;
       return;
     }
     values_[next_] = fraction;
     next_ = (next_ + 1) % kWindow;
     if (count_ < kWindow) ++count_;
+    if (since_reseed_ < kMaxCounted) ++since_reseed_;
   }
+  // Updates judged since the last reseed (saturates at kMaxCounted).
+  std::size_t sinceReseed() const { return since_reseed_; }
+  bool verified(std::size_t needed) const { return since_reseed_ >= needed; }
+  static constexpr std::size_t kMaxCounted = 1000000;
   std::size_t size() const { return count_; }
   double mean() const {
     if (count_ == 0) return 0.0;
@@ -55,15 +71,17 @@ class MatchMonitor {
 
  private:
   std::array<double, kWindow> values_{};
-  std::size_t count_{0}, next_{0};
+  std::size_t count_{0}, next_{0}, since_reseed_{0};
 };
 
 // ndt3d is planar: of the transform base_frame -> cloud frame it uses x, y and yaw only.
 // The sensor is placed level, at height base_height in the map frame; the transform's z,
 // roll and pitch are ignored. This reports which ignored parts are not negligible: a tilt
-// over angle_tol, or a z that differs from base_height by more than height_tol (base_height
-// is a height in the map frame and z one above base_frame, so they agree only when
-// base_frame rides at map z = 0). A value that is not finite counts as not negligible.
+// over angle_tol (always a mismatch: the node warns), or a z that differs from base_height
+// by more than height_tol. The latter is not an error by itself: base_height is a height
+// in the map frame and z one above base_frame, so they differ on every robot whose
+// base_frame does not ride at map z = 0 (the node only informs). A value that is not
+// finite counts as not negligible.
 struct IgnoredSensorTf {
   bool tilt{false};
   bool height{false};

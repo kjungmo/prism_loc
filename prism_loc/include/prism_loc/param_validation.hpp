@@ -26,6 +26,7 @@ void validateBbsParams(const prism_loc_core::BbsParams& bp,
                        const prism_loc_core::RelocVerifierParams& rv);
 void validateNdtParams(double ndt_resolution, int voxel_min_points,
                        const prism_loc_core::NdtParams& np,
-                       double min_match_fraction = kDefaultMinMatchFraction);
+                       double min_match_fraction = kDefaultMinMatchFraction,
+                       int match_verify_updates = kDefaultMatchVerifyUpdates);
 
 }  // namespace prism_loc

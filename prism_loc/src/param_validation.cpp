@@ -88,12 +88,14 @@ void validateBbsParams(const prism_loc_core::BbsParams& bp,
 }
 
 void validateNdtParams(double ndt_resolution, int voxel_min_points,
-                       const prism_loc_core::NdtParams& np, double min_match_fraction) {
+                       const prism_loc_core::NdtParams& np, double min_match_fraction,
+                       int match_verify_updates) {
   require(ndt_resolution > 0.0, "ndt_resolution", ndt_resolution, "> 0");
   require(voxel_min_points >= 1, "voxel_min_points", voxel_min_points, ">= 1");
   require(np.max_points >= 1, "max_points", np.max_points, ">= 1");
   require(min_match_fraction >= 0.0 && min_match_fraction <= 1.0, "min_match_fraction",
           min_match_fraction, "in [0, 1]");
+  require(match_verify_updates >= 0, "match_verify_updates", match_verify_updates, ">= 0");
 }
 
 }  // namespace prism_loc

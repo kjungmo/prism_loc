@@ -54,23 +54,32 @@ form; the status thresholds come from the runs listed in PARAMS.md (min_match_fr
   ndt3d_track  40 s of tracking: position error <= 0.5 m (mean <= 0.15) for every pose
               after t = 10 s and <= 0.25 m after t = 30 s (pulling in the 0.36 m error of
               the initial pose took up to 20 s in the seeded runs), yaw <= 0.05 rad;
-              every /diagnostics status after t = 10 s is OK with match_fraction >= 0.65;
-              no startup WARN about the sensor transform
+              after /initialpose the status is WARN "pose not verified" (t = 3 .. 8 s)
+              and turns OK by t = 14 s; every status after t = 15 s is OK with
+              match_fraction >= 0.65; no startup message about the sensor transform
   ndt3d_kidnap  at t = 20 s the robot is moved (the clouds come from another place, the
-              odometry does not notice): statuses before are OK; WARN "low scan-to-map
-              match" within 6 s and in >= 80 % of the statuses from then on
+              odometry does not notice): statuses from t = 15 s to then are OK; WARN
+              "low scan-to-map match" within 6 s and in >= 80 % of the statuses from then on
   ndt3d_off_map  /initialpose 100 m off the map; the robot stands for 6 s, then drives:
-              while it stands after the reseed the match is not judged (match_fraction
-              n/a, no WARN); once it moves, WARN "low scan-to-map match: 0.000" in every
-              status from t = 9 s, while n_eff / particles is >= 0.99
-  ndt3d_base_height  base_height left at 0 with the lidar 0.5 m up (and
-              min_match_fraction 0.9): one startup WARN in the node log naming the
-              ignored TF z, and WARN "low scan-to-map match ... min_match_fraction 0.900"
-              in every status from t = 6 s
-  ndt3d_tilt  lidar pitched 0.1 rad, YAML without min_neff_fraction and
-              min_match_fraction: one startup WARN in the node log naming the tilt; the
-              node's own defaults for ndt3d are min_neff_fraction 0 and
-              min_match_fraction 0.65
+              while it stands the status is WARN "pose not verified ... 0 of 15" (the
+              match is not judged on the reseed update: match_fraction n/a); once it
+              moves, WARN "low scan-to-map match: 0.000" in every status from t = 9 s,
+              while n_eff / particles is >= 0.99
+  ndt3d_base_height  base_height left at 0 with the lidar 0.5 m up: one INFO in the node
+              log giving the TF z and base_height (no WARN: the two differ on any robot
+              whose base_link is not at map z = 0), and WARN "low scan-to-map match" in
+              every status from t = 6 s
+  ndt3d_tilt  lidar pitched 0.1 rad, YAML without min_neff_fraction, min_match_fraction
+              and match_verify_updates: one WARN in the node log naming the tilt (no
+              height message); the node's own defaults for ndt3d are 0, 0.65 and 15
+  ndt3d_strict  healthy tracking with min_match_fraction 0.95 (and match_verify_updates
+              0): WARN "low scan-to-map match ... min_match_fraction 0.950" in every
+              status from t = 6 s (the parameter, not its default, drives the decision)
+  ndt3d_verify3  healthy tracking with match_verify_updates 3: WARN "pose not verified
+              ... N of 3" first, OK in every status from t = 6 s (with the default 15 it
+              would still be "pose not verified")
+  ndt3d_off   min_match_fraction 0 and /initialpose 100 m off the map: the check is off,
+              every status is OK although the robot is lost (0 disables both WARNs)
 
 This is a ROS-path test (topics -> node -> pose/TF/diagnostics) on a synthetic world
 whose sensor model matches the filter's assumptions; it is not a field result.
@@ -660,10 +669,14 @@ class Driver3D(Driver):
             rclpy.spin_once(self.n, timeout_sec=0.02)
         if not fut.done() or fut.result() is None:
             return None
-        return [v.double_value if v.type == 3 else None for v in fut.result().values]
+        return [v.double_value if v.type == 3 else v.integer_value if v.type == 2 else None
+                for v in fut.result().values]
 
 
 LOW_MATCH = 'low scan-to-map match'
+NOT_VERIFIED = 'pose not verified since the last reseed'
+TILT_WARN = 'is tilted (roll'                       # startup WARN: the lidar's tilt is ignored
+HEIGHT_INFO = 'ndt3d does not use that z'           # startup INFO: TF z against base_height
 
 
 def values_of(status):
@@ -688,11 +701,19 @@ def scenario_ndt3d_track(d, results):
         check(results, bool(late) and max(late) <= 0.25,
               f'max position error after 30 s: {max(late) if late else float("nan"):.3f} m (need <= 0.25)')
         check(results, my <= 0.05, f'max yaw error after 10 s: {my:.4f} rad (need <= 0.05)')
-    late = d.statuses(10.0)
+    early = d.statuses(3.0, 8.0)
+    unv = [s for s in early if level_of(s) == WARN and s.message.startswith(NOT_VERIFIED) and ' of 15 filter' in s.message]
+    check(results, len(early) >= 4 and len(unv) == len(early),
+          f'statuses from t = 3 to 8 s (after /initialpose at 1 s) that WARN "{NOT_VERIFIED}: N of 15 ...": '
+          f'{len(unv)} of {len(early)} (need all of >= 4)' + (f' ("{early[-1].message}")' if early else ''))
+    first_ok = next((d.rel(m) for m, s in d.diags if d.rel(m) > 3.0 and level_of(s) == OK), None)
+    check(results, first_ok is not None and first_ok <= 14.0,
+          f'first OK status after /initialpose at t = {first_ok if first_ok is not None else float("nan"):.1f} s (need <= 14)')
+    late = d.statuses(15.0)
     bad = sorted({(level_of(s), s.message) for s in late if level_of(s) != OK})
-    check(results, len(late) >= 25 and not bad,
-          f'/diagnostics statuses after t = 10 s that are not OK: {sum(1 for s in late if level_of(s) != OK)} of '
-          f'{len(late)} (need 0 of >= 25): {bad[:3] if bad else "none"}')
+    check(results, len(late) >= 20 and not bad,
+          f'/diagnostics statuses after t = 15 s that are not OK: {sum(1 for s in late if level_of(s) != OK)} of '
+          f'{len(late)} (need 0 of >= 20): {bad[:3] if bad else "none"}')
     mf = [float(values_of(s)['match_fraction']) for s in late if values_of(s).get('match_fraction', 'n/a') != 'n/a']
     check(results, len(mf) == len(late) and bool(mf) and min(mf) >= 0.65,
           f'match_fraction in those statuses: min {min(mf) if mf else float("nan"):.3f}, '
@@ -703,18 +724,19 @@ def scenario_ndt3d_track(d, results):
         print(f'  n_eff / particles in those statuses (not a health signal for ndt3d): min {min(ne):.4f}, '
               f'median {sorted(ne)[len(ne) // 2]:.4f}, max {max(ne):.4f}')
     log = node_log('ndt3d_track')
-    check(results, 'but ndt3d uses only' not in log,
-          'no startup WARN about the sensor transform (lidar level, TF z = base_height, yaw 0.3 rad)'
-          + ('' if 'but ndt3d uses only' not in log else ': the WARN was logged'))
+    said = TILT_WARN in log or HEIGHT_INFO in log
+    check(results, not said,
+          'no startup message about the sensor transform (lidar level, TF z = base_height, yaw 0.3 rad)'
+          + (': one was logged' if said else ''))
 
 
 def scenario_ndt3d_kidnap(d, results):
     t_k, end = 20.0, 34.0
     d.run3d(end, kidnap_at=t_k)
-    before = d.statuses(10.0, t_k)
+    before = d.statuses(15.0, t_k)
     bad = [s.message for s in before if level_of(s) != OK]
-    check(results, len(before) >= 8 and not bad,
-          f'statuses from t = 10 s to the kidnap that are not OK: {len(bad)} of {len(before)} (need 0 of >= 8)'
+    check(results, len(before) >= 4 and not bad,
+          f'statuses from t = 15 s to the kidnap that are not OK: {len(bad)} of {len(before)} (need 0 of >= 4)'
           + (f' ("{bad[0]}")' if bad else ''))
     errs = [e[1] for e in d.errors() if e[0] > t_k + 2.0]
     check(results, bool(errs) and min(errs) > 1.0,
@@ -733,12 +755,22 @@ def scenario_ndt3d_kidnap(d, results):
 def scenario_ndt3d_off_map(d, results):
     move_at = 6.0
     d.run3d(15.0, ip_offset=(100.0, 0.0, 0.0), move_at=move_at)
+    pre = d.statuses(-60.0, 0.9)
+    early = [s.message for s in pre if NOT_VERIFIED in s.message or level_of(s) != OK]
+    check(results, len(pre) >= 1 and not early,
+          f'before /initialpose (no pose seed yet): statuses that are not OK: {len(early)} of {len(pre)} (need 0 of >= 1)'
+          + (f' ("{early[0]}")' if early else ''))
     standing = d.statuses(2.5, move_at)
     judged = [s for s in standing if values_of(s).get('match_fraction') != 'n/a' or LOW_MATCH in s.message]
     check(results, len(standing) >= 2 and not judged,
-          f'standing after /initialpose (only the reseed update has run): statuses with a match_fraction or the WARN: '
-          f'{len(judged)} of {len(standing)} (need 0 of >= 2)'
+          f'standing after /initialpose (only the reseed update has run): statuses with a match_fraction or the '
+          f'low-match WARN: {len(judged)} of {len(standing)} (need 0 of >= 2)'
           + (f' ("{judged[0].message}", match_fraction {values_of(judged[0]).get("match_fraction")})' if judged else ''))
+    unv = [s for s in standing if level_of(s) == WARN and s.message.startswith(NOT_VERIFIED + ': 0 of 15 filter')
+           and values_of(s).get('match_updates_since_reseed') == '0']
+    check(results, len(standing) >= 2 and len(unv) == len(standing),
+          f'standing after /initialpose: statuses that WARN "{NOT_VERIFIED}: 0 of 15 ...": {len(unv)} of {len(standing)} '
+          '(need all)' + (f' ("{standing[-1].message}")' if standing else ''))
     late = d.statuses(move_at + 3.0)
     n_warn = sum(1 for s in late if level_of(s) == WARN and LOW_MATCH + ': 0.000' in s.message)
     check(results, len(late) >= 4 and n_warn == len(late),
@@ -756,43 +788,85 @@ def scenario_ndt3d_off_map(d, results):
 def scenario_ndt3d_base_height(d, results):
     d.run3d(12.0)
     log = node_log('ndt3d_base_height')
-    n = log.count('but ndt3d uses only')
-    check(results, n == 1 and 'has z 0.500 m' in log and 'base_height = 0.000 m' in log
-          and 'differs from base_height' in log and 'The tilt is ignored' not in log,
-          f'startup WARN about the ignored TF z (z 0.500 m against base_height 0.000 m), logged once, no tilt: {n} time(s)')
+    lines = [ln for ln in log.splitlines() if HEIGHT_INFO in ln]
+    check(results, len(lines) == 1 and '[INFO]' in lines[0] and 'has z 0.500 m and base_height is 0.000 m' in lines[0]
+          and TILT_WARN not in log,
+          f'startup INFO giving the TF z and base_height (z 0.500 m, base_height 0.000 m), logged once, no tilt WARN: '
+          f'{len(lines)} line(s)' + (f' ("{lines[0][:60]}...")' if lines else ''))
     late = d.statuses(6.0)
     n_warn = sum(1 for s in late if level_of(s) == WARN and LOW_MATCH in s.message and 'base_height' in s.message
-                 and 'min_match_fraction 0.900)' in s.message)
+                 and 'min_match_fraction 0.650)' in s.message)
     check(results, len(late) >= 4 and n_warn == len(late),
           f'base_height left at 0 with the lidar at 0.5 m: statuses from t = 6 s that WARN "{LOW_MATCH} ... '
-          f'min_match_fraction 0.900": {n_warn} of {len(late)} (need all of >= 4)'
+          f'min_match_fraction 0.650": {n_warn} of {len(late)} (need all of >= 4)'
           + (f' ("{late[-1].message}")' if late else ''))
 
 
 def scenario_ndt3d_tilt(d, results):
     d.run3d(5.0)
     log = node_log('ndt3d_tilt')
-    n = log.count('but ndt3d uses only')
-    check(results, n == 1 and 'pitch 0.100 rad' in log and 'The tilt is ignored' in log
-          and 'differs from base_height' not in log,
-          f'startup WARN about the ignored tilt (lidar pitched 0.1 rad, z = base_height), logged once: {n} time(s)')
-    got = d.get_params(['min_neff_fraction', 'min_match_fraction'])
-    check(results, got == [0.0, 0.65],
-          f'in-code defaults for ndt3d (YAML without the two keys): min_neff_fraction, min_match_fraction = {got} '
-          '(need [0.0, 0.65])')
+    lines = [ln for ln in log.splitlines() if TILT_WARN in ln]
+    check(results, len(lines) == 1 and '[WARN]' in lines[0] and 'pitch 0.100 rad' in lines[0] and HEIGHT_INFO not in log,
+          f'startup WARN about the ignored tilt (lidar pitched 0.1 rad, z = base_height), logged once, no height '
+          f'message: {len(lines)} line(s)')
+    got = d.get_params(['min_neff_fraction', 'min_match_fraction', 'match_verify_updates'])
+    check(results, got == [0.0, 0.65, 15],
+          f'in-code defaults for ndt3d (YAML without the three keys): min_neff_fraction, min_match_fraction, '
+          f'match_verify_updates = {got} (need [0.0, 0.65, 15])')
+
+
+def scenario_ndt3d_strict(d, results):
+    d.run3d(12.0)
+    late = d.statuses(6.0)
+    n_warn = sum(1 for s in late if level_of(s) == WARN and LOW_MATCH in s.message and 'min_match_fraction 0.950)' in s.message)
+    check(results, len(late) >= 4 and n_warn == len(late),
+          f'healthy tracking with min_match_fraction 0.95: statuses from t = 6 s that WARN "{LOW_MATCH} ... '
+          f'min_match_fraction 0.950": {n_warn} of {len(late)} (need all of >= 4)'
+          + (f' ("{late[-1].message}")' if late else ''))
+    errs = [e[1] for e in d.errors() if e[0] > 6.0]
+    check(results, bool(errs) and max(errs) <= 0.5, f'and the pose is fine: max position error after 6 s '
+          f'{max(errs) if errs else float("nan"):.3f} m (need <= 0.5)')
+
+
+def scenario_ndt3d_off(d, results):
+    d.run3d(9.0, ip_offset=(100.0, 0.0, 0.0))
+    late = d.statuses(2.5)
+    bad = [s.message for s in late if level_of(s) != OK]
+    check(results, len(late) >= 5 and not bad,
+          f'min_match_fraction 0, pose 100 m off the map: statuses from t = 2.5 s that are not OK: {len(bad)} of '
+          f'{len(late)} (need 0 of >= 5: the check is off)' + (f' ("{bad[0]}")' if bad else ''))
+    v = values_of(late[-1]) if late else {}
+    check(results, v.get('match_fraction') == '0.000',
+          f'and the value is still reported: match_fraction {v.get("match_fraction")} (need 0.000)')
+
+
+def scenario_ndt3d_verify3(d, results):
+    d.run3d(10.0)
+    unv = [s.message for m, s in d.diags if s.message.startswith(NOT_VERIFIED)]
+    check(results, bool(unv) and all(' of 3 filter updates' in m for m in unv),
+          f'"{NOT_VERIFIED}" statuses, all counting "of 3": {len(unv)} (need >= 1)' + (f' ("{unv[0][:70]}...")' if unv else ''))
+    late = d.statuses(6.0)
+    bad = [s.message for s in late if level_of(s) != OK]
+    check(results, len(late) >= 3 and not bad,
+          f'healthy tracking with match_verify_updates 3: statuses from t = 6 s that are not OK: {len(bad)} of {len(late)} '
+          '(need 0 of >= 3)' + (f' ("{bad[0]}")' if bad else ''))
 
 
 NDT3D_SCENARIOS = {'ndt3d_track': scenario_ndt3d_track, 'ndt3d_kidnap': scenario_ndt3d_kidnap,
                    'ndt3d_off_map': scenario_ndt3d_off_map, 'ndt3d_base_height': scenario_ndt3d_base_height,
-                   'ndt3d_tilt': scenario_ndt3d_tilt}
+                   'ndt3d_tilt': scenario_ndt3d_tilt, 'ndt3d_strict': scenario_ndt3d_strict,
+                   'ndt3d_verify3': scenario_ndt3d_verify3, 'ndt3d_off': scenario_ndt3d_off}
 WORLD_PCD = 'e2e_world3d.pcd'
 
 
 SCENARIO_ARGS = {'reloc_gate': ['try_global_localization:=true', 'bbs_verify_min_translation:=0.3',
                                 'bbs_verify_min_rotation:=0.3'],
-                 'ndt3d_base_height': ['base_height:=0.0', 'min_match_fraction:=0.9']}
+                 'ndt3d_base_height': ['base_height:=0.0'],
+                 'ndt3d_strict': ['min_match_fraction:=0.95', 'match_verify_updates:=0'],
+                 'ndt3d_verify3': ['match_verify_updates:=3'],
+                 'ndt3d_off': ['min_match_fraction:=0.0']}
 # YAML keys left out for a scenario, so that the node's own defaults apply.
-SCENARIO_DROP_KEYS = {'ndt3d_tilt': ['min_neff_fraction', 'min_match_fraction']}
+SCENARIO_DROP_KEYS = {'ndt3d_tilt': ['min_neff_fraction', 'min_match_fraction', 'match_verify_updates']}
 
 
 SCENARIOS = {'track': scenario_track, 'gap': scenario_gap, 'no_odom': scenario_no_odom,

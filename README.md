@@ -70,9 +70,10 @@ It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. With `ndt3d.yaml` the same script drives `ndt3d` in the 3D version of
 that world (16-ring lidar, prior map sampled from the same surfaces) and asserts position
-error ≤ 0.5 m after 10 s and ≤ 0.25 m after 30 s, yaw error ≤ 0.05 rad, an OK status
-throughout healthy tracking, and the `low scan-to-map match` WARN after a kidnap, for a
-pose off the map and for a wrong `base_height`. This is a ROS-path check on synthetic
+error ≤ 0.5 m after 10 s and ≤ 0.25 m after 30 s, yaw error ≤ 0.05 rad, the `pose not
+verified` WARN after `/initialpose` and an OK status from then on in healthy tracking,
+and the `low scan-to-map match` WARN after a kidnap, for a pose off the map and for a
+wrong `base_height`. This is a ROS-path check on synthetic
 data, not a field result.
 [`scripts/fusion_extrinsic_check.py`](scripts/fusion_extrinsic_check.py) feeds `fusion3d`
 a robot that stands, or turns on the spot, with its lidar, IMU and GNSS antenna mounted
@@ -232,12 +233,12 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 | Level | `prism_loc` (laser2d / ndt3d) | `prism_loc_fusion` (fusion3d) |
 |---|---|---|
 | ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped; IMU not used after `startup_timeout_s` because its mount is unknown (empty `frame_id`, or no transform `base_link -> <imu frame>`) |
-| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction` (laser2d; off by default for ndt3d); ndt3d: scan-to-map match below `min_match_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time`; point clouds or GNSS fixes not used because their mount is unknown (the IMU likewise, within `startup_timeout_s`) |
+| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction` (laser2d; off by default for ndt3d); ndt3d: scan-to-map match below `min_match_fraction`, or pose not verified since the last reseed; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time`; point clouds or GNSS fixes not used because their mount is unknown (the IMU likewise, within `startup_timeout_s`) |
 
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
-`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction` (ndt3d only); `imu_rate_hz`,
+`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
@@ -253,27 +254,69 @@ the NDT likelihood one particle takes nearly all the weight at every update of a
 run, and when no scan point falls in a map cell all particles weigh the same. `ndt3d`
 therefore reports `match_fraction`: the share of the scored scan points that lie within
 3 standard deviations of the NDT cell they fall in, at the published pose, averaged over
-the last 5 filter updates (it is not judged on the update forced by `/initialpose`). The
-status WARNs `low scan-to-map match` while it is below `min_match_fraction` (0.65).
-Measured with the `ndt3d` model and the shipped parameters on the 3D synthetic world
-that `scripts/synthetic_e2e.py` uses (75 s runs made outside CI; statuses after t = 10 s):
+the last 5 filter updates. Three states follow from it:
 
-| Run | `match_fraction` | n_eff / particles | Status |
-|---|---|---|---|
-| healthy, 4 seeds (largest pose error after 10 s 0.09 – 0.43 m, after 30 s ≤ 0.17 m) | 0.747 – 0.883 | 0.002 – 0.004 | OK in 260 of 260 |
-| healthy, prior map with 2 cm of noise | 0.972 – 0.998 | 0.002 – 0.004 | OK in 65 of 65 |
-| kidnapped (2 runs; pose error 2 – 8 m), from 5 s after the kidnap | 0.331 – 0.626 | 0.002 – 0.007 | WARN in 70 of 70; first WARN at most 2.0 s after the kidnap; OK in 50 of 50 before it |
-| initial pose 3.6 m and 1 rad off | 0.229 – 0.561 | 0.002 – 0.005 | WARN in 65 of 65 |
-| pose off the map (no overlap) | 0.000 | 1.000 | WARN in 65 of 65 |
-| `base_height` 0.5 m too low (pose error still ≤ 0.24 m) | 0.345 – 0.443 | 0.002 – 0.002 | WARN in 65 of 65 |
+| Status | When |
+|---|---|
+| WARN `low scan-to-map match: ...` | `match_fraction` below `min_match_fraction` (0.65) |
+| WARN `pose not verified since the last reseed: N of 15 ...` | after `/initialpose` (or `set_initial_pose`), until `match_verify_updates` (15) filter updates have been judged, about 3 m of travel; a robot that stands still stays here. A wrong initial pose can match well for its first updates |
+| OK `localizing` | otherwise |
 
-Limits: these are 11 runs of one synthetic world; a pose error under about half
-an NDT cell is not detected (an initial pose 1.3 m and 0.35 rad off stayed more than
-0.3 m off for 15 s, up to 0.47 m after t = 10 s, with `match_fraction`
-0.763 – 0.851 and status OK); the value is that of
-the last filter update, so it does not change while the robot stands still; and objects
-that are not in the map lower the healthy value, so read `match_fraction` on a known-good
-run at your site and set `min_match_fraction` below it.
+**OK is not proof that the pose is right.** The signal is a classifier with these measured
+rates, as shares of all filter updates of the runs named (offline replica: the filter core
+driven by synthetic clouds of the world `scripts/synthetic_e2e.py` uses; 4 seeds per case;
+no part of a run left out unless stated):
+
+| Runs | OK | not verified | low match | OK while > 1 m off | OK while > 0.3 m off | low match while < 0.15 m off |
+|---|---|---|---|---|---|---|
+| healthy, exact prior map; 0.5x to 3x speed, sparser lidars (24 runs) | 90.1 % | 8.3 % | 1.7 % | 0 | 2.3 % | 0.1 % |
+| healthy, 2 or 5 cm of noise on the prior map (8) | 88.5 % | 11.5 % | 0 | 0 | 0.2 % | 0 |
+| healthy, scene differs from the exact map: 6 or 15 moving columns, boxes added or removed, 3 or 5 cm range noise (24) | 75.2 % | 11.4 % | 13.4 % | 0 | 3.2 % | **11.7 %** |
+| the same with 2 cm of noise on the prior map (24) | 88.5 % | 11.5 % | 0.1 % | 0 | 0.8 % | 0.1 % |
+| kidnapped, exact map, every update after the kidnap (8) | 8.4 % | 0 | 91.6 % | **2.7 %**, at most 4 updates in a row | 7.0 % | 0 |
+| kidnapped, 2 or 5 cm map noise (12) | 24.1 % | 0 | 75.9 % | **6.8 %**, up to 15 updates in a row (9 s) | 21.5 % | 0 |
+| `/initialpose` 3.6 m and 1 rad off, exact map, every update (4) | 0.8 % | 8.2 % | 91.0 % | 0 (7.8 % without the "not verified" state) | 0.8 % | 0 |
+| the same, 2 or 5 cm map noise (8) | 58.8 % | 9.7 % | 31.5 % | 0 (9.3 % without it) | 9.8 % | 0.2 % |
+| `/initialpose` 0.3 to 1.0 m off (28) | 88.1 % | 11.5 % | 0.5 % | 0 | 4.6 % | 0 |
+| pose off the map (4) | 0 | 0 | 100 % | 0 | 0 | 0 |
+| `base_height` 5 or 10 cm wrong, pose fine (8) | 0 | 0 | 100 % | 0 | 0 | 82.9 % (a true mismatch, not of x and y) |
+
+What these numbers say:
+- **Missed.** A kidnapped robot reads OK in 3 to 7 % of the updates, for up to 9 s at a
+  time on a thick (noisy) map, where lost poses match better (up to 0.75; 0.71 on the
+  exact map) and healthy ones too (0.89 to 1.0). An offset of up to about one NDT cell is
+  not detected at all: with
+  `/initialpose` 0.5 or 1.0 m off, 8 of 28 runs were still 0.5 to 0.87 m off for up to 7 s
+  after the status had turned OK.
+- **False alarms.** On an exact (thin) map, objects that are not in the map and range noise
+  of a few centimetres bring a healthy run under 0.65: 15 moving columns 35 % of the
+  updates, 5 boxes added and 1 removed 21 %, 5 cm range noise 20 %, 2 boxes added 3 %,
+  6 columns 1 %, 3 cm range noise 0. With 2 cm of noise on the map all of these are at
+  most 0.5 %.
+- **The default.** At 0.70 the kidnapped misses fall to 0.9 % (exact map) and 4.6 %
+  (noisy map), and the false alarms of the third row rise from 13 % to 41 %. 0.65 is kept;
+  it has to be set per site.
+- **Setting it.** Drive a known-good lap, read the value
+  (`ros2 topic echo /diagnostics | grep -A1 match_fraction`), take its minimum and set
+  `min_match_fraction` 0.03 to 0.05 below that minimum, not lower: lost poses in the
+  table above reached 0.75 (0.78 on the node, below), so a threshold far below the healthy
+  minimum gives the misses room.
+- The value is that of the last filter update: it does not change while the robot stands.
+
+Through `/diagnostics` on the node (pairing harness without strata, 75 s per run, every
+status from t = 2 s on):
+
+| Runs | statuses | OK | not verified | low match | OK while > 1 m off | OK while > 0.3 m off | `match_fraction` |
+|---|---|---|---|---|---|---|---|
+| healthy, exact map, 4 seeds | 292 | 260 | 32 | 0 | 0 | 8 | 0.732 – 0.888 |
+| healthy, 2 cm and 5 cm map noise | 146 | 130 | 16 | 0 | 0 | 0 | 0.944 – 1.000 |
+| kidnapped at 40 s / 30 s, exact map (2 runs), statuses after the kidnap | 80 | 1 | 0 | 79 | 1 | 1 | 0.329 – 0.719 |
+| kidnapped at 30 s, 5 cm map noise, statuses after the kidnap | 45 | 2 | 0 | 43 | 2 | 2 | 0.351 – 0.782 |
+| `/initialpose` 3.6 m and 1 rad off, exact map | 73 | 0 | 3 | 70 | 0 | 0 | 0.233 – 0.677 |
+| the same, 2 cm and 5 cm map noise | 146 | 80 | 14 | 52 | 0 | 22 | 0.232 – 1.000 |
+| `/initialpose` 0.5 m, 1.0 m, and 1.3 m with 0.35 rad off | 219 | 194 | 25 | 0 | 0 | 18 | 0.730 – 0.876 |
+| pose off the map | 73 | 0 | 0 | 73 | 0 | 0 | 0.000 – 0.000 |
+| `base_height` 0.5 m too low | 73 | 0 | 0 | 73 | 0 | 0 | 0.328 – 0.462 |
 
 Status names follow the `diagnostic_updater` convention: `<node name>: ...` with the
 namespace as `hardware_id`. In a multi-robot setup either namespace or remap

@@ -148,7 +148,10 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     // /diagnostics: WARN while the mean share of scan points that lie on mapped surfaces,
     // over the last motion updates, is below this (0 disables the check).
     min_match_fraction_ = declare_parameter<double>("min_match_fraction", min_match_fraction_);
-    validateNdtParams(res, minpts, np3, min_match_fraction_);
+    // /diagnostics: after a reseed, WARN "pose not verified" until this many filter updates
+    // have been judged (0 disables; nothing is reported either when min_match_fraction is 0).
+    match_verify_updates_ = declare_parameter<int>("match_verify_updates", match_verify_updates_);
+    validateNdtParams(res, minpts, np3, min_match_fraction_, match_verify_updates_);
     if (pcd.empty()) {
       RCLCPP_ERROR(get_logger(), "ndt3d: map_pcd_path is empty");
       throw std::runtime_error(
@@ -302,6 +305,13 @@ void LocalizationNode::onDiagnostics() {
                   "min_match_fraction %.3f) - the pose, base_height, the lidar's tilt or the map may be wrong",
                   match_.mean(), match_.size(), last_match_points_, min_match_fraction_);
     warnings.emplace_back(buf);
+  } else if (!laser && filter_init_ && min_match_fraction_ > 0.0 &&
+             !match_.verified(static_cast<std::size_t>(match_verify_updates_))) {
+    std::snprintf(buf, sizeof(buf), "pose not verified since the last reseed: %zu of %d filter "
+                  "updates judged (an update needs %.2f m or %.2f rad of motion); a wrong "
+                  "initial pose can match well at first",
+                  match_.sinceReseed(), match_verify_updates_, update_min_d_, update_min_a_);
+    warnings.emplace_back(buf);
   }
   if (zero_stamp_inputs_ > 0) {
     std::snprintf(buf, sizeof(buf), "%ld %s with a zero header stamp dropped in the last second",
@@ -360,7 +370,10 @@ void LocalizationNode::onDiagnostics() {
   kv("relocalization_scans_skipped",
      std::to_string(reloc_verifier_ ? reloc_verifier_->scansSkipped() : 0));
   kv("use_sim_time", sim_time ? "true" : "false");
-  if (!laser) kv("match_fraction", match_.size() > 0 ? num(match_.mean(), "%.3f") : std::string("n/a"));
+  if (!laser) {
+    kv("match_fraction", match_.size() > 0 ? num(match_.mean(), "%.3f") : std::string("n/a"));
+    kv("match_updates_since_reseed", std::to_string(match_.sinceReseed()));
+  }
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
   arr.status.push_back(st);
@@ -557,16 +570,21 @@ void LocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr m
     double roll = 0.0, pitch = 0.0, yaw = 0.0;
     tf2::Matrix3x3(tf2::Quaternion(q.x, q.y, q.z, q.w)).getRPY(roll, pitch, yaw);
     const IgnoredSensorTf ig = ignoredSensorTf(roll, pitch, sensor_tf.translation.z, base_height_);
-    if (ig.any())
+    if (ig.tilt)
       RCLCPP_WARN(get_logger(),
-                  "ndt3d: %s -> %s has z %.3f m, roll %.3f rad, pitch %.3f rad, but ndt3d uses only "
-                  "its x, y and yaw and takes the sensor to be level at map height base_height = "
-                  "%.3f m.%s%s",
-                  base_frame_.c_str(), msg->header.frame_id.c_str(), sensor_tf.translation.z, roll,
-                  pitch, base_height_,
-                  ig.tilt ? " The tilt is ignored: the clouds are matched as if the sensor were level." : "",
-                  ig.height ? " z is ignored and differs from base_height: check that base_height is the "
-                              "sensor's z in the map frame (not the robot's height)." : "");
+                  "ndt3d: %s -> %s is tilted (roll %.3f rad, pitch %.3f rad), but ndt3d uses only "
+                  "the x, y and yaw of that transform: the clouds are matched as if the sensor were "
+                  "level",
+                  base_frame_.c_str(), msg->header.frame_id.c_str(), roll, pitch);
+    // Not a fault by itself: the two heights differ whenever base_frame is not at map z = 0.
+    if (ig.height)
+      RCLCPP_INFO(get_logger(),
+                  "ndt3d: %s -> %s has z %.3f m and base_height is %.3f m. ndt3d does not use that "
+                  "z: it places the sensor at map z = base_height. The two differ on any robot "
+                  "whose %s is not at map z = 0; make sure base_height is the sensor's z in the map "
+                  "frame (not the robot's height)",
+                  base_frame_.c_str(), msg->header.frame_id.c_str(), sensor_tf.translation.z,
+                  base_height_, base_frame_.c_str());
   }
   ndt_model_->setCloud(fromPointCloud2(*msg), sib);
   runUpdate(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
