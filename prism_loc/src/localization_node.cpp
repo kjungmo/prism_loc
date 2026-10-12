@@ -8,6 +8,7 @@
 #include "prism_loc/param_validation.hpp"
 #include "prism_loc/tf_wait.hpp"
 #include <tf2/time.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
 namespace prism_loc {
 using prism_loc_core::Pose2D;
@@ -38,9 +39,10 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
   input_timeout_periods_ = np.input_timeout_periods =
       declare_parameter<double>("input_timeout_periods", np.input_timeout_periods);
   // Warn when the effective sample size of the last correction falls below this share of
-  // the particle count (0 disables the check).
+  // the particle count (0 disables the check). Off by default for ndt3d, where n_eff says
+  // nothing about tracking health (ndt_status.hpp); min_match_fraction is its check.
   min_neff_fraction_ = np.min_neff_fraction =
-      declare_parameter<double>("min_neff_fraction", np.min_neff_fraction);
+      declare_parameter<double>("min_neff_fraction", defaultMinNeffFraction(backend_));
   validateNodeParams(np);
 
   prism_loc_core::ParticleFilterParams pp;
@@ -142,8 +144,14 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     const int minpts = declare_parameter<int>("voxel_min_points", 5);
     prism_loc_core::NdtParams np3;
     np3.max_points = declare_parameter<int>("max_points", 500);
-    np3.base_height = declare_parameter<double>("base_height", 0.0);
-    validateNdtParams(res, minpts, np3);
+    base_height_ = np3.base_height = declare_parameter<double>("base_height", 0.0);
+    // /diagnostics: WARN while the mean share of scan points that lie on mapped surfaces,
+    // over the last motion updates, is below this (0 disables the check).
+    min_match_fraction_ = declare_parameter<double>("min_match_fraction", min_match_fraction_);
+    // /diagnostics: after a reseed, WARN "pose not verified" until this many filter updates
+    // have been judged (0 disables; nothing is reported either when min_match_fraction is 0).
+    match_verify_updates_ = declare_parameter<int>("match_verify_updates", match_verify_updates_);
+    validateNdtParams(res, minpts, np3, min_match_fraction_, match_verify_updates_);
     if (pcd.empty()) {
       RCLCPP_ERROR(get_logger(), "ndt3d: map_pcd_path is empty");
       throw std::runtime_error(
@@ -291,6 +299,20 @@ void LocalizationNode::onDiagnostics() {
                   last_neff_, last_n_);
     warnings.emplace_back(buf);
   }
+  if (!laser && match_.low(min_match_fraction_)) {
+    std::snprintf(buf, sizeof(buf), "low scan-to-map match: %.3f of the scan points lie on mapped "
+                  "surfaces (mean of the last %zu update(s), %d points at the last one; "
+                  "min_match_fraction %.3f) - the pose, base_height, the lidar's tilt or the map may be wrong",
+                  match_.mean(), match_.size(), last_match_points_, min_match_fraction_);
+    warnings.emplace_back(buf);
+  } else if (!laser && filter_init_ && min_match_fraction_ > 0.0 &&
+             !match_.verified(static_cast<std::size_t>(match_verify_updates_))) {
+    std::snprintf(buf, sizeof(buf), "pose not verified since the last reseed: %zu of %d filter "
+                  "updates judged (an update needs %.2f m or %.2f rad of motion); a wrong "
+                  "initial pose can match well at first",
+                  match_.sinceReseed(), match_verify_updates_, update_min_d_, update_min_a_);
+    warnings.emplace_back(buf);
+  }
   if (zero_stamp_inputs_ > 0) {
     std::snprintf(buf, sizeof(buf), "%ld %s with a zero header stamp dropped in the last second",
                   zero_stamp_inputs_, input_name);
@@ -348,6 +370,10 @@ void LocalizationNode::onDiagnostics() {
   kv("relocalization_scans_skipped",
      std::to_string(reloc_verifier_ ? reloc_verifier_->scansSkipped() : 0));
   kv("use_sim_time", sim_time ? "true" : "false");
+  if (!laser) {
+    kv("match_fraction", match_.size() > 0 ? num(match_.mean(), "%.3f") : std::string("n/a"));
+    kv("match_updates_since_reseed", std::to_string(match_.sinceReseed()));
+  }
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
   arr.status.push_back(st);
@@ -386,10 +412,12 @@ bool LocalizationNode::lookupOdom(const rclcpp::Time& stamp, Pose2D& odom_base) 
   }
 }
 
-bool LocalizationNode::lookupSensor(const std::string& sensor_frame, Pose2D& sensor_in_base) {
+bool LocalizationNode::lookupSensor(const std::string& sensor_frame, Pose2D& sensor_in_base,
+                                    geometry_msgs::msg::Transform* full) {
   try {
     auto tf = tf_buffer_->lookupTransform(base_frame_, sensor_frame, tf2::TimePointZero);
     sensor_in_base = toPose2D(tf.transform);
+    if (full) *full = tf.transform;
     return true;
   } catch (const std::exception& e) {
     ++sensor_tf_failures_;
@@ -533,7 +561,31 @@ void LocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr m
     return;
   }
   Pose2D sib;
-  if (!lookupSensor(msg->header.frame_id, sib)) return;
+  geometry_msgs::msg::Transform sensor_tf;
+  if (!lookupSensor(msg->header.frame_id, sib, &sensor_tf)) return;
+  if (msg->header.frame_id != sensor_tf_checked_) {
+    // Once per cloud frame: say which parts of its transform ndt3d does not use.
+    sensor_tf_checked_ = msg->header.frame_id;
+    const auto& q = sensor_tf.rotation;
+    double roll = 0.0, pitch = 0.0, yaw = 0.0;
+    tf2::Matrix3x3(tf2::Quaternion(q.x, q.y, q.z, q.w)).getRPY(roll, pitch, yaw);
+    const IgnoredSensorTf ig = ignoredSensorTf(roll, pitch, sensor_tf.translation.z, base_height_);
+    if (ig.tilt)
+      RCLCPP_WARN(get_logger(),
+                  "ndt3d: %s -> %s is tilted (roll %.3f rad, pitch %.3f rad), but ndt3d uses only "
+                  "the x, y and yaw of that transform: the clouds are matched as if the sensor were "
+                  "level",
+                  base_frame_.c_str(), msg->header.frame_id.c_str(), roll, pitch);
+    // Not a fault by itself: the two heights differ whenever base_frame is not at map z = 0.
+    if (ig.height)
+      RCLCPP_INFO(get_logger(),
+                  "ndt3d: %s -> %s has z %.3f m and base_height is %.3f m. ndt3d does not use that "
+                  "z: it places the sensor at map z = base_height. The two differ on any robot "
+                  "whose %s is not at map z = 0; make sure base_height is the sensor's z in the map "
+                  "frame (not the robot's height)",
+                  base_frame_.c_str(), msg->header.frame_id.c_str(), sensor_tf.translation.z,
+                  base_height_, base_frame_.c_str());
+  }
   ndt_model_->setCloud(fromPointCloud2(*msg), sib);
   runUpdate(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
 }
@@ -604,6 +656,7 @@ void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {
   const bool moved = dd >= update_min_d_ || da >= update_min_a_;
 
   if (force_update_ || moved) {
+    const bool reseeded = force_update_;
     pf_->predict(*motion_, last_odom_, odom_base);
     if (backend_ == "laser2d") pf_->correct(*laser_model_);
     else pf_->correct(*ndt_model_);
@@ -621,6 +674,12 @@ void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {
     last_odom_ = odom_base;
     force_update_ = false;
     const Pose2D base_in_map = pf_->estimate(&last_cov_);
+    if (backend_ == "ndt3d") {
+      // Diagnostic only: nothing here feeds the filter.
+      const prism_loc_core::NdtMatchStats ms = ndt_model_->matchStats(base_in_map);
+      match_.update(reseeded, ms.fraction());
+      last_match_points_ = ms.points;
+    }
     map_odom_ = prism_loc_core::compose(base_in_map, prism_loc_core::inverse(odom_base));
     have_map_odom_ = true;
     any_update_ = true;

@@ -9,7 +9,7 @@
     ndt_resolution: 1.0               # m: NDT voxel (cell) edge length for the map
     voxel_min_points: 5               # count: min points per voxel to form a valid NDT cell
     max_points: 500                   # count: scan points subsampled per measurement update
-    base_height: 0.0                  # m: assumed sensor/base height above the map ground plane
+    base_height: 0.0                  # m: z of the LIDAR in the map frame (its height above a map ground plane at z = 0), not the robot's height; the TF's z, roll, pitch are not used
     min_particles: 500                # count: lower bound on the particle set size
     max_particles: 2000               # count: upper bound on the particle set size
     resample_threshold: 0.5           # fraction: resample when Neff < threshold * N
@@ -30,4 +30,6 @@
     startup_timeout_s: 30.0           # s: /diagnostics grace before a missing map/input/pose seed is an ERROR
     input_timeout_s: 1.0              # s: /diagnostics ERROR when input stops for max(this, periods x input period)
     input_timeout_periods: 5.0        # count: input periods of silence before /diagnostics reports input stopped
-    min_neff_fraction: 0.005          # fraction: /diagnostics WARN when Neff/N at an update falls below this (0 = off)
+    min_neff_fraction: 0.0            # fraction: /diagnostics WARN when Neff/N at an update falls below this (0 = off; off for ndt3d, where Neff is 1 of 500 in healthy tracking)
+    min_match_fraction: 0.65          # fraction: /diagnostics WARN when the share of scan points on mapped surfaces (mean of the last 5 updates) falls below this (0 = off). Set it just under the lowest match_fraction of a known-good run on your site
+    match_verify_updates: 15          # count: after /initialpose, /diagnostics WARNs "pose not verified" until this many filter updates have been judged (0 = off)
