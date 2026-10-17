@@ -74,11 +74,13 @@ a robot that stands, or turns on the spot, with its lidar, IMU and GNSS antenna 
 off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad, the
 `/diagnostics` status when a mount is missing from TF, and, on GNSS and IMU alone with
 sensor noise, height, tilt and heading within 0.15 m, 0.03 rad and 0.05 rad and a
-horizontal error within twice the reported sigma (see
-[Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build of the two
-fusion packages.
-GoogleTest cases: 45 in `prism_loc_core`, 20 in `prism_loc_fusion`, 18 in
-`prism_loc`, 24 in `prism_loc_fusion_ros` (107 in total).
+horizontal error within twice the reported sigma; with a constant gyro bias (45 s), across a
+reseed and from a start before the antenna mount is known, height and tilt within the same
+bounds, heading within 0.05 rad plus the vertical bias times the time, and a horizontal error
+within 3 sigma (see [Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build
+of the two fusion packages; the whole script takes about 9 minutes.
+GoogleTest cases: 45 in `prism_loc_core`, 26 in `prism_loc_fusion`, 18 in
+`prism_loc`, 24 in `prism_loc_fusion_ros` (113 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -357,19 +359,55 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   measurement noise (`pose_pos_std`) is used unchanged for the pose of `base_frame`: with
   a lever arm `t`, an error `δ` in the registered attitude adds about `|t|·δ` of position
   error that the filter does not model.
-- **GNSS antenna off `base_frame`.** A fix corrects position, velocity and accelerometer
-  bias. It does not correct attitude or gyro bias (they are "consider" states of this
-  update: their uncertainty limits how far the fix is trusted, through the lever arm). A
-  single antenna does not observe the heading, and correcting attitude from it made the
-  heading drift and, right after a reseed, tilted the filter. Attitude is left to the IMU
-  and the lidar. What follows: the position of `base_frame` is known to about the
-  horizontal lever arm times the heading error, and the reported covariance says so.
-  Measured on the node with GNSS and IMU only (noise 0.02 m/s², 0.002 rad/s, 0.02 m; 30 s;
-  antennas at (0.5, 0, 1.0) and (−0.3, 0.2, 1.0); standing and turning; 16 runs, heading
-  exact at the start): height error ≤ 0.02 m, tilt ≤ 0.003 rad, heading ≤ 0.002 rad,
-  horizontal error ≤ 0.03 m. In the pairing runs with a 0.1 rad heading error the
-  horizontal error was 0.08 – 0.09 m for a 0.5 m lever arm. Seeding from the first fix
-  uses the attitude the filter starts with.
+- **GNSS antenna off `base_frame`.** The fix is fused as the position of the antenna,
+  `p + R·t`, with the full Jacobian. It corrects position, velocity, accelerometer bias, roll,
+  pitch and the two horizontal gyro biases. It does **not** correct the heading and the
+  vertical gyro bias unless the robot travels faster than 0.6 m/s: while it stands, turns on
+  the spot or creeps, they are "consider" states (their uncertainty limits how far the fix is
+  trusted, through the lever arm). A single antenna does not separate the heading from the
+  position of `base_frame`, and a plain update there made heading and vertical gyro bias drift
+  with the covariance shrinking (over-confident). Above 0.6 m/s, clear of 3 times the filter's
+  own speed uncertainty, nothing is left out and the fix corrects the heading too. With a
+  lever arm the roll/pitch variance at start and at every reseed is the accelerometer's (about
+  1e-4 rad²), not the 0.5 rad² of the heading; with the antenna at `base_frame` the starting
+  covariance is what it always was.
+  **Without the lidar** (GNSS and IMU only) the heading is therefore not corrected while the
+  robot stands or turns: it drifts with the vertical gyro bias, about 0.1 rad per minute for
+  every 0.1 deg/s, and the position of `base_frame` is known to about the horizontal lever
+  arm times the heading error (the reported covariance says so). Use the lidar, or send
+  `/initialpose` again, when that matters.
+  Measured on the real filter core in a synthetic experiment (study 6 of
+  [`experiments/README.md`](experiments/README.md), `experiments/eskf_lever.cpp`, 15,104 runs with
+  a lever arm: 60 s and 300 s, gyro bias 0 to 0.5 deg/s per axis, accelerometer bias, standing,
+  turning, spinning and driving, two antenna mounts, GNSS dropouts, a reseed). A run "diverged"
+  if the tilt exceeded 0.05 rad, the height 0.5 m, the horizontal error 1 m or the heading error
+  0.5 rad at a 1 s epoch from 10 s on (a GNSS dropout and 5 s after it, and 5 s after a reseed,
+  are not tested):
+
+  | | all runs | with lidar fixes | GNSS and IMU only | 60 s | 300 s |
+  |---|---|---|---|---|---|
+  | first version of the lever arm (attitude and gyro bias all consider states) | 2,813 of 15,104 (18.6 %) | 43 of 7,552 (0.6 %) | 2,770 of 7,552 (36.7 %) | 17.3 % | 26.2 % |
+  | this version | 760 of 15,104 (5.0 %) | 0 of 7,552 | 760 of 7,552 (10.1 %) | 2.3 % | 20.2 % |
+
+  All 760 runs that still diverge have no lidar fixes; 709 of them crossed the heading limit
+  (the heading drifts with the vertical gyro bias), 548 have a gyro bias of 0.5 deg/s per axis
+  (32.9 % of the runs with that bias). Driving above 0.6 m/s diverged in 1.9 % of the
+  GNSS-and-IMU-only runs, standing in 16.2 %, turning on the spot with pauses in 10.5 %, spinning in
+  11.6 %. With the offset ignored, as before the lever arm, every GNSS-and-IMU-only run diverged
+  (the antenna is 0.4 to 1.1 m from `base_frame`). One case is worse than in the first version:
+  standing for 300 s on GNSS and IMU alone with no gyro bias, 62 of 96 runs diverged (tilt, then
+  height: while the robot stands, a tilt error and a horizontal accelerometer bias cannot be told
+  apart), against 0 of 96 for the first version, which does not correct the tilt at all and
+  therefore fails with any gyro bias (170 of 1,280 runs at 0.05 deg/s, 1,664 of 1,664 at 0.5 deg/s).
+  With the antenna at `base_frame` nothing
+  changed: 1,265 of 3,200 such GNSS-and-IMU-only runs diverge in the same grid, with the same
+  plain update as on `main`. Position NEES (3 degrees of freedom, mean over the seeds, 95 %
+  chi-square band): inside the band in 72 % of the 1,664 configurations, above it
+  (over-confident) in 14 %, below it in 14 %. The NEES of all 15 states is above its band in
+  51 % (71 % with the antenna at `base_frame`): some states are over-confident, as on `main`.
+  All tables: [`experiments/results/eskf_lever/report.md`](experiments/results/eskf_lever/report.md).
+  The node check `scripts/fusion_extrinsic_check.py` adds a constant gyro bias (0.003, -0.002,
+  0.002 rad/s, and 0.5 deg/s on each axis), a reseed, and a start before the antenna mount is known.
 - **Missing mount.** With an empty frame name or no transform, that input is not used
   (nothing is assumed): the log says so every 5 s and `/diagnostics` reports
   `point clouds not used: ...`, `GNSS not used: ...` (WARN) or `IMU not used: ...` (WARN
