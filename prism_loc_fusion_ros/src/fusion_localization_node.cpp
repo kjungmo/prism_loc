@@ -50,6 +50,7 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   ep.sigma_acc_bias = declare_parameter<double>("sigma_acc_bias", 1e-4);
   ep.sigma_gyro_bias = declare_parameter<double>("sigma_gyro_bias", 1e-5);
   ep.reset_jacobian = declare_parameter<bool>("reset_jacobian", false);
+  eskf_params_ = ep;
   eskf_ = std::make_unique<prism_loc_fusion::Eskf>(ep);
 
   // datum_* are declared unconditionally so YAML values always bind; used only when
@@ -345,6 +346,11 @@ void FusionLocalizationNode::onDiagnostics() {
   odom_tf_missing_ = 0;
 }
 
+void FusionLocalizationNode::seedTilt(Mat15& P0, const Eigen::Quaterniond& q) const {
+  P0.block<3, 3>(6, 6) = prism_loc_fusion::Eskf::attitudeCovariance(
+      q, prism_loc_fusion::Eskf::tiltVarianceFromAccel(last_acc_, 1e-2, eskf_params_), 0.5);
+}
+
 bool FusionLocalizationNode::tryInitialize() {
   if (filter_init_) return true;
   if (!(have_attitude_ && have_position_)) return false;
@@ -357,7 +363,21 @@ bool FusionLocalizationNode::tryInitialize() {
   P0.block<3, 3>(6, 6) *= 0.5;
   P0.block<3, 3>(9, 9) *= 1e-2;
   P0.block<3, 3>(12, 12) *= 1e-4;
+  // A GNSS antenna off the origin of base_frame (lever arm): the fix then depends on the
+  // attitude, and a roll and pitch variance of 0.5 rad^2 lets the first fixes after a start
+  // or a reseed tilt the filter. The accelerometer gives roll and pitch to about 0.01 rad.
+  // With the antenna at base_frame the covariance stays what it was (no change to the
+  // estimates of a user without a lever arm). The mount is known once a fix has been
+  // read; a start from /initialpose can come before that (tilt_seed_pending_).
+  tilt_seed_pending_ = false;
+  if (gnss_mount_.resolved() && !gnss_mount_.ext().T.translation().isZero(0.0)) {
+    if (last_acc_valid_) seedTilt(P0, x0.q);
+    else tilt_seed_pending_ = true;
+  } else if (!gnss_mount_.resolved()) {
+    tilt_seed_pending_ = true;
+  }
   eskf_->initialize(x0, P0);
+  ndt_since_init_ = 0;
   filter_init_ = true;
   RCLCPP_INFO(get_logger(), "fusion3d: initialized at (%.2f, %.2f, %.2f)", x0.p.x(), x0.p.y(), x0.p.z());
   return true;
@@ -380,6 +400,8 @@ void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
   const Eigen::Vector3d gyro = vectorInBase(
       imu_mount_.ext(),
       Eigen::Vector3d(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z));
+  last_acc_ = acc;
+  last_acc_valid_ = true;
   if (!have_attitude_) { init_attitude_ = attitudeFromAccel(acc, initial_yaw_); have_attitude_ = true; }
   const rclcpp::Time stamp(msg->header.stamp, get_clock()->get_clock_type());
   if (!last_imu_valid_) { last_imu_time_ = stamp; last_imu_valid_ = true; return; }
@@ -446,6 +468,7 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   R.bottomRightCorner<3, 3>() *= pose_rot_std_ * pose_rot_std_;
   const Eigen::Isometry3d base_pose = basePoseFromSensorPose(points_mount_.ext(), r.pose);
   eskf_->updatePose(base_pose.translation(), Eigen::Quaterniond(base_pose.linear()), R);
+  ++ndt_since_init_;
   any_ndt_ = true;
   last_ndt_wall_ = Steady::now();
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
@@ -497,7 +520,23 @@ void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr
   // Updating: an antenna off the base_frame origin is fused as what it is, a point at the
   // lever arm, so that the attitude it depends on is part of the update. With a zero lever
   // arm (fix in base_frame) this is the plain position update.
-  eskf_->updatePositionLever(enu, gnss_mount_.ext().T.translation(), R);
+  const Eigen::Vector3d lever = gnss_mount_.ext().T.translation();
+  // Started from /initialpose before the first IMU sample (tilt_seed_pending_ is only set then
+  // for an antenna at a lever arm): the roll/pitch covariance cannot be set yet, and with the
+  // 0.5 rad^2 of the heading a fix at a lever arm would tilt the filter. The fix waits for the
+  // first IMU sample (a fraction of a second).
+  if (tilt_seed_pending_ && !last_acc_valid_) return;
+  if (tilt_seed_pending_ && last_acc_valid_) {
+    // The filter started before this antenna mount was known. If the lidar has not corrected
+    // it since, give the attitude the covariance a start with the mount would have had.
+    tilt_seed_pending_ = false;
+    if (!lever.isZero(0.0) && ndt_since_init_ == 0) {
+      Mat15 Pa = Mat15::Zero();
+      seedTilt(Pa, eskf_->state().q);
+      eskf_->replaceAttitudeCovariance(Pa.block<3, 3>(6, 6));
+    }
+  }
+  eskf_->updatePositionLever(enu, lever, R);
   any_gnss_fix_ = true;
   last_gnss_wall_ = Steady::now();
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));

@@ -97,7 +97,9 @@ jobs:
       # fusion3d with the lidar, the IMU and the GNSS antenna mounted off base_link (static
       # TF): the pose is that of base_link within 0.05 m and 0.02 rad; an input whose mount
       # is missing is left out and /diagnostics says so; *_frame overrides the frame name;
-      # GNSS and IMU alone with sensor noise stay consistent for 30 s.
+      # GNSS and IMU alone with sensor noise stay consistent for 30 s, and with a constant
+      # gyro bias for 45 s, across a reseed, and from a start before the antenna mount is
+      # known (the whole script takes about 9 minutes on a desktop; 1800 s here).
       # The workspace above is built without optimization; one NDT registration then takes
       # over a second on the thread that also takes the IMU and /diagnostics reports
       # "IMU stopped". The two fusion packages are rebuilt optimized for this step so that
@@ -114,7 +116,7 @@ jobs:
             --cmake-args -DCMAKE_BUILD_TYPE=Release
           source install/setup.bash
           mkdir -p ci_logs && cd ci_logs
-          timeout 900 python3 ../src/prism_loc/scripts/fusion_extrinsic_check.py \
+          timeout 1800 python3 ../src/prism_loc/scripts/fusion_extrinsic_check.py \
             ../install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml \
             --tolerate-imu-gaps \
             || { for f in fusion_extrinsic_*.log; do echo "--- $f"; tail -n 40 "$f"; done; exit 1; }

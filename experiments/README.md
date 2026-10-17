@@ -160,6 +160,50 @@ python3 experiments/select_verify_params.py --check   # bbs_verify_selection.csv
 ```
 
 The second argument is the worker-thread count; it changes only `time_ms`.
+## 6. `eskf_lever.cpp` — how to fuse a GNSS fix taken off the body origin
+
+Drives the real `prism_loc_fusion::Eskf` (no copy, no ROS) with a simulated IMU, a simulated
+GNSS antenna at a lever arm, and optionally simulated NDT pose fixes, and runs 15 ways of
+applying the antenna fix on identical data (common random numbers). The schemes are listed
+at the top of `eskf_lever.cpp`: `ignore` (the offset not modelled, as on `main` before the
+lever arm), `S0` (attitude and gyro bias are consider states, the first version of the lever
+arm), `S1` (heading and vertical gyro bias), `S3` (heading), `S2` (none: the full update),
+`S4` and `S5` (S2 and S1 iterated three times), `S6` (S1 while the robot stands, the full
+update while it moves, with a speed test, a rate test or both; `S6va`, `S6v`, `S6vb` are the
+speed test alone at 0.15, 0.3 and 0.6 m/s). A trailing `s` means that the roll/pitch variance
+at start and at every reseed comes from the accelerometer instead of the 0.5 rad² of the heading.
+**`S6vb` is what the node runs** (the defaults of `EskfParams`), chosen because it had the
+fewest diverged runs of the 2,304 configurations below; the speed threshold of 0.6 m/s is the
+best of the three tested, not an optimum (driving was simulated at 1.0 to 1.7 m/s only).
+
+The grid (`eskf_lever.cpp`, top comment): duration 60 s (1,920 configurations, 10 seeds) and
+300 s (384 configurations, 6 seeds); gyro bias 0, 0.05, 0.1, 0.2, 0.5 deg/s on each axis (300 s:
+0, 0.1, 0.5) with a random sign per axis; accelerometer bias 0 and 0.1 m/s²; standing, turning
+on the spot with pauses, spinning without pause, driving a planar lemniscate; antenna A
+(0.5, 0, 1.0), B (-0.3, 0.2, 1.0) and Z (0, 0, 0, the zero lever: every scheme runs
+`updatePosition`, and the results are identical in all 6,400 runs, which the report checks);
+without and with NDT fixes; without and with a GNSS dropout (10 s in 60 s runs, 30 s in 300 s
+runs); without and with a reseed at half time; simulated IMU noise equal to what the filter
+assumes, and twice what `fusion3d.yaml` assumes. The thresholds of "diverged" and the NEES bands are fixed in the file before the final
+run; the exploratory passes before it (the first one with the dropout inside the divergence test,
+then a shorter list of schemes, the motion gates, the spin motion) are not part of the result.
+`std::normal_distribution` is implementation defined: the committed results are from GCC 9.4 /
+libstdc++, and the 13 schemes that the last two passes had in common gave identical rows.
+
+```sh
+experiments/run_eskf_lever.sh /tmp/lever 4      # about 2 CPU hours: builds, runs both suites, writes report.md
+python3 experiments/eskf_lever_report.py experiments/results/eskf_lever/g60 experiments/results/eskf_lever/g300
+```
+
+The committed results are `experiments/results/eskf_lever/` (`g60_runs.csv.gz`, `g60_agg.csv.gz`,
+`g300_*`: one row per run and scheme, and per configuration and scheme with the NEES bands) and
+`report.md`, the output of the second command. The tables in `README.md` come from there.
+
+Not done: a real robot; slopes; GNSS multipath or jumps; driving slower than 1 m/s; an
+observability-constrained update or first-estimates Jacobians (Huang, Mourikis and Roumeliotis
+2010), the usual remedy for an update that gains information along an unobservable direction,
+which was not tried. The scheme that the grid supports is a gate on the speed with two fixed
+settings; it is a design choice that the data favour, not a proof.
 
 ## 7. `ndt3d_replay.cpp` — rates of the ndt3d status rule
 

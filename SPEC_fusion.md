@@ -58,9 +58,33 @@ prior maps.
 
 **updatePositionLever** (`p_z`, lever `t`, `R₃`), for a fix of a point at `t` in the body
 frame (GNSS antenna off `base_frame`): `h = p + R·t`; `H=[I₃ 0 −R[t]× 0 0]` (local attitude
-error, `q ← q⊗Exp(δθ)`); `y=p_z−h`; `K=P Hᵀ(H P Hᵀ+R)⁻¹` with the rows of `δθ` and
-`δb_g` set to zero (attitude and gyro bias are consider states: counted in `H P Hᵀ`,
-not corrected); `P=(I−K H)P(I−K H)ᵀ+K R Kᵀ`; inject+reset. A zero lever is `updatePosition`.
+error, `q ← q⊗Exp(δθ)`); `y=p_z−h`; `K=P Hᵀ(H P Hᵀ+R)⁻¹`. Two parts of `K` are removed
+before the update, so that they are *consider* states (Schmidt-Kalman: counted in
+`H P Hᵀ`, not corrected): the heading, `δθ` along the vertical `u = Rᵀ ẑ` (body frame), and
+the vertical gyro bias, the part of `δb_g` along `u`. With `A = I − uuᵀ` the gain rows
+become `K_θ ← A K_θ` and `K_bg ← A K_bg`; roll and pitch (`δθ` across `u`), the two
+horizontal gyro bias components, `δp`, `δv` and `δb_a` are corrected. Joseph form,
+`P=(I−K H)P(I−K H)ᵀ+K R Kᵀ`; inject+reset. The states left out are `EskfParams::lever_consider`
+(a mask of `LeverConsider`; default heading and vertical gyro bias; the node does not
+set it); `lever_iterations` (default 1) relinearises `h` and `H` at the corrected state
+for more than one Gauss-Newton pass (Bell and Cathey 1993) and is used only by the experiment.
+A zero lever is `updatePosition`, bit for bit, whatever these are set to.
+
+*Why the heading and the vertical gyro bias.* A single antenna does not separate the
+heading from the position of the body: `p + R·t` stays put if the heading turns and the
+position moves around the antenna. A plain update (`lever_consider` 0) lets the filter
+trade one for the other and the vertical gyro bias with them; its covariance then shrinks
+along a direction it has not observed (it is over-confident). Roll, pitch and the
+horizontal gyro bias *are* observable from the antenna and the IMU (the tilt moves the
+antenna by `|t|` per radian and tilts gravity into the velocity), and leaving them out
+(the first version) let a constant gyro bias tilt the filter and the height diverge.
+Measured in `experiments/eskf_lever.cpp` (README, study 6).
+
+*Start of the filter.* With an antenna off `base_frame` the roll/pitch variance starts at
+`(σ_ba,prior² + σ_a²)/g² + ((|f|−g)/g)²` from the first accelerometer sample `f`
+(`Eskf::tiltVarianceFromAccel`, about 1e-4 rad² at rest) and the heading variance at 0.5 rad²
+(`Eskf::attitudeCovariance`), at the start and before every reseed. With the antenna at
+`base_frame` the starting covariance is what it always was (0.5 rad² on all three axes).
 
 **updatePose** (`p_z`, `q_z`, `R₆`): `H` selects `δp` (rows 0:3 ↔ cols 0:3 = I₃),
 `δθ` (rows 3:6 ↔ cols 6:9 = I₃); residual `y[0:3]=p_z−p`,
@@ -133,7 +157,11 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
 - **GNSS, translation.** The fix is fused with `updatePositionLever` (§4) at the lever
   arm `t_bs`; with `t_bs = 0` or a fix in `base_frame`, with `updatePosition` as before.
   The first fix seeds the position as `p_antenna − R(q₀) t_bs`, `q₀` being the attitude
-  the filter will start from.
+  the filter will start from. With `t_bs ≠ 0` the roll/pitch variance at start and before
+  every reseed comes from the accelerometer (§4, `Eskf::tiltVarianceFromAccel`); if the mount
+  is not yet known when the filter starts (a start from `/initialpose`), the attitude
+  covariance is replaced at the first fix, unless the lidar has corrected the filter since the start;
+  a fix at a lever arm that arrives before the first IMU sample (a start from `/initialpose`) is held back until it.
 
 An input whose frame is empty or has no transform is not used, and `/diagnostics` says so
 (WARN; ERROR for the IMU once `startup_timeout_s` has passed). Earlier versions ignored
@@ -161,11 +189,18 @@ the frames and used every input as measured at `base_frame`.
 - **updatePosition:** wrong init `p`; repeated GNSS at truth → `p`→truth.
 - **updatePose:** feed `(p_z,q_z)` → pose → measurement.
 - **updatePositionLever:** Jacobian against finite differences; the update equals the
-  consider gain with the Joseph covariance; closed-form position gain with a
-  position–heading covariance (fixes the sign of the Jacobian); attitude and gyro bias
-  untouched bit for bit; zero lever equals `updatePosition` bit for bit; GNSS-only for a
-  minute (standing, turning, two lever arms, 8 seeds, heading 0.1 rad off): height ≤ 0.1 m,
-  tilt ≤ 0.02 rad, heading kept, position NEES between 0.2 and 6.
+  consider gain with the Joseph covariance for every mask of `LeverConsider` (against a gain
+  written out independently); the default leaves out exactly the parts of the heading and the
+  vertical gyro bias along the vertical and corrects the rest; the first version's mask leaves
+  attitude and gyro bias untouched bit for bit; the motion gate (speed and rate thresholds, both
+  sides, the 3σ rule, each test switched off by 0, the mask used while moving); the iterated
+  update relinearises; `attitudeCovariance`, `tiltVarianceFromAccel`,
+  `replaceAttitudeCovariance`; closed-form position gain with a position–heading covariance
+  (fixes the sign of the Jacobian); zero lever equals `updatePosition` bit for bit, for every
+  setting of mask and iterations; GNSS-only for a minute (standing, turning, two lever arms, three
+  gyro biases up to 0.5 deg/s, 8 seeds, heading 0.1 rad off): height ≤ 0.1 m, tilt ≤ 0.03 rad,
+  heading = 0.1 rad + vertical bias × 60 s within 0.05 rad, horizontal error within 3σ and 0.6 m,
+  position NEES between 0.2 and 6 (for the two smaller biases).
 - **integration:** synthetic straight+turn trajectory emitting IMU (bias+noise) +
   periodic NDT pose + GNSS; ESKF tracks ground truth ≤0.3 m, ≤0.1 rad.
 

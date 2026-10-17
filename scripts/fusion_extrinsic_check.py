@@ -36,6 +36,43 @@ so a mount that is ignored or applied the wrong way round fails.
                sigma the node reports (sqrt of covariance_trace_position). The fix does
                not observe the heading here, so the horizontal error is not small: it
                is bounded by what the filter says it is.
+  gnss_bias_stand_a, gnss_bias_turn_b, gnss_bias_big_turn_a
+               GNSS and IMU only as above, 45 s, with a constant gyro bias on every axis: the
+               bias of the review (0.003, -0.002, 0.002 rad/s) standing with antenna A and
+               turning with antenna B, and 0.5 deg/s on each axis (+, -, +) turning with A. At
+               t = 15, 30, 45 s: height within 0.15 m, tilt within 0.03 rad, heading within
+               0.05 rad + vertical bias x t of the truth (the heading is not corrected by the
+               fix, so it drifts with the bias), horizontal error within 3 x the node's sigma
+  The gnss_bias_*, gnss_reseed, gnss_late_pose, gnss_after_ndt, gnss_reseed_before_fix and gnss_pose_first
+               scenarios also assert, in the published pose covariance 0.25 to 0.6 s after the first fix and
+               after each /initialpose: roll/pitch variance at most 2e-3 rad^2 (it starts at about 1e-4 from the
+               accelerometer; the heading's 0.5 rad^2 would fail); without lidar clouds the heading variance
+               between 0.3 and 0.7 rad^2 (one antenna does not observe it); with clouds the heading variance at
+               most 0.05 rad^2 and the position covariance trace at most 0.06 m^2.
+  gnss_reseed  antenna A, standing, the review's bias; /initialpose at t = 15 s (0.04 m,
+               -0.03 m, 0.01 rad off); the checks above at t = 30, 45 s (heading within 0.06 rad
+               + vertical bias x time since the reseed)
+  gnss_late_pose  antenna A, standing, the review's bias; /initialpose and the IMU for 1 s
+               before the first fix, so that the filter starts before the antenna mount is known;
+               the checks above at t = 15, 30, 45 s after the first fix
+  gnss_after_ndt  antenna A, standing, the review's bias; /initialpose, the IMU and lidar clouds for 8 s
+               before the first fix (the lidar corrects the filter, the antenna mount is not known
+               yet); then the fixes join: at t = 15, 30 s after the first fix, height within 0.15 m,
+               tilt within 0.03 rad, heading within 0.1 rad, horizontal error within 3 x the node's
+               sigma, and the position covariance trace within 0.06 m^2 (a heading variance of 0.5 rad^2
+               on a 0.5 m lever arm alone would add 0.125)
+  gnss_reseed_before_fix  antenna A, standing, the review's bias; /initialpose and lidar clouds for 4 s,
+               a second /initialpose, 1.5 s of the IMU alone, then the fixes: the checks of
+               gnss_late_pose at t = 15, 30, 45 s
+  gnss_pose_first  antenna A, standing, the review's bias; /initialpose and GNSS fixes for 1 s before the
+               first IMU sample (the filter starts without an accelerometer reading): the checks of
+               gnss_late_pose at t = 15, 30, 45 s
+  gnss_pose_first_wait, gnss_pose_first_base
+               /initialpose and fixes for 1 s before the first IMU sample, then the IMU: with the
+               antenna at A (_wait) no pose is published during that second (the fixes wait for the
+               first accelerometer sample, which seeds the roll/pitch covariance) and poses follow
+               within 1 s of the first IMU sample; with the antenna at base_link (_base, no TF) the
+               fixes are used as before and at least 3 poses are published during that second
   slash        frame_id "/base_link" on the IMU and the fix, "/lidar" on the cloud (with
                base_link -> lidar on TF): one leading slash is dropped, pose within
                tolerance
@@ -182,6 +219,7 @@ class Rig:
         self.sent_clouds = 0
         self.turned = 0.0        # yaw the robot has turned so far (rad), as the gyro reported it
         self.noise = None        # NOISE to add white noise to the IMU and the fixes
+        self.gyro_bias = np.zeros(3)   # constant gyro bias, in the IMU frame (rad/s)
         self.noise_rng = np.random.default_rng(17)
         self.last_imu_s = None   # stamp of the previous IMU sample
         self.t0 = time.monotonic()
@@ -214,6 +252,7 @@ class Rig:
         if mount is not None:
             f = rot_rpy(*mount[1]).T @ f             # ... as the mounted IMU measures them
             w = rot_rpy(*mount[1]).T @ w
+        w = w + self.gyro_bias
         if self.noise:
             f = f + self.noise_rng.normal(0.0, self.noise['acc'], 3)
             w = w + self.noise_rng.normal(0.0, self.noise['gyro'], 3)
@@ -443,6 +482,95 @@ def gnss_only_noisy(rig, results, mount, yaw_rate):
     results.append((v.get('gnss_mount', '').startswith('base_link -> gnss xyz'), f'{what}: gnss_mount "{v.get("gnss_mount")}"'))
 
 
+GYRO_BIAS = np.array([0.003, -0.002, 0.002])             # rad/s, the bias of the review of PR 7
+GYRO_BIAS_BIG = np.array([1.0, -1.0, 1.0]) * math.radians(0.5)   # 0.5 deg/s on each axis
+
+
+def gnss_bias_run(rig, results, mount, yaw_rate, bias, what, checkpoints, reseed_at=None, late_pose=False,
+                  prelude=None, cloud=None, max_trace=None, heading_allowed=None):
+    """GNSS and IMU only with a constant gyro bias. checkpoints: seconds after the first fix at
+    which the pose is read (after streaming `yaw_rate` for 4 s of every 5 s, still for the last
+    second). The thresholds are those of the docstring. prelude(rig) runs before the first fix; cloud
+    (frame, mount) adds lidar clouds all along; max_trace bounds the position covariance trace at every
+    checkpoint; heading_allowed replaces 0.05 rad + bias x time as the heading bound (a lidar corrects it)."""
+    rig.noise = NOISE
+    rig.gyro_bias = np.array(bias)
+    rig.add_static('gnss', mount)
+    if late_pose:                                     # /initialpose and the IMU before the first fix
+        rig.stream(1.0)
+        rig.initial_pose()
+        rig.stream(1.0)
+    if prelude is not None:
+        prelude(rig)
+    t_reseed = None
+    marks = [time.monotonic()]                        # starts of the filter's covariance: the first fix, each reseed
+    worst = {'z': 0.0, 'tilt': 0.0, 'yaw_excess': -1e9, 'xy_over_sigma': 0.0, 'xy': 0.0, 'yaw': 0.0}
+    n = 0
+    t_nominal = 0.0                                   # seconds streamed since the first fix
+    for cp in checkpoints:
+        while t_nominal < cp - 1e-6:                  # 5 s cycles: 4 s turning, 1 s still
+            if reseed_at is not None and t_reseed is None and t_nominal >= reseed_at - 1e-6:
+                rig.initial_pose()
+                marks.append(time.monotonic())
+                t_reseed = t_nominal
+            rig.stream(4.0, gnss=('gnss', mount), cloud=cloud, yaw_rate=yaw_rate)
+            rig.stream(1.0, gnss=('gnss', mount), cloud=cloud)
+            t_nominal += 5.0
+        e = rig.pose_error(1.0)
+        trace = rig.values().get('covariance_trace_position', 'n/a')
+        if e is None or trace == 'n/a':
+            continue
+        n += 1
+        since = t_nominal - (t_reseed if t_reseed is not None else 0.0)
+        xy = math.hypot(e[0], e[1])
+        worst['z'] = max(worst['z'], abs(e[2]))
+        worst['tilt'] = max(worst['tilt'], math.hypot(e[3], e[4]))
+        worst['yaw'] = max(worst['yaw'], abs(e[5]))
+        allowed = heading_allowed if heading_allowed is not None else (0.06 if t_reseed is not None else 0.05) + abs(bias[2]) * since
+        worst['yaw_excess'] = max(worst['yaw_excess'], abs(e[5]) - allowed)
+        worst['trace'] = max(worst.get('trace', 0.0), float(trace))
+        worst['xy'] = max(worst['xy'], xy)
+        worst['xy_over_sigma'] = max(worst['xy_over_sigma'], xy / math.sqrt(float(trace)))
+    results.append((n == len(checkpoints), f'{what}: checkpoints with a pose and a covariance: {n} (need {len(checkpoints)})'))
+    ok = n == len(checkpoints)
+    # Roll/pitch variance of the published pose 0.25 to 0.6 s after each start: with an antenna off the origin it
+    # starts at the accelerometer's accuracy (about 1e-4 rad^2), not at the 0.5 rad^2 of the heading.
+    win = [m for t, m in rig.poses if any(mk + 0.25 <= t <= mk + 0.6 for mk in marks)]
+    cov = [max(m.pose.covariance[21], m.pose.covariance[28]) for m in win]
+    results.append((bool(cov) and max(cov) <= 2e-3,
+                    f'{what}: largest roll/pitch variance 0.25 to 0.6 s after a start: '
+                    f'{max(cov) if cov else float("nan"):.2e} rad^2 over {len(cov)} poses (need <= 2e-3)'))
+    if cloud is None:   # nothing but the IMU and the antenna: the heading is not observed and keeps its 0.5 rad^2
+        yv = [m.pose.covariance[35] for m in win]
+        results.append((bool(yv) and 0.3 <= min(yv) and max(yv) <= 0.7,
+                        f'{what}: heading variance 0.25 to 0.6 s after a start: '
+                        f'{min(yv) if yv else float("nan"):.3f} to {max(yv) if yv else float("nan"):.3f} rad^2 (need 0.3 to 0.7)'))
+    else:               # with the lidar the heading is observed: its variance must not go back to the 0.5 rad^2 of a start
+        yv = [m.pose.covariance[35] for m in win]
+        results.append((bool(yv) and max(yv) <= 0.05,
+                        f'{what}: heading variance 0.25 to 0.6 s after a start: '
+                        f'{max(yv) if yv else float("nan"):.4f} rad^2 (need <= 0.05)'))
+    if max_trace is not None:
+        tr = [m.pose.covariance[0] + m.pose.covariance[7] + m.pose.covariance[14] for m in win]
+        results.append((bool(tr) and max(tr) <= max_trace,
+                        f'{what}: position covariance trace 0.25 to 0.6 s after a start: '
+                        f'{max(tr) if tr else float("nan"):.4f} m^2 (need <= {max_trace})'))
+    results.append((ok and worst['z'] <= 0.15, f'{what}: largest height error {worst["z"]:.3f} m (need <= 0.15)'))
+    results.append((ok and worst['tilt'] <= 0.03, f'{what}: largest tilt error {worst["tilt"]:.4f} rad (need <= 0.03)'))
+    results.append((ok and worst['yaw_excess'] <= 0.0,
+                    f'{what}: largest heading error {worst["yaw"]:.4f} rad, at most {worst["yaw_excess"]:+.4f} rad over the '
+                    + (f'allowed {heading_allowed} rad' if heading_allowed is not None else
+                       f'allowed 0.05 rad + {abs(bias[2]):.4f} rad/s x time') + ' (need <= 0)'))
+    results.append((ok and worst['xy_over_sigma'] <= 3.0,
+                    f'{what}: largest horizontal error {worst["xy"]:.3f} m, at most {worst["xy_over_sigma"]:.2f} x the sigma the node '
+                    f'reports (need <= 3)'))
+    if max_trace is not None:
+        results.append((ok and worst.get('trace', 1e9) <= max_trace,
+                        f'{what}: largest position covariance trace {worst.get("trace", float("nan")):.4f} m^2 (need <= {max_trace})'))
+    v = rig.values()
+    results.append((v.get('gnss_mount', '').startswith('base_link -> gnss xyz'), f'{what}: gnss_mount "{v.get("gnss_mount")}"'))
+
+
 def scenario_slash(rig, results):
     rig.add_static('lidar', LIDAR)
     rig.stream(1.0, imu=('/base_link', None))
@@ -573,16 +701,74 @@ def scenario_imu_missing(rig, results):
                     f'imu_mount "{v_mount(rig)}"'))
 
 
+def prelude_ndt(rig):
+    """/initialpose, then the IMU and lidar clouds alone: the filter starts before any fix and the lidar corrects it."""
+    rig.stream(1.0)
+    rig.initial_pose()
+    rig.stream(8.0, cloud=('base_link', None))
+
+
+def prelude_two_poses(rig):
+    """/initialpose and clouds, a second /initialpose, then the IMU alone for 1.5 s: nothing has corrected the new start."""
+    rig.stream(1.0)
+    rig.initial_pose()
+    rig.stream(4.0, cloud=('base_link', None))
+    rig.initial_pose()
+    rig.stream(1.5)
+
+
+def prelude_pose_first(rig):
+    """/initialpose and fixes, no IMU yet: the filter starts at the first fix with no accelerometer sample."""
+    rig.initial_pose()
+    rig.stream(1.0, imu=None, gnss=('gnss', ANTENNA_A))
+
+
+def scenario_pose_first_wait(rig, results):
+    rig.add_static('gnss', ANTENNA_A)
+    rig.initial_pose()
+    n0 = len(rig.poses)
+    rig.stream(1.0, imu=None, gnss=('gnss', ANTENNA_A))
+    n1 = len(rig.poses)
+    results.append((n1 == n0, f'antenna A, /initialpose and fixes before the first IMU sample: {n1 - n0} poses in 1 s (need 0)'))
+    rig.stream(1.0, gnss=('gnss', ANTENNA_A))
+    n2 = len(rig.poses)
+    results.append((n2 - n1 >= 50, f'... and {n2 - n1} poses in the next second with the IMU (need >= 50)'))
+
+
+def scenario_pose_first_base(rig, results):
+    rig.initial_pose()
+    n0 = len(rig.poses)
+    rig.stream(1.0, imu=None, gnss=('base_link', None))
+    n1 = len(rig.poses)
+    results.append((n1 - n0 >= 3, f'antenna at base_link, /initialpose and fixes before the first IMU sample: {n1 - n0} poses in 1 s (need >= 3)'))
+
+
 SCENARIOS = {'lidar': scenario_lidar, 'imu': scenario_imu, 'gnss': scenario_gnss, 'missing': scenario_missing,
              'empty_frame': scenario_empty_frame, 'override': scenario_override, 'imu_missing': scenario_imu_missing,
              'gnss_missing': scenario_gnss_missing, 'slash': scenario_slash,
              'gnss_stand_a': lambda r, res: gnss_only_noisy(r, res, ANTENNA_A, 0.0),
              'gnss_stand_b': lambda r, res: gnss_only_noisy(r, res, ANTENNA_B, 0.0),
              'gnss_turn_a': lambda r, res: gnss_only_noisy(r, res, ANTENNA_A, 0.3),
-             'gnss_turn_b': lambda r, res: gnss_only_noisy(r, res, ANTENNA_B, 0.3)}
+             'gnss_turn_b': lambda r, res: gnss_only_noisy(r, res, ANTENNA_B, 0.3),
+             'gnss_bias_stand_a': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s', [15, 30, 45]),
+             'gnss_bias_turn_b': lambda r, res: gnss_bias_run(r, res, ANTENNA_B, 0.3, GYRO_BIAS, 'antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s', [15, 30, 45]),
+             'gnss_bias_big_turn_a': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.3, GYRO_BIAS_BIG, 'antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s', [15, 30, 45]),
+             'gnss_reseed': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, /initialpose at 15 s', [30, 45], reseed_at=15.0),
+             'gnss_after_ndt': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, lidar before the first fix', [15, 30], prelude=prelude_ndt, cloud=('base_link', None), max_trace=0.06, heading_allowed=0.1),
+             'gnss_reseed_before_fix': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, /initialpose twice before the first fix', [15, 30, 45], prelude=prelude_two_poses),
+             'gnss_pose_first': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample', [15, 30, 45], prelude=prelude_pose_first),
+             'gnss_pose_first_wait': scenario_pose_first_wait,
+             'gnss_pose_first_base': scenario_pose_first_base,
+             'gnss_late_pose': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, /initialpose before the first fix', [15, 30, 45], late_pose=True)}
 SCENARIO_ARGS = {'imu': [f'initial_yaw:={BASE_YAW}'], 'gnss': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_stand_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_b': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_turn_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_turn_b': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_bias_stand_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_bias_turn_b': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_bias_big_turn_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_reseed': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_late_pose': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_pose_first': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_pose_first_wait': [f'initial_yaw:={BASE_YAW}'], 'gnss_pose_first_base': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_after_ndt': [f'initial_yaw:={BASE_YAW}'], 'gnss_reseed_before_fix': [f'initial_yaw:={BASE_YAW}'],
                  'override': ['points_frame:=base_link', 'imu_frame:=base_link', 'gnss_frame:=base_link'],
                  'imu_missing': ['startup_timeout_s:=10.0']}
 

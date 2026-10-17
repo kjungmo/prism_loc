@@ -32,6 +32,8 @@ class FusionLocalizationNode : public rclcpp::Node {
   void onDiagnostics();
   void onTfWatch(const tf2_msgs::msg::TFMessage::SharedPtr msg);
   bool tryInitialize();
+  using Mat15 = prism_loc_fusion::Eskf::Mat15;
+  void seedTilt(Mat15& P0, const Eigen::Quaterniond& q) const;
   void publish(const rclcpp::Time& stamp);
 
   // Mounts of the sensors on base_frame (see mount.hpp). resolveMount() returns false
@@ -48,6 +50,13 @@ class FusionLocalizationNode : public rclcpp::Node {
   bool map_to_base_fallback_{true};
 
   std::unique_ptr<prism_loc_fusion::Eskf> eskf_;
+  prism_loc_fusion::EskfParams eskf_params_;
+  // Starting covariance of the attitude (see tryInitialize): with a GNSS antenna off the
+  // origin of base_frame the roll and pitch start at the accelerometer's accuracy.
+  Eigen::Vector3d last_acc_{Eigen::Vector3d::Zero()};   // latest specific force, base_frame
+  bool last_acc_valid_{false};
+  bool tilt_seed_pending_{false};    // started before the antenna mount was known
+  long ndt_since_init_{0};           // NDT corrections since the filter started
   prism_loc_fusion::GeodeticConverter geo_;
   std::unique_ptr<NdtRegistration> ndt_;
 
