@@ -16,14 +16,18 @@ class Eskf {
   // Position fix of a point fixed to the body at `lever` (body frame), e.g. a GNSS
   // antenna: h(x) = p + R(q) lever.
   //
-  // The attitude and the gyro bias are "consider" states of this update
-  // (Schmidt-Kalman): the innovation covariance H P H^T carries the attitude uncertainty
-  // through the lever arm, so the position is not trusted beyond what the attitude
-  // allows, but the fix does not correct attitude or gyro bias; it corrects position,
-  // velocity and accelerometer bias. Reason, measured: with a plain Kalman update the
-  // heading (which a single antenna does not observe) and the vertical gyro bias drifted
-  // by about 1 rad in a minute on GNSS and IMU alone, and with the wide attitude
-  // covariance a filter starts from, the first fixes after a reseed tilted it.
+  // Full Jacobian (below), Joseph covariance, and a gain from which the states in
+  // EskfParams::lever_consider are removed (Schmidt-Kalman "consider" states): by default
+  // the heading and the vertical gyro bias. A single antenna does not separate the heading
+  // from the position of the body, and a plain update there let heading and vertical bias
+  // drift while the covariance shrank (measured, experiments/eskf_lever.cpp: the full update
+  // is over-confident in most GNSS-and-IMU-only runs). Their uncertainty still enters the
+  // innovation covariance H P H^T, so the position is not trusted beyond what the heading
+  // allows. Roll and pitch, the horizontal gyro biases, position, velocity and the
+  // accelerometer bias are corrected. That needs a roll and pitch variance of about 1e-4 rad^2
+  // at the start (attitudeCovariance(), tiltVarianceFromAccel()): with 0.5 rad^2 the first
+  // fixes after a start or a reseed tilt the filter.
+  // Without NDT or another heading source the heading drifts with the vertical gyro bias.
   // A lever of exactly zero is updatePosition(), with identical arithmetic.
   void updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vector3d& lever,
                            const Eigen::Matrix3d& R);
@@ -33,6 +37,21 @@ class Eskf {
   static Eigen::Vector3d leverArmPosition(const NominalState& x, const Eigen::Vector3d& lever);
   static Eigen::Matrix<double, 3, 15> leverArmJacobian(const Eigen::Quaterniond& q,
                                                        const Eigen::Vector3d& lever);
+  // Covariance of the attitude error for an attitude q whose roll and pitch are known to
+  // within var_tilt (rad^2, for example from the accelerometer) and whose heading is known
+  // to var_heading: var_tilt about the two axes across the vertical, var_heading about the
+  // vertical, no correlation. The error is local, so the vertical is R(q)^T z.
+  static Eigen::Matrix3d attitudeCovariance(const Eigen::Quaterniond& q, double var_tilt,
+                                            double var_heading);
+  // Variance of the roll and pitch that follow from one accelerometer reading (specific
+  // force, base frame): the accelerometer bias prior and the white noise over g, plus the
+  // departure of the reading from g, which is acceleration the reading cannot tell from tilt.
+  static double tiltVarianceFromAccel(const Eigen::Vector3d& specific_force, double var_acc_bias,
+                                      const EskfParams& params);
+  // Replace the attitude block of the covariance and drop the correlation of the attitude
+  // with every other state. Valid only for a filter that has had no measurement since
+  // initialize() (the node uses it for a lever arm found after the filter started).
+  void replaceAttitudeCovariance(const Eigen::Matrix3d& P_att);
   const NominalState& state() const { return x_; }
   const Mat15& covariance() const { return P_; }
  private:
@@ -40,5 +59,6 @@ class Eskf {
   NominalState x_;
   Mat15 P_{Mat15::Identity()};
   EskfParams params_;
+  double rate_{0.0};   // norm of the bias-corrected angular rate of the last predict()
 };
 }  // namespace prism_loc_fusion
