@@ -263,48 +263,58 @@ the last 5 filter updates. Three states follow from it:
 | OK `localizing` | otherwise |
 
 **OK is not proof that the pose is right.** The signal is a classifier with these measured
-rates, as shares of all filter updates of the runs named (offline replica: the filter core
-driven by synthetic clouds of the world `scripts/synthetic_e2e.py` uses; 4 seeds per case;
-no part of a run left out unless stated):
+rates, as shares of all filter updates of the runs named (the offline replay
+[`experiments/ndt3d_replay.cpp`](experiments/ndt3d_replay.cpp): the real filter core and
+`MatchMonitor` driven by synthetic clouds of the world `scripts/synthetic_e2e.py` uses, 4 seeds
+per case; no part of a run left out unless stated). Regenerate them with
+`experiments/ndt3d_replay_batch.py` and `experiments/ndt3d_replay_rates.py`
+([`experiments/README.md`](experiments/README.md), study 7). The raw per-update output is in
+`experiments/results/ndt3d_replay/`, and `rates.md` there has the same tables for threshold 0.70,
+without the "not verified" state, and one row for every case of the batch, also the ones not in
+this table (a cropped prior map, a pitched lidar, other `base_height` values, a second
+`/initialpose` after a kidnap).
 
 | Runs | OK | not verified | low match | OK while > 1 m off | OK while > 0.3 m off | low match while < 0.15 m off |
 |---|---|---|---|---|---|---|
-| healthy, exact prior map; 0.5x to 3x speed, sparser lidars (24 runs) | 90.1 % | 8.3 % | 1.7 % | 0 | 2.3 % | 0.1 % |
-| healthy, 2 or 5 cm of noise on the prior map (8) | 88.5 % | 11.5 % | 0 | 0 | 0.2 % | 0 |
-| healthy, scene differs from the exact map: 6 or 15 moving columns, boxes added or removed, 3 or 5 cm range noise (24) | 75.2 % | 11.4 % | 13.4 % | 0 | 3.2 % | **11.7 %** |
-| the same with 2 cm of noise on the prior map (24) | 88.5 % | 11.5 % | 0.1 % | 0 | 0.8 % | 0.1 % |
+| healthy, exact prior map; 0.5x to 3x speed, sparser lidars (24 runs) | 89.5 % | 8.8 % | 1.6 % | 0 | 2.3 % | 0.1 % |
+| healthy, 2 or 5 cm of noise on the prior map (8) | 87.8 % | 12.2 % | 0 | 0 | 0.2 % | 0 |
+| healthy, scene differs from the exact map: 6 or 15 moving columns, boxes added or removed, 3 or 5 cm range noise (24) | 74.7 % | 12.1 % | 13.2 % | 0 | 3.2 % | **11.6 %** |
+| the same with 2 cm of noise on the prior map (24) | 87.7 % | 12.2 % | 0.1 % | 0 | 0.8 % | 0.1 % |
 | kidnapped, exact map, every update after the kidnap (8) | 8.4 % | 0 | 91.6 % | **2.7 %**, at most 4 updates in a row | 7.0 % | 0 |
-| kidnapped, 2 or 5 cm map noise (12) | 24.1 % | 0 | 75.9 % | **6.8 %**, up to 15 updates in a row (9 s) | 21.5 % | 0 |
-| `/initialpose` 3.6 m and 1 rad off, exact map, every update (4) | 0.8 % | 8.2 % | 91.0 % | 0 (7.8 % without the "not verified" state) | 0.8 % | 0 |
-| the same, 2 or 5 cm map noise (8) | 58.8 % | 9.7 % | 31.5 % | 0 (9.3 % without it) | 9.8 % | 0.2 % |
-| `/initialpose` 0.3 to 1.0 m off (28) | 88.1 % | 11.5 % | 0.5 % | 0 | 4.6 % | 0 |
-| pose off the map (4) | 0 | 0 | 100 % | 0 | 0 | 0 |
-| `base_height` 5 or 10 cm wrong, pose fine (8) | 0 | 0 | 100 % | 0 | 0 | 82.9 % (a true mismatch, not of x and y) |
+| kidnapped, 2 or 5 cm map noise (12) | 24.1 % | 0 | 75.9 % | **6.8 %**, up to 15 updates in a row (8 s) | 21.5 % | 0 |
+| `/initialpose` 3.6 m and 1 rad off, exact map, every update (4) | 0.8 % | 8.9 % | 90.2 % | 0 (8.5 % without the "not verified" state) | 0.8 % | 0 |
+| the same, 2 or 5 cm map noise (8) | 58.3 % | 10.5 % | 31.2 % | 0 (10.1 % without it) | 9.8 % | 0.2 % |
+| `/initialpose` 0.3 to 1.0 m off (28) | 86.8 % | 12.2 % | 1.0 % | 0 | 4.7 % | 0 |
+| pose off the map (4) | 0 | 2.0 % | 98.0 % | 0 | 0 | 0 |
+| `base_height` 5 or 10 cm wrong, pose fine (8) | 0 | 0.8 % | 99.2 % | 0 | 0 | 82.2 % (a true mismatch, not of x and y) |
 
 What these numbers say:
-- **Missed.** A kidnapped robot reads OK in 3 to 7 % of the updates, for up to 9 s at a
-  time on a thick (noisy) map, where lost poses match better (up to 0.75; 0.71 on the
-  exact map) and healthy ones too (0.89 to 1.0). An offset of up to about one NDT cell is
-  not detected at all: with
-  `/initialpose` 0.5 or 1.0 m off, 8 of 28 runs were still 0.5 to 0.87 m off for up to 7 s
-  after the status had turned OK.
+- **Missed.** A kidnapped robot reads OK in 3 to 7 % of the updates, for up to 8 s at a
+  time on a thick (noisy) map, where lost poses match better (a single update up to 0.77;
+  0.73 on the exact map) and healthy ones too (0.88 to 1.0). An offset of up to about one NDT
+  cell is not detected at all: with `/initialpose` 0.3 to 1.0 m off, 7 of 28 runs were still
+  0.5 to 0.87 m off for up to 6.7 s after the status had turned OK.
 - **False alarms.** On an exact (thin) map, objects that are not in the map and range noise
   of a few centimetres bring a healthy run under 0.65: 15 moving columns 35 % of the
   updates, 5 boxes added and 1 removed 21 %, 5 cm range noise 20 %, 2 boxes added 3 %,
   6 columns 1 %, 3 cm range noise 0. With 2 cm of noise on the map all of these are at
   most 0.5 %.
-- **The default.** At 0.70 the kidnapped misses fall to 0.9 % (exact map) and 4.6 %
-  (noisy map), and the false alarms of the third row rise from 13 % to 41 %. 0.65 is kept;
+- **The default.** At 0.70 the kidnapped misses fall to 0.9 % (exact map) and 4.6 % (noisy
+  map), and the false alarms of the third row rise from 13 % to 41 %. 0.65 is kept;
   it has to be set per site.
 - **Setting it.** Drive a known-good lap, read the value
   (`ros2 topic echo /diagnostics | grep -A1 match_fraction`), take its minimum and set
   `min_match_fraction` 0.03 to 0.05 below that minimum, not lower: lost poses in the
-  table above reached 0.75 (0.78 on the node, below), so a threshold far below the healthy
+  replay reached 0.77 (0.78 on the node, below), so a threshold far below the healthy
   minimum gives the misses room.
+- **A wrong initial pose** (3.6 m and 1 rad off) stayed above the threshold for the first 9 to 15
+  judged updates, while 0.8 to 2.5 m off; that is why the "not verified" state exists.
 - The value is that of the last filter update: it does not change while the robot stands.
 
 Through `/diagnostics` on the node (pairing harness without strata, 75 s per run, every
-status from t = 2 s on):
+status from t = 2 s on). **These runs came from an integration harness outside this repository
+(it starts the node and a simulated robot and reads `/diagnostics`); no script in this repository
+regenerates this table, and the replay above is the committed counterpart**:
 
 | Runs | statuses | OK | not verified | low match | OK while > 1 m off | OK while > 0.3 m off | `match_fraction` |
 |---|---|---|---|---|---|---|---|

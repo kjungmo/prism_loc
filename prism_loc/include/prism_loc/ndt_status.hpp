@@ -18,8 +18,8 @@ namespace prism_loc {
 //   mean of the last <= 5 <  threshold  true     the mean
 //   threshold 0                         false    (check off: the mean is never negative)
 // A reseed also makes the pose "not verified": a wrong initial pose can match well for
-// several updates before the match collapses (measured: OK for 8 to 14 updates in a row
-// while 1.4 to 2.3 m off). verified(n) is false until n updates have been judged since
+// several updates before the match collapses (measured in the replay, experiments/ndt3d_replay.cpp:
+// 9 to 15 judged updates in a row above the threshold while 0.8 to 2.5 m off). verified(n) is false until n updates have been judged since
 // the last reseed; the node reports WARN "pose not verified" meanwhile (unless the match
 // is low, which is reported instead).
 //   updates judged since the reseed   verified(n)
