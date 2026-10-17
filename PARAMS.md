@@ -75,7 +75,7 @@ node with an error naming the parameter.
 | startup_timeout_s | double | `30.0` | s | `/diagnostics` grace after startup before a missing map, missing input or missing pose seed is reported as ERROR (drivers can be slow to start). |
 | input_timeout_s | double | `1.0` | s | `/diagnostics` reports the scans/clouds as stopped (ERROR) after `max(input_timeout_s, input_timeout_periods x observed input period)` of silence. |
 | input_timeout_periods | double | `5.0` | count | Input periods of silence (period measured on the steady clock) before input counts as stopped. |
-| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Measured with the laser2d model: healthy tracking >= 0.025 in the synthetic e2e `track` runs (not asserted). Not judged on the update forced by a reseed (`/initialpose`, `set_initial_pose`, accepted relocalization). |
+| min_neff_fraction | double | `0.005` | fraction | `/diagnostics` WARNs when the effective sample size of the last correction falls below this share of the particle count (`0` disables). Measured with the laser2d model: healthy tracking 0.024 to 0.026 at the lowest in two runs of the synthetic e2e `track` scenario (not asserted). Not judged on the update forced by a reseed (`/initialpose`, `set_initial_pose`, accepted relocalization). |
 
 ## ndt3d backend (`prism_loc` node, `backend: "ndt3d"`)
 
