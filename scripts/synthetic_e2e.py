@@ -709,6 +709,16 @@ def scenario_ndt3d_track(d, results):
     first_ok = next((d.rel(m) for m, s in d.diags if d.rel(m) > 3.0 and level_of(s) == OK), None)
     check(results, first_ok is not None and first_ok <= 14.0,
           f'first OK status after /initialpose at t = {first_ok if first_ok is not None else float("nan"):.1f} s (need <= 14)')
+    # match_updates_since_reseed counts every judged update since /initialpose (not the window of 5):
+    # it equals N of the "N of 15" WARN and is at least 15 once the status is OK.
+    unv_all = [s for s in d.statuses(1.5) if s.message.startswith(NOT_VERIFIED)]
+    wrong = [(s.message.split(': ')[1].split(' of')[0], values_of(s).get('match_updates_since_reseed'))
+             for s in unv_all if s.message.split(': ')[1].split(' of')[0] != values_of(s).get('match_updates_since_reseed')]
+    oks = [int(values_of(s).get('match_updates_since_reseed', -1)) for s in d.statuses(15.0) if level_of(s) == OK]
+    check(results, bool(unv_all) and not wrong and bool(oks) and min(oks) >= 15,
+          f'match_updates_since_reseed: equal to N of "N of 15" in {len(unv_all) - len(wrong)} of {len(unv_all)} '
+          f'statuses, smallest value in the OK statuses after t = 15 s {min(oks) if oks else "none"} '
+          f'(need all equal and >= 15)' + (f' (message, value: {wrong[0]})' if wrong else ''))
     late = d.statuses(15.0)
     bad = sorted({(level_of(s), s.message) for s in late if level_of(s) != OK})
     check(results, len(late) >= 20 and not bad,
