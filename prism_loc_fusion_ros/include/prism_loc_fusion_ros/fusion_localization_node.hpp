@@ -57,11 +57,12 @@ class FusionLocalizationNode : public rclcpp::Node {
   bool last_acc_valid_{false};
   bool tilt_seed_pending_{false};    // started before the antenna mount was known
   bool attitude_from_pose_{false};   // the attitude to start from is the one of /initialpose (roll and pitch: from the accelerometer)
-  // Where the heading came from last (/diagnostics): the lidar (an accepted NDT correction), /initialpose, or
-  // neither (the initial_yaw parameter, then the IMU alone). The lever-arm update bounds the heading
+  // Where the heading came from last (/diagnostics): the lidar (an accepted NDT correction), /initialpose, the
+  // motion (the kinematic alignment of a lever-arm filter at a start or a stop, Eskf::alignHeading), or neither
+  // (the initial_yaw parameter, then the IMU alone). The lever-arm update bounds the heading
   // uncertainty it uses (EskfParams::lever_heading_sigma_max); capped_active_ is true while every lever update
   // since capped_since_wall_ was bounded.
-  enum class HeadingSource { kNone, kInitialPose, kLidar };
+  enum class HeadingSource { kNone, kInitialPose, kLidar, kMotion };
   HeadingSource heading_source_{HeadingSource::kNone};
   bool capped_active_{false};
   long ndt_since_init_{0};           // NDT corrections since the filter started

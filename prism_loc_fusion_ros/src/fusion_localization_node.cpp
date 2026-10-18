@@ -233,7 +233,7 @@ void FusionLocalizationNode::onDiagnostics() {
   };
   const double since_start = secs(start_wall_);
   const double since_imu = secs(last_imu_wall_);
-  char buf[320];
+  char buf[384];
   std::vector<std::string> errors, warnings;
 
   // Errors: the fused pose cannot be propagated or was never initialized.
@@ -300,10 +300,10 @@ void FusionLocalizationNode::onDiagnostics() {
   const bool capped_now = filter_init_ && lever_arm && capped_active_ && any_gnss_fix_ && secs(last_gnss_wall_) < 2.0;
   const double since_heading = heading_source_ == HeadingSource::kNone ? secs(init_wall_) : secs(heading_source_wall_);
   if (capped_now && secs(capped_since_wall_) >= kHeadingWarnS && since_heading >= kHeadingWarnS) {
-    std::snprintf(buf, sizeof(buf), "heading not observed: GNSS and IMU only for %.0f s, the heading uncertainty is held at %.2f rad "
-                  "and base_link can be wrong by up to the horizontal lever arm (%.2f m) either way; drive with a turn, a start or a "
-                  "stop, use the lidar, or send /initialpose", since_heading, eskf_->headingSigma(),
-                  gnss_mount_.ext().T.translation().head<2>().norm());
+    std::snprintf(buf, sizeof(buf), "heading not observed: GNSS and IMU only for %.0f s, heading spread %.1f rad, base_link can be off by up to the lever arm "
+                  "(%.2f m) either way; a start or a stop of %.2f m/s or more finds the heading, a constant speed or a turn on the spot does not; "
+                  "or use the lidar or /initialpose", since_heading, eskf_->headingSigmaHonest(),
+                  gnss_mount_.ext().T.translation().head<2>().norm(), eskf_params_.lever_align_dv);
     warnings.emplace_back(buf);
   }
   if (imu_gaps_ > imu_gaps_reported_) {
@@ -358,10 +358,13 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("points_mount", points_mount_.describe(base_frame_));
   kv("imu_mount", imu_mount_.describe(base_frame_));
   kv("gnss_mount", gnss_mount_.describe(base_frame_));
-  kv("heading_source", heading_source_ == HeadingSource::kLidar ? "lidar" : heading_source_ == HeadingSource::kInitialPose ? "initialpose" : "none");
-  kv("heading_sigma_rad", filter_init_ ? num(eskf_->headingSigma(), "%.3f") : "n/a");
+  kv("heading_source", heading_source_ == HeadingSource::kLidar ? "lidar" : heading_source_ == HeadingSource::kInitialPose ? "initialpose"
+                       : heading_source_ == HeadingSource::kMotion ? "motion" : "none");
+  kv("heading_sigma_rad", filter_init_ ? num(eskf_->headingSigmaHonest(), "%.3f") : "n/a");   // the spread the filter holds, not the bounded one the update uses
+  kv("heading_sigma_used_rad", filter_init_ ? num(eskf_->headingSigma(), "%.3f") : "n/a");
   kv("heading_capped", capped_now ? "true" : "false");
   kv("lever_release", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverReleaseOpen() ? "open" : "closed");
+  kv("lever_blind", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverBlind() ? "true" : "false");
   kv("gnss_only_s", !filter_init_ ? "n/a" : num(since_heading, "%.1f"));
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
@@ -576,6 +579,10 @@ void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr
   const auto now_w = Steady::now();
   if (!any_gnss_fix_ || std::chrono::duration<double>(now_w - last_gnss_wall_).count() > 2.0) capped_active_ = false;   // a gap in the fixes ends the stretch
   eskf_->updatePositionLever(enu, lever, R);
+  if (!lever.isZero(0.0) && eskf_->leverAligned()) {   // a start or a stop gave the heading
+    heading_source_ = HeadingSource::kMotion;
+    heading_source_wall_ = now_w;
+  }
   if (!lever.isZero(0.0)) {
     if (!eskf_->leverHeadingCapped()) capped_active_ = false;
     else if (!capped_active_) { capped_active_ = true; capped_since_wall_ = now_w; }
@@ -669,7 +676,9 @@ void FusionLocalizationNode::publish(const rclcpp::Time& stamp) {
   ps.pose.pose.position.x = x.p.x(); ps.pose.pose.position.y = x.p.y(); ps.pose.pose.position.z = x.p.z();
   ps.pose.pose.orientation.x = x.q.x(); ps.pose.pose.orientation.y = x.q.y();
   ps.pose.pose.orientation.z = x.q.z(); ps.pose.pose.orientation.w = x.q.w();
-  const auto& P = eskf_->covariance();
+  // With a lever arm the covariance includes the heading spread the bound holds back (Eskf::covarianceHonest): the pose is
+  // not claimed to be better than it is.
+  const auto P = gnss_mount_.resolved() ? eskf_->covarianceHonest(gnss_mount_.ext().T.translation()) : eskf_->covariance();
   for (int i = 0; i < 3; ++i)
     for (int j = 0; j < 3; ++j) {
       ps.pose.covariance[i * 6 + j] = P(i, j);
