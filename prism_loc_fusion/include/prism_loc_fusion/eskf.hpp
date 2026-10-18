@@ -84,6 +84,12 @@ class Eskf {
   // not trust the start covariance. Does nothing if lever_start_sigma, lever_restore or lever_align_sigma is 0. Touches neither x nor P.
   // Returns true if it marked the shadow.
   bool markHeadingUnknown();
+  // Median of the last 15 intervals between lever-arm fixes (s), 0 until 3 fixes have come. The alignment scales its span, window and gap
+  // limit with it (EskfParams::lever_align_span).
+  double fixPeriod() const;
+  // True once the filter has seen enough fixes to know that their period is over EskfParams::lever_align_period_max (a rate under about
+  // 0.8 Hz): the heading alignment does not run, and a start marked by markHeadingUnknown() has been taken back. Stays true until initialize().
+  bool leverUnsupportedRate() const { return rate_unsupported_; }
   // Heading standard deviation (rad) without the bound: the larger of headingSigma() and the
   // shadow of the heading variance that predict() carries while the bound holds the heading back
   // (lever_restore). The same as headingSigma() when nothing is held back.
@@ -127,10 +133,14 @@ class Eskf {
   void syncShadow(const Eigen::Vector3d& up);
   void setHeadingVariance(const Eigen::Vector3d& up, double var);
   bool alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up);
-  struct Fix { double t; Eigen::Vector2d s, p; double rate_max; };   // clock_, cum_a_, the antenna fix and the largest body rate since the previous fix, of one lever update
+  void spreadAfterOutage();
+  bool unknown_pending_{false};     // markHeadingUnknown() has marked the start and the fix rate is not yet known to be supported
+  bool rate_unsupported_{false};
+  struct Fix { double t; Eigen::Vector2d s, p; double rate_max; Eigen::Vector2d d; };   // clock_, cum_a_, the antenna fix, the largest body rate since the previous fix and cum_p_, of one lever update
   std::deque<Fix> fixes_;
   double clock_{0.0};
   double rate_max_{0.0};
   Eigen::Vector2d cum_a_{Eigen::Vector2d::Zero()};   // sum of the world-frame horizontal acceleration since the start, see alignHeading()
+  Eigen::Vector2d cum_p_{Eigen::Vector2d::Zero()};   // its integral over time (cum_a_ dt), see spreadAfterOutage()
 };
 }  // namespace prism_loc_fusion

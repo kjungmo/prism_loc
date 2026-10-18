@@ -761,7 +761,7 @@ S2s:
 | S7a35r05 | 4200 | 870 (20.7 %) | 362 | 148 | 156 | 1598 (38.0 %) | 1133 | 0.13 / 0.95 | 3.19 | 0.131 | 0.20 | 0.00 | 1.00 |
 | S7a35r20 | 4200 | 979 (23.3 %) | 476 | 285 | 242 | 1805 (43.0 %) | 1176 | 0.17 / 1.01 | 6.32 | 0.378 | 0.31 | 0.00 | 1.00 |
 | S8 | 4200 | 880 (21.0 %) | 354 | 159 | 213 | 1698 (40.4 %) | 1108 | 0.15 / 1.00 | 3.18 | 0.157 | 0.21 | 0.00 | 1.00 |
-| S8u | 4200 | 962 (22.9 %) | 383 | 194 | 249 | 1807 (43.0 %) | 1131 | 0.16 / 1.04 | 3.57 | 0.205 | 0.20 | 0.00 | 1.00 |
+| S8u | 4200 | 962 (22.9 %) | 383 | 194 | 248 | 1807 (43.0 %) | 1132 | 0.16 / 1.04 | 3.57 | 0.205 | 0.20 | 0.00 | 1.00 |
 
 ### GNSS and IMU only, by motion and duration (lever-arm rows)
 
@@ -844,7 +844,7 @@ S2s:
 | S7a35r05 | 540 | 95 (17.6 %) | 7 | 3 | 2 | 227 (42.0 %) | 185 | 0.20 / 0.71 | 0.58 | 0.045 | 0.38 | 0.00 | 1.00 |
 | S7a35r20 | 540 | 95 (17.6 %) | 7 | 3 | 2 | 236 (43.7 %) | 192 | 0.20 / 0.71 | 0.64 | 0.045 | 0.38 | 0.00 | 1.00 |
 | S8 | 540 | 92 (17.0 %) | 8 | 4 | 16 | 229 (42.4 %) | 173 | 0.20 / 0.81 | 0.60 | 0.045 | 0.38 | 0.00 | 1.00 |
-| S8u | 540 | 96 (17.8 %) | 8 | 3 | 17 | 228 (42.2 %) | 172 | 0.19 / 0.80 | 0.60 | 0.046 | 0.37 | 0.00 | 1.00 |
+| S8u | 540 | 96 (17.8 %) | 8 | 3 | 17 | 228 (42.2 %) | 172 | 0.19 / 0.81 | 0.60 | 0.046 | 0.37 | 0.00 | 1.00 |
 
 **drive 300 s**: 540 runs per scheme
 
@@ -904,7 +904,7 @@ S2s:
 | S7a35r05 | 576 | 96 (16.7 %) | 96 | 38 | 56 | 366 (63.5 %) | 250 | 0.18 / 1.02 | 24.24 | 0.673 | 0.88 | 0.00 | 1.00 |
 | S7a35r20 | 576 | 96 (16.7 %) | 96 | 38 | 54 | 364 (63.2 %) | 250 | 0.19 / 1.02 | 22.88 | 0.658 | 0.88 | 0.00 | 1.00 |
 | S8 | 576 | 96 (16.7 %) | 96 | 41 | 60 | 372 (64.6 %) | 239 | 0.20 / 1.07 | 24.78 | 0.572 | 0.90 | 0.00 | 1.00 |
-| S8u | 576 | 96 (16.7 %) | 96 | 41 | 60 | 374 (64.9 %) | 238 | 0.20 / 1.06 | 24.78 | 0.572 | 0.93 | 0.00 | 1.00 |
+| S8u | 576 | 96 (16.7 %) | 96 | 41 | 59 | 374 (64.9 %) | 239 | 0.20 / 1.06 | 24.78 | 0.572 | 0.93 | 0.00 | 1.00 |
 
 **stand 900 s**: 144 runs per scheme
 
@@ -1087,7 +1087,7 @@ S2s:
 | S7a35r05 | 888 | 282 (31.8 %) | 141 | 92 | 124 | 709 (79.8 %) | 394 | 0.47 / 1.15 | 26.34 | 0.830 | 1.33 | 0.00 | 1.00 |
 | S7a35r20 | 888 | 350 (39.4 %) | 221 | 174 | 180 | 800 (90.1 %) | 396 | 0.67 / 1.54 | 28.46 | 0.891 | 1.39 | 0.00 | 1.00 |
 | S8 | 888 | 275 (31.0 %) | 141 | 100 | 181 | 713 (80.3 %) | 365 | 0.55 / 1.24 | 29.89 | 0.831 | 1.34 | 0.00 | 1.00 |
-| S8u | 888 | 322 (36.3 %) | 160 | 118 | 203 | 756 (85.1 %) | 362 | 0.65 / 1.29 | 29.89 | 0.831 | 1.34 | 0.00 | 1.00 |
+| S8u | 888 | 322 (36.3 %) | 160 | 118 | 202 | 756 (85.1 %) | 363 | 0.65 / 1.29 | 29.89 | 0.831 | 1.34 | 0.00 | 1.00 |
 
 ### GNSS and IMU only, by accelerometer bias per axis, m/s^2 (lever-arm rows)
 
@@ -1130,7 +1130,7 @@ S2s:
 | S7a35r05 | 1608 | 151 (9.4 %) | 134 | 54 | 80 | 655 (40.7 %) | 506 | 0.13 / 1.00 | 3.92 | 0.127 | 0.24 | 0.00 | 1.00 |
 | S7a35r20 | 1608 | 191 (11.9 %) | 172 | 95 | 105 | 712 (44.3 %) | 520 | 0.17 / 1.01 | 6.26 | 0.357 | 0.36 | 0.00 | 1.00 |
 | S8 | 1608 | 148 (9.2 %) | 132 | 56 | 97 | 686 (42.7 %) | 498 | 0.15 / 1.06 | 3.10 | 0.126 | 0.26 | 0.00 | 1.00 |
-| S8u | 1608 | 171 (10.6 %) | 140 | 66 | 108 | 719 (44.7 %) | 505 | 0.16 / 1.06 | 3.83 | 0.185 | 0.25 | 0.00 | 1.00 |
+| S8u | 1608 | 171 (10.6 %) | 140 | 66 | 107 | 719 (44.7 %) | 506 | 0.16 / 1.06 | 3.83 | 0.185 | 0.25 | 0.00 | 1.00 |
 
 **accel bias 0.3**: 1080 runs per scheme
 
@@ -1173,7 +1173,7 @@ S2s:
 | S7a35r05 | 1400 | 284 (20.3 %) | 121 | 43 | 124 | 531 (37.9 %) | 315 | 0.23 / 1.02 | 3.19 | 0.128 | 0.19 | 0.00 | 1.00 |
 | S7a35r20 | 1400 | 330 (23.6 %) | 172 | 105 | 178 | 603 (43.1 %) | 321 | 0.26 / 1.14 | 8.18 | 0.420 | 0.31 | 0.00 | 1.00 |
 | S8 | 1400 | 276 (19.7 %) | 118 | 46 | 179 | 549 (39.2 %) | 270 | 0.24 / 1.10 | 3.16 | 0.141 | 0.20 | 0.00 | 1.00 |
-| S8u | 1400 | 344 (24.6 %) | 137 | 69 | 202 | 634 (45.3 %) | 289 | 0.28 / 1.12 | 3.59 | 0.237 | 0.17 | 0.00 | 1.00 |
+| S8u | 1400 | 344 (24.6 %) | 137 | 69 | 201 | 634 (45.3 %) | 290 | 0.28 / 1.12 | 3.59 | 0.237 | 0.17 | 0.00 | 1.00 |
 
 **antenna B**: 1400 runs per scheme
 
@@ -1256,7 +1256,7 @@ S2s:
 | S7a35r05 | 1368 | 483 (35.3 %) | 362 | 144 | 82 | 519 (37.9 %) | 252 | 0.16 / 1.02 | 23.74 | 0.683 | 0.21 | 0.02 | 0.73 |
 | S7a35r20 | 1368 | 510 (37.3 %) | 390 | 177 | 104 | 570 (41.7 %) | 264 | 0.19 / 1.11 | 22.93 | 0.686 | 0.33 | 0.00 | 1.00 |
 | S8 | 1368 | 478 (34.9 %) | 353 | 151 | 97 | 580 (42.4 %) | 245 | 0.17 / 1.08 | 26.22 | 0.666 | 0.25 | 0.01 | 0.99 |
-| S8u | 1368 | 497 (36.3 %) | 359 | 163 | 109 | 614 (44.9 %) | 249 | 0.18 / 1.11 | 26.22 | 0.666 | 0.27 | 0.01 | 0.99 |
+| S8u | 1368 | 497 (36.3 %) | 359 | 163 | 108 | 614 (44.9 %) | 250 | 0.18 / 1.11 | 26.22 | 0.666 | 0.27 | 0.01 | 0.99 |
 
 **dropout 30 s**: 1080 runs per scheme
 
@@ -1319,7 +1319,7 @@ S2s:
 | S7a35r05 | 2292 | 79 (3.4 %) | 2 | 4 | 92 | 972 (42.4 %) | 823 | 0.11 / 0.98 | 0.29 | 0.048 | 0.36 | 0.00 | 1.00 |
 | S7a35r20 | 2292 | 171 (7.5 %) | 93 | 99 | 158 | 1098 (47.9 %) | 841 | 0.17 / 1.02 | 0.31 | 0.065 | 0.43 | 0.00 | 1.00 |
 | S8 | 2292 | 91 (4.0 %) | 1 | 9 | 139 | 984 (42.9 %) | 794 | 0.13 / 1.03 | 0.29 | 0.049 | 0.36 | 0.00 | 1.00 |
-| S8u | 2292 | 160 (7.0 %) | 19 | 28 | 158 | 1042 (45.5 %) | 802 | 0.15 / 1.06 | 0.29 | 0.055 | 0.36 | 0.00 | 1.00 |
+| S8u | 2292 | 160 (7.0 %) | 19 | 28 | 157 | 1042 (45.5 %) | 803 | 0.15 / 1.06 | 0.29 | 0.055 | 0.36 | 0.00 | 1.00 |
 
 **reseed at half time**: 1908 runs per scheme
 
@@ -2010,6 +2010,7 @@ The filter is told the noise of the simulated IMU. "release open" is the share o
 - S7a35: 98 runs with tz where the zero-lever run of the same data has none: 88 with a GNSS dropout, 7 without a dropout and with an accelerometer bias of 0.3 m/s^2, 3 with neither; 98 are runs of 300 s.
 - S7a35: 156 runs with a horizontal error over 1 m; antenna A 124, B 14, M 18; 48 are runs of 900 s or 1,800 s without a dropout; 86 have a GNSS dropout; the zero-lever row: 7 of 1400.
 - S7a35: 14 runs over 1 m that S6vb does not have (and 752 that only S6vb has); of the new ones 6 are antenna A at 0.5 deg/s, with the largest error 1.00 to 1.53 m (the same runs under S6vb: 0.44 to 1.00 m).
+- S7a35 against S6vb: 103 runs gain tz and 1105 lose it; 54 of the 103 are drive and start-stop runs (they begin moving within 6 s of the start); 88 of the 103 have an accelerometer bias of 0.3 m/s^2; the zero-lever run of the same data has tz in 30 of the 103.
 - S6vb, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 1074, circ 796, xy>1 414, heading>0.5 1223, median max xy 0.27 m, p95 2.00 m
 - S7a35, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 684, circ 143, xy>1 86, heading>0.5 840, median max xy 0.14 m, p95 0.92 m
 - zero lever, runs with a GNSS dropout: 816 runs, tz 237, circ 17, xy>1 7, heading>0.5 553, median max xy 0.03 m, p95 0.11 m
@@ -2108,6 +2109,7 @@ The filter is told the noise of the simulated IMU. "release open" is the share o
 - S8: 96 runs with tz where the zero-lever run of the same data has none: 82 with a GNSS dropout, 12 without a dropout and with an accelerometer bias of 0.3 m/s^2, 2 with neither; 96 are runs of 300 s.
 - S8: 213 runs with a horizontal error over 1 m; antenna A 179, B 16, M 18; 48 are runs of 900 s or 1,800 s without a dropout; 118 have a GNSS dropout; the zero-lever row: 7 of 1400.
 - S8: 65 runs over 1 m that S7a35 does not have (and 8 that only S7a35 has); of the new ones 59 are antenna A at 0.5 deg/s, with the largest error 1.00 to 1.29 m (the same runs under S7a35: 0.65 to 1.00 m).
+- S8 against S7a35: 35 runs gain tz and 35 lose it; 15 of the 35 are drive and start-stop runs (they begin moving within 6 s of the start); 30 of the 35 have an accelerometer bias of 0.3 m/s^2; the zero-lever run of the same data has tz in 19 of the 35.
 - S7a35, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 684, circ 143, xy>1 86, heading>0.5 840, median max xy 0.14 m, p95 0.92 m
 - S8, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 679, circ 153, xy>1 118, heading>0.5 927, median max xy 0.15 m, p95 0.98 m
 - zero lever, runs with a GNSS dropout: 816 runs, tz 237, circ 17, xy>1 7, heading>0.5 553, median max xy 0.03 m, p95 0.11 m
@@ -2168,7 +2170,7 @@ The filter is told the noise of the simulated IMU. "release open" is the share o
 
 - Runs per scheme, GNSS and IMU only: 4200 with a lever arm (antennas A, B, M), 1400 with the zero lever.
 - S8, all cells: 4200 runs, tz 880, circ 159, xy>1 213, heading>0.5 1698, median max xy 0.15 m, p95 1.00 m
-- S8u, all cells: 4200 runs, tz 962, circ 194, xy>1 249, heading>0.5 1807, median max xy 0.16 m, p95 1.04 m
+- S8u, all cells: 4200 runs, tz 962, circ 194, xy>1 248, heading>0.5 1807, median max xy 0.16 m, p95 1.04 m
 - zero lever, all cells: 1400 runs, tz 321, circ 17, xy>1 7, heading>0.5 1001, median max xy 0.03 m, p95 0.08 m
 - S8, stand 300 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 96 runs, tz 0, circ 0, xy>1 0, heading>0.5 30, median max xy 0.15 m, p95 0.42 m
 - S8u, stand 300 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 96 runs, tz 0, circ 0, xy>1 0, heading>0.5 30, median max xy 0.14 m, p95 0.43 m
@@ -2204,10 +2206,11 @@ The filter is told the noise of the simulated IMU. "release open" is the share o
 - S8, standing 600 s: 96 of 576 with tz; 96 of the 144 runs whose reseed (300 s) falls inside the dropout (240 to 360 s); the zero-lever row has 32 of 48 there.
 - S8u, standing 600 s: 96 of 576 with tz; 96 of the 144 runs whose reseed (300 s) falls inside the dropout (240 to 360 s); the zero-lever row has 32 of 48 there.
 - S8u: 172 runs with tz where the zero-lever run of the same data has none: 130 with a GNSS dropout, 25 without a dropout and with an accelerometer bias of 0.3 m/s^2, 17 with neither; 172 are runs of 300 s.
-- S8u: 249 runs with a horizontal error over 1 m; antenna A 202, B 29, M 18; 48 are runs of 900 s or 1,800 s without a dropout; 143 have a GNSS dropout; the zero-lever row: 7 of 1400.
-- S8u: 37 runs over 1 m that S8 does not have (and 1 that only S8 has); of the new ones 10 are antenna A at 0.5 deg/s, with the largest error 1.00 to 1.90 m (the same runs under S8: 0.08 to 1.00 m).
+- S8u: 248 runs with a horizontal error over 1 m; antenna A 201, B 29, M 18; 48 are runs of 900 s or 1,800 s without a dropout; 142 have a GNSS dropout; the zero-lever row: 7 of 1400.
+- S8u: 37 runs over 1 m that S8 does not have (and 2 that only S8 has); of the new ones 10 are antenna A at 0.5 deg/s, with the largest error 1.00 to 1.90 m (the same runs under S8: 0.08 to 1.00 m).
+- S8u against S8: 117 runs gain tz and 35 lose it; 104 of the 117 are drive and start-stop runs (they begin moving within 6 s of the start); 83 of the 117 have an accelerometer bias of 0.3 m/s^2; the zero-lever run of the same data has tz in 24 of the 117.
 - S8, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 679, circ 153, xy>1 118, heading>0.5 927, median max xy 0.15 m, p95 0.98 m
-- S8u, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 727, circ 177, xy>1 143, heading>0.5 996, median max xy 0.16 m, p95 1.04 m
+- S8u, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 727, circ 177, xy>1 142, heading>0.5 996, median max xy 0.16 m, p95 1.04 m
 - zero lever, runs with a GNSS dropout: 816 runs, tz 237, circ 17, xy>1 7, heading>0.5 553, median max xy 0.03 m, p95 0.11 m
 - zero lever, standing 900 s and 1800 s, every gyro and accelerometer bias of the grid, no dropout: 64 runs, tz 0, circ 0, xy>1 0, heading>0.5 63, median max xy 0.04 m, p95 0.04 m
 - S8, spinning 300 s at 0.5 deg/s, no dropout, accelerometer bias <= 0.1: 24 runs, tz 0, circ 2, xy>1 4, heading>0.5 24, median max xy 0.63 m, p95 1.22 m
@@ -2262,6 +2265,105 @@ The filter is told the noise of the simulated IMU. "release open" is the share o
 - S8u, NEES at the last epoch: position inside its band in 116 of 366 standing configurations; tilt (2 dof) below its band in 280 and above in 700 of 1740 configurations; heading (1 dof) above its band in 516 of 1740.
 - Zero lever in the second pass: 1944 runs, every scheme identical in 1944.
 
+### Numbers quoted in README.md and the PR text: second pass (chosen scheme S8u, previous version S8k, zero lever = antenna Z)
+
+- Runs per scheme, GNSS and IMU only: 4200 with a lever arm (antennas A, B, M), 1400 with the zero lever.
+- S8k, all cells: 4200 runs, tz 962, circ 194, xy>1 249, heading>0.5 1807, median max xy 0.16 m, p95 1.04 m
+- S8u, all cells: 4200 runs, tz 962, circ 194, xy>1 248, heading>0.5 1807, median max xy 0.16 m, p95 1.04 m
+- zero lever, all cells: 1400 runs, tz 321, circ 17, xy>1 7, heading>0.5 1001, median max xy 0.03 m, p95 0.08 m
+- S8k, stand 300 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 96 runs, tz 0, circ 0, xy>1 0, heading>0.5 30, median max xy 0.14 m, p95 0.43 m
+- S8u, stand 300 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 96 runs, tz 0, circ 0, xy>1 0, heading>0.5 30, median max xy 0.14 m, p95 0.43 m
+- zero lever, stand 300 s, same cells: 32 runs, tz 0, circ 0, xy>1 0, heading>0.5 30, median max xy 0.03 m, p95 0.04 m
+- S8k, line 300 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 96 runs, tz 0, circ 0, xy>1 0, heading>0.5 27, median max xy 0.15 m, p95 0.43 m
+- S8u, line 300 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 96 runs, tz 0, circ 0, xy>1 0, heading>0.5 27, median max xy 0.15 m, p95 0.43 m
+- zero lever, line 300 s, same cells: 32 runs, tz 0, circ 0, xy>1 0, heading>0.5 27, median max xy 0.03 m, p95 0.04 m
+- S8k, stand 600 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 192 runs, tz 0, circ 0, xy>1 0, heading>0.5 93, median max xy 0.16 m, p95 0.56 m
+- S8u, stand 600 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 192 runs, tz 0, circ 0, xy>1 0, heading>0.5 93, median max xy 0.16 m, p95 0.56 m
+- zero lever, stand 600 s, same cells: 64 runs, tz 0, circ 0, xy>1 0, heading>0.5 61, median max xy 0.03 m, p95 0.04 m
+- S8k, line 600 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: no runs
+- S8u, line 600 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: no runs
+- zero lever, line 600 s, same cells: no runs
+- S8k, stand 900 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 144 runs, tz 0, circ 0, xy>1 16, heading>0.5 96, median max xy 0.20 m, p95 1.09 m
+- S8u, stand 900 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 144 runs, tz 0, circ 0, xy>1 16, heading>0.5 96, median max xy 0.20 m, p95 1.09 m
+- zero lever, stand 900 s, same cells: 48 runs, tz 0, circ 0, xy>1 0, heading>0.5 47, median max xy 0.04 m, p95 0.04 m
+- S8k, line 900 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 144 runs, tz 0, circ 0, xy>1 16, heading>0.5 96, median max xy 0.20 m, p95 1.09 m
+- S8u, line 900 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 144 runs, tz 0, circ 0, xy>1 16, heading>0.5 96, median max xy 0.20 m, p95 1.09 m
+- zero lever, line 900 s, same cells: 48 runs, tz 0, circ 0, xy>1 0, heading>0.5 47, median max xy 0.04 m, p95 0.04 m
+- S8k, stand 1800 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 24 runs, tz 0, circ 0, xy>1 0, heading>0.5 0, median max xy 0.15 m, p95 0.22 m
+- S8u, stand 1800 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 24 runs, tz 0, circ 0, xy>1 0, heading>0.5 0, median max xy 0.15 m, p95 0.22 m
+- zero lever, stand 1800 s, same cells: 8 runs, tz 0, circ 0, xy>1 0, heading>0.5 8, median max xy 0.04 m, p95 0.05 m
+- S8k, line 1800 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 24 runs, tz 0, circ 0, xy>1 0, heading>0.5 0, median max xy 0.15 m, p95 0.22 m
+- S8u, line 1800 s, no dropout, accelerometer bias <= 0.1, gyro bias <= 0.2 deg/s: 24 runs, tz 0, circ 0, xy>1 0, heading>0.5 0, median max xy 0.15 m, p95 0.22 m
+- zero lever, line 1800 s, same cells: 8 runs, tz 0, circ 0, xy>1 0, heading>0.5 8, median max xy 0.04 m, p95 0.04 m
+- S8k, standing 900 s and 1800 s, every gyro and accelerometer bias of the grid, no dropout: 192 runs, tz 0, circ 0, xy>1 24, heading>0.5 120, median max xy 0.20 m, p95 1.10 m
+- S8u, standing 900 s and 1800 s, every gyro and accelerometer bias of the grid, no dropout: 192 runs, tz 0, circ 0, xy>1 24, heading>0.5 120, median max xy 0.20 m, p95 1.10 m
+- S8k, the clean envelope (stand, line, startstop, turn; gyro bias <= 0.2 deg/s; accelerometer bias <= 0.1; no dropout): 912 runs, tz 0, circ 2, xy>1 32, heading>0.5 378, median max xy 0.15 m, p95 0.80 m
+- S8u, the clean envelope (stand, line, startstop, turn; gyro bias <= 0.2 deg/s; accelerometer bias <= 0.1; no dropout): 912 runs, tz 0, circ 2, xy>1 32, heading>0.5 378, median max xy 0.15 m, p95 0.80 m
+- zero lever, the clean envelope: 304 runs, tz 3, circ 0, xy>1 0, heading>0.5 261, median max xy 0.04 m, p95 0.04 m
+- S8u: 962 runs with tz; 790 of them also have tz in the zero-lever row of the same data; 633 have an accelerometer bias of 0.3 m/s^2; 727 a GNSS dropout; 17 neither.
+  those without dropout and without accelerometer bias 0.3 by motion and gyro bias: drive 0.05 deg/s: 1, drive 0.1 deg/s: 1, drive 0.2 deg/s: 1, drive 0.5 deg/s: 2, startstop 0.5 deg/s: 12.
+- S8k, standing 600 s: 96 of 576 with tz; 96 of the 144 runs whose reseed (300 s) falls inside the dropout (240 to 360 s); the zero-lever row has 32 of 48 there.
+- S8u, standing 600 s: 96 of 576 with tz; 96 of the 144 runs whose reseed (300 s) falls inside the dropout (240 to 360 s); the zero-lever row has 32 of 48 there.
+- S8u: 172 runs with tz where the zero-lever run of the same data has none: 130 with a GNSS dropout, 25 without a dropout and with an accelerometer bias of 0.3 m/s^2, 17 with neither; 172 are runs of 300 s.
+- S8u: 248 runs with a horizontal error over 1 m; antenna A 201, B 29, M 18; 48 are runs of 900 s or 1,800 s without a dropout; 142 have a GNSS dropout; the zero-lever row: 7 of 1400.
+- S8u: 0 runs over 1 m that S8k does not have (and 1 that only S8k has); of the new ones 0 are antenna A at 0.5 deg/s, with the largest error nan to nan m (the same runs under S8k: nan to nan m).
+- S8u against S8k: 0 runs gain tz and 0 lose it; 0 of the 0 are drive and start-stop runs (they begin moving within 6 s of the start); 0 of the 0 have an accelerometer bias of 0.3 m/s^2; the zero-lever run of the same data has tz in 0 of the 0.
+- S8k, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 727, circ 177, xy>1 143, heading>0.5 996, median max xy 0.16 m, p95 1.04 m
+- S8u, runs with a GNSS dropout (30 s or 120 s): 2448 runs, tz 727, circ 177, xy>1 142, heading>0.5 996, median max xy 0.16 m, p95 1.04 m
+- zero lever, runs with a GNSS dropout: 816 runs, tz 237, circ 17, xy>1 7, heading>0.5 553, median max xy 0.03 m, p95 0.11 m
+- zero lever, standing 900 s and 1800 s, every gyro and accelerometer bias of the grid, no dropout: 64 runs, tz 0, circ 0, xy>1 0, heading>0.5 63, median max xy 0.04 m, p95 0.04 m
+- S8k, spinning 300 s at 0.5 deg/s, no dropout, accelerometer bias <= 0.1: 24 runs, tz 0, circ 0, xy>1 4, heading>0.5 24, median max xy 0.68 m, p95 1.21 m
+- S8u, spinning 300 s at 0.5 deg/s, no dropout, accelerometer bias <= 0.1: 24 runs, tz 0, circ 0, xy>1 4, heading>0.5 24, median max xy 0.68 m, p95 1.21 m
+- zero lever, spinning 300 s at 0.5 deg/s, no dropout, accelerometer bias <= 0.1: 8 runs, tz 0, circ 0, xy>1 0, heading>0.5 8, median max xy 0.03 m, p95 0.04 m
+- S8u, stand 300 s: share of lever updates with the release open: median 0.00, mean 0.01; with the bound active: median 1.00, mean 0.96.
+- S8u, line 300 s: share of lever updates with the release open: median 0.00, mean 0.01; with the bound active: median 1.00, mean 0.96.
+- S8u, startstop 300 s: share of lever updates with the release open: median 0.05, mean 0.07; with the bound active: median 0.05, mean 0.06.
+- S8u, turn 300 s: share of lever updates with the release open: median 0.00, mean 0.00; with the bound active: median 1.00, mean 0.97.
+- S8u, drive 300 s: share of lever updates with the release open: median 0.99, mean 0.99; with the bound active: median 0.06, mean 0.05.
+- S8u, spin 300 s: share of lever updates with the release open: median 0.00, mean 0.00; with the bound active: median 1.00, mean 0.98.
+- S0, NDT fixes on (hndt): 288 runs, tz 9, circ 0, xy>1 0, heading>0.5 0, median max xy 0.04 m, p95 0.06 m
+- S8k, NDT fixes on (hndt): 288 runs, tz 0, circ 0, xy>1 0, heading>0.5 0, median max xy 0.03 m, p95 0.04 m
+- S8u, NDT fixes on (hndt): 288 runs, tz 0, circ 0, xy>1 0, heading>0.5 0, median max xy 0.03 m, p95 0.04 m
+- reseed on a body tilted by 0 rad, GNSS and IMU only, S8k: 144 runs, tz 2, tilt at the end > 0.02 rad 0, median end tilt 0.0026 rad.
+- reseed on a body tilted by 0 rad, GNSS and IMU only, S8u: 144 runs, tz 2, tilt at the end > 0.02 rad 0, median end tilt 0.0026 rad.
+- reseed on a body tilted by 0 rad, GNSS and IMU only, S7n: 144 runs, tz 3, tilt at the end > 0.02 rad 0, median end tilt 0.0021 rad.
+- reseed on a body tilted by 0.05 rad, GNSS and IMU only, S8k: 144 runs, tz 7, tilt at the end > 0.02 rad 0, median end tilt 0.0020 rad.
+- reseed on a body tilted by 0.05 rad, GNSS and IMU only, S8u: 144 runs, tz 7, tilt at the end > 0.02 rad 0, median end tilt 0.0020 rad.
+- reseed on a body tilted by 0.05 rad, GNSS and IMU only, S7n: 144 runs, tz 5, tilt at the end > 0.02 rad 41, median end tilt 0.0095 rad.
+- reseed on a body tilted by 0.1 rad, GNSS and IMU only, S8k: 144 runs, tz 4, tilt at the end > 0.02 rad 0, median end tilt 0.0024 rad.
+- reseed on a body tilted by 0.1 rad, GNSS and IMU only, S8u: 144 runs, tz 4, tilt at the end > 0.02 rad 0, median end tilt 0.0024 rad.
+- reseed on a body tilted by 0.1 rad, GNSS and IMU only, S7n: 144 runs, tz 46, tilt at the end > 0.02 rad 60, median end tilt 0.0152 rad.
+- start heading 0.5 rad off, stand 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 6, tz 0, median end heading 0.50 rad.
+- start heading 0.5 rad off, startstop 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 24, tz 0, median end heading 0.01 rad.
+- start heading 0.5 rad off, drive 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 24, tz 1, median end heading 0.00 rad.
+- start heading 0.5 rad off, stand 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 6, tz 0, median end heading 0.50 rad.
+- start heading 0.5 rad off, startstop 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 24, tz 0, median end heading 0.01 rad.
+- start heading 0.5 rad off, drive 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 24, tz 1, median end heading 0.00 rad.
+- start heading 0.5 rad off, stand 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 6, tz 0, median end heading 0.51 rad.
+- start heading 0.5 rad off, startstop 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 4, tz 17, median end heading 0.83 rad.
+- start heading 0.5 rad off, drive 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 9, tz 14, median end heading 0.40 rad.
+- start heading 1 rad off, stand 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 0, tz 0, median end heading 1.00 rad.
+- start heading 1 rad off, startstop 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 24, tz 0, median end heading 0.01 rad.
+- start heading 1 rad off, drive 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 24, tz 14, median end heading 0.00 rad.
+- start heading 1 rad off, stand 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 0, tz 0, median end heading 1.00 rad.
+- start heading 1 rad off, startstop 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 24, tz 0, median end heading 0.01 rad.
+- start heading 1 rad off, drive 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 24, tz 14, median end heading 0.00 rad.
+- start heading 1 rad off, stand 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 0, tz 0, median end heading 1.00 rad.
+- start heading 1 rad off, startstop 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 3, tz 24, median end heading 1.04 rad.
+- start heading 1 rad off, drive 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 2, tz 24, median end heading 1.08 rad.
+- start heading 2 rad off, stand 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 0, tz 0, median end heading 2.01 rad.
+- start heading 2 rad off, startstop 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 23, tz 4, median end heading 0.02 rad.
+- start heading 2 rad off, drive 300 s, S8k: 24 runs, recovered (< 0.2 rad at the end) 24, tz 24, median end heading 0.00 rad.
+- start heading 2 rad off, stand 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 0, tz 0, median end heading 2.01 rad.
+- start heading 2 rad off, startstop 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 23, tz 4, median end heading 0.02 rad.
+- start heading 2 rad off, drive 300 s, S8u: 24 runs, recovered (< 0.2 rad at the end) 24, tz 24, median end heading 0.00 rad.
+- start heading 2 rad off, stand 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 0, tz 0, median end heading 2.02 rad.
+- start heading 2 rad off, startstop 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 0, tz 24, median end heading 1.28 rad.
+- start heading 2 rad off, drive 300 s, S7: 24 runs, recovered (< 0.2 rad at the end) 3, tz 24, median end heading 1.02 rad.
+- S8k, NEES at the last epoch: position inside its band in 116 of 366 standing configurations; tilt (2 dof) below its band in 280 and above in 700 of 1740 configurations; heading (1 dof) above its band in 516 of 1740.
+- S8u, NEES at the last epoch: position inside its band in 116 of 366 standing configurations; tilt (2 dof) below its band in 280 and above in 700 of 1740 configurations; heading (1 dof) above its band in 516 of 1740.
+- Zero lever in the second pass: 1944 runs, every scheme identical in 1944.
+
 
 # Lever-arm study, third pass: standing, then moving
 
@@ -2281,6 +2383,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 1152 | 428 | 324 | 249 | 292 | 182 | 390 | 267 | 564 |
 | S8a | 1152 | 81 | 324 | 52 | 18 | 6 | 55 | 95 | 263 |
 | S8 | 1152 | 26 | 324 | 12 | 1 | 0 | 16 | 86 | 270 |
+| S8k | 1152 | 49 | 324 | 24 | 3 | 0 | 19 | 86 | 274 |
+| S8v | 1152 | 49 | 324 | 24 | 3 | 0 | 19 | 86 | 274 |
 | S8u | 1152 | 49 | 324 | 24 | 3 | 0 | 19 | 86 | 274 |
 
 ### sgstart
@@ -2293,6 +2397,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 384 | 214 | 168 | 111 | 161 | 88 | 200 | 130 | 153 |
 | S8a | 384 | 31 | 168 | 13 | 10 | 0 | 11 | 28 | 0 |
 | S8 | 384 | 16 | 168 | 8 | 1 | 0 | 6 | 27 | 0 |
+| S8k | 384 | 26 | 168 | 11 | 2 | 0 | 7 | 27 | 0 |
+| S8v | 384 | 26 | 168 | 11 | 2 | 0 | 7 | 27 | 0 |
 | S8u | 384 | 26 | 168 | 11 | 2 | 0 | 7 | 27 | 0 |
 
 ### sgdrive
@@ -2305,6 +2411,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 384 | 189 | 156 | 113 | 128 | 92 | 160 | 97 | 153 |
 | S8a | 384 | 25 | 156 | 14 | 0 | 0 | 14 | 27 | 1 |
 | S8 | 384 | 10 | 156 | 4 | 0 | 0 | 4 | 26 | 4 |
+| S8k | 384 | 23 | 156 | 13 | 1 | 0 | 7 | 25 | 5 |
+| S8v | 384 | 23 | 156 | 13 | 1 | 0 | 7 | 25 | 5 |
 | S8u | 384 | 23 | 156 | 13 | 1 | 0 | 7 | 25 | 5 |
 
 ### sgturn
@@ -2317,6 +2425,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 384 | 25 | 0 | 25 | 3 | 2 | 30 | 40 | 258 |
 | S8a | 384 | 25 | 0 | 25 | 8 | 6 | 30 | 40 | 262 |
 | S8 | 384 | 0 | 0 | 0 | 0 | 0 | 6 | 33 | 266 |
+| S8k | 384 | 0 | 0 | 0 | 0 | 0 | 5 | 34 | 269 |
+| S8v | 384 | 0 | 0 | 0 | 0 | 0 | 5 | 34 | 269 |
 | S8u | 384 | 0 | 0 | 0 | 0 | 0 | 5 | 34 | 269 |
 
 ### Standing 300 s
@@ -2329,6 +2439,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 65 | 54 | 52 | 32 | 16 | 57 | 23 | 90 |
 | S8a | 288 | 6 | 54 | 6 | 1 | 0 | 9 | 3 | 54 |
 | S8 | 288 | 0 | 54 | 0 | 0 | 0 | 2 | 0 | 54 |
+| S8k | 288 | 0 | 54 | 0 | 0 | 0 | 2 | 0 | 56 |
+| S8v | 288 | 0 | 54 | 0 | 0 | 0 | 2 | 0 | 56 |
 | S8u | 288 | 0 | 54 | 0 | 0 | 0 | 2 | 0 | 56 |
 
 ### Standing 600 s
@@ -2341,6 +2453,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 115 | 78 | 64 | 75 | 40 | 101 | 52 | 153 |
 | S8a | 288 | 19 | 78 | 13 | 4 | 3 | 9 | 7 | 71 |
 | S8 | 288 | 2 | 78 | 1 | 0 | 0 | 2 | 9 | 72 |
+| S8k | 288 | 10 | 78 | 5 | 0 | 0 | 1 | 8 | 75 |
+| S8v | 288 | 10 | 78 | 5 | 0 | 0 | 1 | 8 | 75 |
 | S8u | 288 | 10 | 78 | 5 | 0 | 0 | 1 | 8 | 75 |
 
 ### Standing 900 s
@@ -2353,6 +2467,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 133 | 96 | 68 | 97 | 64 | 123 | 91 | 173 |
 | S8a | 288 | 23 | 96 | 10 | 7 | 1 | 17 | 29 | 72 |
 | S8 | 288 | 11 | 96 | 4 | 1 | 0 | 5 | 27 | 74 |
+| S8k | 288 | 17 | 96 | 7 | 3 | 0 | 7 | 28 | 74 |
+| S8v | 288 | 17 | 96 | 7 | 3 | 0 | 7 | 28 | 74 |
 | S8u | 288 | 17 | 96 | 7 | 3 | 0 | 7 | 28 | 74 |
 
 ### Standing 1800 s
@@ -2365,6 +2481,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 115 | 96 | 65 | 88 | 62 | 109 | 101 | 148 |
 | S8a | 288 | 33 | 96 | 23 | 6 | 2 | 20 | 56 | 66 |
 | S8 | 288 | 13 | 96 | 7 | 0 | 0 | 7 | 50 | 70 |
+| S8k | 288 | 22 | 96 | 12 | 0 | 0 | 9 | 50 | 69 |
+| S8v | 288 | 22 | 96 | 12 | 0 | 0 | 9 | 50 | 69 |
 | S8u | 288 | 22 | 96 | 12 | 0 | 0 | 9 | 50 | 69 |
 
 ### Gyro bias 0 deg/s per axis
@@ -2377,6 +2495,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 15 | 69 | 11 | 5 | 0 | 11 | 0 | 9 |
 | S8a | 288 | 0 | 69 | 0 | 0 | 0 | 0 | 0 | 0 |
 | S8 | 288 | 1 | 69 | 1 | 0 | 0 | 0 | 0 | 1 |
+| S8k | 288 | 1 | 69 | 1 | 0 | 0 | 0 | 0 | 1 |
+| S8v | 288 | 1 | 69 | 1 | 0 | 0 | 0 | 0 | 1 |
 | S8u | 288 | 1 | 69 | 1 | 0 | 0 | 0 | 0 | 1 |
 
 ### Gyro bias 0.05 deg/s per axis
@@ -2389,6 +2509,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 102 | 87 | 62 | 56 | 27 | 84 | 44 | 149 |
 | S8a | 288 | 13 | 87 | 10 | 2 | 2 | 10 | 6 | 77 |
 | S8 | 288 | 0 | 87 | 0 | 0 | 0 | 1 | 0 | 78 |
+| S8k | 288 | 5 | 87 | 2 | 0 | 0 | 0 | 0 | 80 |
+| S8v | 288 | 5 | 87 | 2 | 0 | 0 | 0 | 0 | 80 |
 | S8u | 288 | 5 | 87 | 2 | 0 | 0 | 0 | 0 | 80 |
 
 ### Gyro bias 0.1 deg/s per axis
@@ -2401,6 +2523,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 157 | 81 | 85 | 113 | 73 | 149 | 98 | 216 |
 | S8a | 288 | 28 | 81 | 17 | 5 | 1 | 19 | 30 | 96 |
 | S8 | 288 | 12 | 81 | 6 | 0 | 0 | 6 | 27 | 98 |
+| S8k | 288 | 17 | 81 | 9 | 0 | 0 | 9 | 28 | 96 |
+| S8v | 288 | 17 | 81 | 9 | 0 | 0 | 9 | 28 | 96 |
 | S8u | 288 | 17 | 81 | 9 | 0 | 0 | 9 | 28 | 96 |
 
 ### Gyro bias 0.2 deg/s per axis
@@ -2413,6 +2537,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 288 | 154 | 87 | 91 | 118 | 82 | 146 | 125 | 190 |
 | S8a | 288 | 40 | 87 | 25 | 11 | 3 | 26 | 59 | 90 |
 | S8 | 288 | 13 | 87 | 5 | 1 | 0 | 9 | 59 | 93 |
+| S8k | 288 | 26 | 87 | 12 | 3 | 0 | 10 | 58 | 97 |
+| S8v | 288 | 26 | 87 | 12 | 3 | 0 | 10 | 58 | 97 |
 | S8u | 288 | 26 | 87 | 12 | 3 | 0 | 10 | 58 | 97 |
 
 ### Antenna A
@@ -2425,6 +2551,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 384 | 121 | 108 | 73 | 81 | 57 | 104 | 137 | 143 |
 | S8a | 384 | 22 | 108 | 22 | 8 | 6 | 24 | 88 | 84 |
 | S8 | 384 | 0 | 108 | 0 | 0 | 0 | 6 | 81 | 86 |
+| S8k | 384 | 0 | 108 | 0 | 0 | 0 | 5 | 82 | 90 |
+| S8v | 384 | 0 | 108 | 0 | 0 | 0 | 5 | 82 | 90 |
 | S8u | 384 | 0 | 108 | 0 | 0 | 0 | 5 | 82 | 90 |
 
 ### Antenna B
@@ -2437,6 +2565,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 384 | 137 | 108 | 79 | 110 | 94 | 129 | 110 | 196 |
 | S8a | 384 | 3 | 108 | 3 | 0 | 0 | 30 | 7 | 89 |
 | S8 | 384 | 1 | 108 | 1 | 0 | 0 | 6 | 5 | 91 |
+| S8k | 384 | 1 | 108 | 1 | 0 | 0 | 5 | 4 | 91 |
+| S8v | 384 | 1 | 108 | 1 | 0 | 0 | 5 | 4 | 91 |
 | S8u | 384 | 1 | 108 | 1 | 0 | 0 | 5 | 4 | 91 |
 
 ### Antenna M
@@ -2449,6 +2579,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | 384 | 170 | 108 | 97 | 101 | 31 | 157 | 20 | 225 |
 | S8a | 384 | 56 | 108 | 27 | 10 | 0 | 1 | 0 | 90 |
 | S8 | 384 | 25 | 108 | 11 | 1 | 0 | 4 | 0 | 93 |
+| S8k | 384 | 48 | 108 | 23 | 3 | 0 | 9 | 0 | 93 |
+| S8v | 384 | 48 | 108 | 23 | 3 | 0 | 9 | 0 | 93 |
 | S8u | 384 | 48 | 108 | 23 | 3 | 0 | 9 | 0 | 93 |
 
 ### The bar, per scheme
@@ -2461,6 +2593,8 @@ Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (
 | S8r | no (214 against 168) | no (189 against 156) | no (25 against 0) | 189 of 512 | 295 of 1152 |
 | S8a | yes (31 against 168) | yes (25 against 156) | no (25 against 0) | 0 of 512 | 18 of 1152 |
 | S8 | yes (16 against 168) | yes (10 against 156) | yes (0 against 0) | 0 of 512 | 1 of 1152 |
+| S8k | yes (26 against 168) | yes (23 against 156) | yes (0 against 0) | 0 of 512 | 3 of 1152 |
+| S8v | yes (26 against 168) | yes (23 against 156) | yes (0 against 0) | 0 of 512 | 3 of 1152 |
 | S8u | yes (26 against 168) | yes (23 against 156) | yes (0 against 0) | 0 of 512 | 3 of 1152 |
 
 Zero lever in hsg: 384 runs, every scheme identical in 384.
@@ -2503,6 +2637,16 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
   - sgdrive: 384 runs; heading>0.5 at the end 4; xy>1 26; tz 10; excess 4.
   - sgturn: 384 runs; heading>0.5 at the end 266; xy>1 33; tz 0; excess 0.
   - excess 12: antenna M 11, A 0, B 1; z>1 1, tilt>0.3 0.
+- S8k: lever-arm runs 1152; tz 49; the paired zero-lever tz summed once per lever-arm run (paired) 324, which is 108 unique zero-lever runs of 384 counted three times.
+  - sgstart: 384 runs; heading>0.5 at the end 0; xy>1 27; tz 26; excess 11.
+  - sgdrive: 384 runs; heading>0.5 at the end 5; xy>1 25; tz 23; excess 13.
+  - sgturn: 384 runs; heading>0.5 at the end 269; xy>1 34; tz 0; excess 0.
+  - excess 24: antenna M 23, A 0, B 1; z>1 3, tilt>0.3 0.
+- S8v: lever-arm runs 1152; tz 49; the paired zero-lever tz summed once per lever-arm run (paired) 324, which is 108 unique zero-lever runs of 384 counted three times.
+  - sgstart: 384 runs; heading>0.5 at the end 0; xy>1 27; tz 26; excess 11.
+  - sgdrive: 384 runs; heading>0.5 at the end 5; xy>1 25; tz 23; excess 13.
+  - sgturn: 384 runs; heading>0.5 at the end 269; xy>1 34; tz 0; excess 0.
+  - excess 24: antenna M 23, A 0, B 1; z>1 3, tilt>0.3 0.
 - S8u: lever-arm runs 1152; tz 49; the paired zero-lever tz summed once per lever-arm run (paired) 324, which is 108 unique zero-lever runs of 384 counted three times.
   - sgstart: 384 runs; heading>0.5 at the end 0; xy>1 27; tz 26; excess 11.
   - sgdrive: 384 runs; heading>0.5 at the end 5; xy>1 25; tz 23; excess 13.
@@ -2522,6 +2666,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 1152 | 431 | 366 | 223 | 290 | 189 | 376 | 268 | 551 |
 | S8a | 1152 | 83 | 366 | 49 | 21 | 6 | 58 | 104 | 258 |
 | S8 | 1152 | 21 | 366 | 8 | 0 | 0 | 16 | 93 | 262 |
+| S8k | 1152 | 52 | 366 | 22 | 4 | 0 | 18 | 91 | 274 |
+| S8v | 1152 | 52 | 366 | 22 | 4 | 0 | 18 | 91 | 274 |
 | S8u | 1152 | 52 | 366 | 22 | 4 | 0 | 18 | 91 | 274 |
 
 ### sgstart
@@ -2534,6 +2680,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 384 | 209 | 171 | 107 | 160 | 99 | 192 | 128 | 138 |
 | S8a | 384 | 30 | 171 | 13 | 12 | 0 | 14 | 27 | 0 |
 | S8 | 384 | 14 | 171 | 6 | 0 | 0 | 5 | 29 | 0 |
+| S8k | 384 | 27 | 171 | 11 | 3 | 0 | 5 | 29 | 0 |
+| S8v | 384 | 27 | 171 | 11 | 3 | 0 | 5 | 29 | 0 |
 | S8u | 384 | 27 | 171 | 11 | 3 | 0 | 5 | 29 | 0 |
 
 ### sgdrive
@@ -2546,6 +2694,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 384 | 197 | 195 | 91 | 127 | 88 | 158 | 94 | 164 |
 | S8a | 384 | 28 | 195 | 11 | 0 | 0 | 17 | 30 | 1 |
 | S8 | 384 | 7 | 195 | 2 | 0 | 0 | 7 | 29 | 4 |
+| S8k | 384 | 25 | 195 | 11 | 1 | 0 | 8 | 28 | 6 |
+| S8v | 384 | 25 | 195 | 11 | 1 | 0 | 8 | 28 | 6 |
 | S8u | 384 | 25 | 195 | 11 | 1 | 0 | 8 | 28 | 6 |
 
 ### sgturn
@@ -2558,6 +2708,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 384 | 25 | 0 | 25 | 3 | 2 | 26 | 46 | 249 |
 | S8a | 384 | 25 | 0 | 25 | 9 | 6 | 27 | 47 | 257 |
 | S8 | 384 | 0 | 0 | 0 | 0 | 0 | 4 | 35 | 258 |
+| S8k | 384 | 0 | 0 | 0 | 0 | 0 | 5 | 34 | 268 |
+| S8v | 384 | 0 | 0 | 0 | 0 | 0 | 5 | 34 | 268 |
 | S8u | 384 | 0 | 0 | 0 | 0 | 0 | 5 | 34 | 268 |
 
 ### Standing 300 s
@@ -2570,6 +2722,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 67 | 63 | 37 | 34 | 18 | 49 | 19 | 86 |
 | S8a | 288 | 4 | 63 | 4 | 0 | 0 | 6 | 3 | 50 |
 | S8 | 288 | 0 | 63 | 0 | 0 | 0 | 0 | 0 | 50 |
+| S8k | 288 | 1 | 63 | 1 | 0 | 0 | 0 | 0 | 56 |
+| S8v | 288 | 1 | 63 | 1 | 0 | 0 | 0 | 0 | 56 |
 | S8u | 288 | 1 | 63 | 1 | 0 | 0 | 0 | 0 | 56 |
 
 ### Standing 600 s
@@ -2582,6 +2736,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 109 | 102 | 58 | 67 | 40 | 98 | 54 | 148 |
 | S8a | 288 | 23 | 102 | 14 | 5 | 4 | 13 | 10 | 68 |
 | S8 | 288 | 2 | 102 | 0 | 0 | 0 | 2 | 10 | 70 |
+| S8k | 288 | 16 | 102 | 7 | 0 | 0 | 2 | 9 | 74 |
+| S8v | 288 | 16 | 102 | 7 | 0 | 0 | 2 | 9 | 74 |
 | S8u | 288 | 16 | 102 | 7 | 0 | 0 | 2 | 9 | 74 |
 
 ### Standing 900 s
@@ -2594,6 +2750,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 138 | 114 | 54 | 99 | 64 | 123 | 92 | 166 |
 | S8a | 288 | 29 | 114 | 14 | 7 | 1 | 17 | 33 | 72 |
 | S8 | 288 | 9 | 114 | 2 | 0 | 0 | 4 | 27 | 73 |
+| S8k | 288 | 18 | 114 | 5 | 2 | 0 | 4 | 27 | 74 |
+| S8v | 288 | 18 | 114 | 5 | 2 | 0 | 4 | 27 | 74 |
 | S8u | 288 | 18 | 114 | 5 | 2 | 0 | 4 | 27 | 74 |
 
 ### Standing 1800 s
@@ -2606,6 +2764,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 117 | 87 | 74 | 90 | 67 | 106 | 103 | 151 |
 | S8a | 288 | 27 | 87 | 17 | 9 | 1 | 22 | 58 | 68 |
 | S8 | 288 | 10 | 87 | 6 | 0 | 0 | 10 | 56 | 69 |
+| S8k | 288 | 17 | 87 | 9 | 2 | 0 | 12 | 55 | 70 |
+| S8v | 288 | 17 | 87 | 9 | 2 | 0 | 12 | 55 | 70 |
 | S8u | 288 | 17 | 87 | 9 | 2 | 0 | 12 | 55 | 70 |
 
 ### Gyro bias 0 deg/s per axis
@@ -2618,6 +2778,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 14 | 93 | 10 | 2 | 0 | 8 | 0 | 6 |
 | S8a | 288 | 0 | 93 | 0 | 0 | 0 | 0 | 0 | 0 |
 | S8 | 288 | 0 | 93 | 0 | 0 | 0 | 0 | 0 | 0 |
+| S8k | 288 | 0 | 93 | 0 | 0 | 0 | 0 | 0 | 0 |
+| S8v | 288 | 0 | 93 | 0 | 0 | 0 | 0 | 0 | 0 |
 | S8u | 288 | 0 | 93 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### Gyro bias 0.05 deg/s per axis
@@ -2630,6 +2792,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 101 | 72 | 63 | 66 | 31 | 79 | 41 | 139 |
 | S8a | 288 | 10 | 72 | 7 | 2 | 1 | 8 | 5 | 71 |
 | S8 | 288 | 0 | 72 | 0 | 0 | 0 | 1 | 2 | 71 |
+| S8k | 288 | 1 | 72 | 0 | 0 | 0 | 1 | 1 | 79 |
+| S8v | 288 | 1 | 72 | 0 | 0 | 0 | 1 | 1 | 79 |
 | S8u | 288 | 1 | 72 | 0 | 0 | 0 | 1 | 1 | 79 |
 
 ### Gyro bias 0.1 deg/s per axis
@@ -2642,6 +2806,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 161 | 87 | 86 | 108 | 74 | 142 | 97 | 209 |
 | S8a | 288 | 30 | 87 | 20 | 11 | 2 | 25 | 38 | 97 |
 | S8 | 288 | 10 | 87 | 6 | 0 | 0 | 9 | 31 | 98 |
+| S8k | 288 | 18 | 87 | 10 | 2 | 0 | 11 | 31 | 98 |
+| S8v | 288 | 18 | 87 | 10 | 2 | 0 | 11 | 31 | 98 |
 | S8u | 288 | 18 | 87 | 10 | 2 | 0 | 11 | 31 | 98 |
 
 ### Gyro bias 0.2 deg/s per axis
@@ -2654,6 +2820,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 288 | 155 | 114 | 64 | 114 | 84 | 147 | 130 | 197 |
 | S8a | 288 | 43 | 114 | 22 | 8 | 3 | 25 | 61 | 90 |
 | S8 | 288 | 11 | 114 | 2 | 0 | 0 | 6 | 60 | 93 |
+| S8k | 288 | 33 | 114 | 12 | 2 | 0 | 6 | 59 | 97 |
+| S8v | 288 | 33 | 114 | 12 | 2 | 0 | 6 | 59 | 97 |
 | S8u | 288 | 33 | 114 | 12 | 2 | 0 | 6 | 59 | 97 |
 
 ### Antenna A
@@ -2666,6 +2834,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 384 | 121 | 122 | 66 | 78 | 59 | 107 | 143 | 140 |
 | S8a | 384 | 22 | 122 | 22 | 9 | 6 | 25 | 94 | 85 |
 | S8 | 384 | 0 | 122 | 0 | 0 | 0 | 4 | 85 | 86 |
+| S8k | 384 | 0 | 122 | 0 | 0 | 0 | 5 | 83 | 90 |
+| S8v | 384 | 0 | 122 | 0 | 0 | 0 | 5 | 83 | 90 |
 | S8u | 384 | 0 | 122 | 0 | 0 | 0 | 5 | 83 | 90 |
 
 ### Antenna B
@@ -2678,6 +2848,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 384 | 137 | 122 | 64 | 105 | 94 | 122 | 102 | 189 |
 | S8a | 384 | 3 | 122 | 3 | 0 | 0 | 32 | 10 | 86 |
 | S8 | 384 | 0 | 122 | 0 | 0 | 0 | 9 | 8 | 86 |
+| S8k | 384 | 0 | 122 | 0 | 0 | 0 | 9 | 8 | 90 |
+| S8v | 384 | 0 | 122 | 0 | 0 | 0 | 9 | 8 | 90 |
 | S8u | 384 | 0 | 122 | 0 | 0 | 0 | 9 | 8 | 90 |
 
 ### Antenna M
@@ -2690,6 +2862,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | 384 | 173 | 122 | 93 | 107 | 36 | 147 | 23 | 222 |
 | S8a | 384 | 58 | 122 | 24 | 12 | 0 | 1 | 0 | 87 |
 | S8 | 384 | 21 | 122 | 8 | 0 | 0 | 3 | 0 | 90 |
+| S8k | 384 | 52 | 122 | 22 | 4 | 0 | 4 | 0 | 94 |
+| S8v | 384 | 52 | 122 | 22 | 4 | 0 | 4 | 0 | 94 |
 | S8u | 384 | 52 | 122 | 22 | 4 | 0 | 4 | 0 | 94 |
 
 ### The bar, per scheme
@@ -2702,6 +2876,8 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 | S8r | no (209 against 171) | no (197 against 195) | no (25 against 0) | 181 of 512 | 292 of 1152 |
 | S8a | yes (30 against 171) | yes (28 against 195) | no (25 against 0) | 0 of 512 | 21 of 1152 |
 | S8 | yes (14 against 171) | yes (7 against 195) | yes (0 against 0) | 0 of 512 | 0 of 1152 |
+| S8k | yes (27 against 171) | yes (25 against 195) | yes (0 against 0) | 0 of 512 | 4 of 1152 |
+| S8v | yes (27 against 171) | yes (25 against 195) | yes (0 against 0) | 0 of 512 | 4 of 1152 |
 | S8u | yes (27 against 171) | yes (25 against 195) | yes (0 against 0) | 0 of 512 | 4 of 1152 |
 
 Zero lever in hsgv: 384 runs, every scheme identical in 384.
@@ -2744,6 +2920,16 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
   - sgdrive: 384 runs; heading>0.5 at the end 4; xy>1 29; tz 7; excess 2.
   - sgturn: 384 runs; heading>0.5 at the end 258; xy>1 35; tz 0; excess 0.
   - excess 8: antenna M 8, A 0, B 0; z>1 0, tilt>0.3 0.
+- S8k: lever-arm runs 1152; tz 52; the paired zero-lever tz summed once per lever-arm run (paired) 366, which is 122 unique zero-lever runs of 384 counted three times.
+  - sgstart: 384 runs; heading>0.5 at the end 0; xy>1 29; tz 27; excess 11.
+  - sgdrive: 384 runs; heading>0.5 at the end 6; xy>1 28; tz 25; excess 11.
+  - sgturn: 384 runs; heading>0.5 at the end 268; xy>1 34; tz 0; excess 0.
+  - excess 22: antenna M 22, A 0, B 0; z>1 4, tilt>0.3 0.
+- S8v: lever-arm runs 1152; tz 52; the paired zero-lever tz summed once per lever-arm run (paired) 366, which is 122 unique zero-lever runs of 384 counted three times.
+  - sgstart: 384 runs; heading>0.5 at the end 0; xy>1 29; tz 27; excess 11.
+  - sgdrive: 384 runs; heading>0.5 at the end 6; xy>1 28; tz 25; excess 11.
+  - sgturn: 384 runs; heading>0.5 at the end 268; xy>1 34; tz 0; excess 0.
+  - excess 22: antenna M 22, A 0, B 0; z>1 4, tilt>0.3 0.
 - S8u: lever-arm runs 1152; tz 52; the paired zero-lever tz summed once per lever-arm run (paired) 366, which is 122 unique zero-lever runs of 384 counted three times.
   - sgstart: 384 runs; heading>0.5 at the end 0; xy>1 29; tz 27; excess 11.
   - sgdrive: 384 runs; heading>0.5 at the end 6; xy>1 28; tz 25; excess 11.
@@ -2753,7 +2939,7 @@ The zero-lever filter has 384 runs per suite (128 per motion), the same for ever
 
 # Lever-arm study, fifth pass: an outage across the start, and a boot with a guessed heading
 
-Schemes: S8o (S8 without the span guard of the alignment, the version before this round), S8 (with the guard), S8u (S8 + the heading of the first start is held as unknown, pi / sqrt(3) rad: what the code ships). tz = tilt > 0.05 rad or abs z > 0.5 m at an epoch from 10 s on (epochs from the start of an outage to 5 s after it are not tested); "excess" = the lever-arm run has tz and the zero-lever run of the same data has not; "z>1" = abs z > 1 m; "tilt>0.3" = tilt > 0.3 rad. 4 seeds; GNSS and IMU only; antennas A, B, M (lever) and Z (zero lever, the same data).
+Schemes (round 7: S8k is the S8u of the fifth and sixth rounds, S8u the code that ships now, see the sixth pass): S8o (S8 without the span guard of the alignment, the version before this round), S8 (with the guard), S8u (S8 + the heading of the first start is held as unknown, pi / sqrt(3) rad: what the code ships). tz = tilt > 0.05 rad or abs z > 0.5 m at an epoch from 10 s on (epochs from the start of an outage to 5 s after it are not tested); "excess" = the lever-arm run has tz and the zero-lever run of the same data has not; "z>1" = abs z > 1 m; "tilt>0.3" = tilt > 0.3 rad. 4 seeds; GNSS and IMU only; antennas A, B, M (lever) and Z (zero lever, the same data).
 
 
 ## Suite hgap: the fixes stop 10 s before the robot starts (the start-stop cycle, or the circle) and come back 30 s or 120 s later
@@ -2762,13 +2948,16 @@ Schemes: S8o (S8 without the span guard of the alignment, the version before thi
 |---|---|---|---|---|---|---|---|---|
 | all | S8o | 576 | 87 | 29 of 192 | 73 | 38 | 7 | 170 |
 | all | S8 | 576 | 23 | 29 of 192 | 19 | 4 | 0 | 94 |
-| all | S8u | 576 | 25 | 29 of 192 | 18 | 6 | 1 | 99 |
+| all | S8k | 576 | 25 | 29 of 192 | 18 | 6 | 1 | 99 |
+| all | S8u | 576 | 23 | 29 of 192 | 14 | 5 | 0 | 95 |
 | stop 30 s | S8o | 288 | 19 | 18 of 96 | 15 | 2 | 0 | 56 |
 | stop 30 s | S8 | 288 | 12 | 18 of 96 | 8 | 2 | 0 | 48 |
-| stop 30 s | S8u | 288 | 13 | 18 of 96 | 7 | 2 | 0 | 52 |
+| stop 30 s | S8k | 288 | 13 | 18 of 96 | 7 | 2 | 0 | 52 |
+| stop 30 s | S8u | 288 | 12 | 18 of 96 | 5 | 2 | 0 | 43 |
 | stop 120 s | S8o | 288 | 68 | 11 of 96 | 58 | 36 | 7 | 114 |
 | stop 120 s | S8 | 288 | 11 | 11 of 96 | 11 | 2 | 0 | 46 |
-| stop 120 s | S8u | 288 | 12 | 11 of 96 | 11 | 4 | 1 | 47 |
+| stop 120 s | S8k | 288 | 12 | 11 of 96 | 11 | 4 | 1 | 47 |
+| stop 120 s | S8u | 288 | 11 | 11 of 96 | 9 | 3 | 0 | 52 |
 
 ### By antenna, outage of 120 s
 
@@ -2776,13 +2965,16 @@ Schemes: S8o (S8 without the span guard of the alignment, the version before thi
 |---|---|---|---|---|---|---|---|---|
 | antenna A | S8o | 96 | 26 | 11 of 96 | 22 | 16 | 5 | 57 |
 | antenna A | S8 | 96 | 3 | 11 of 96 | 3 | 0 | 0 | 33 |
-| antenna A | S8u | 96 | 4 | 11 of 96 | 4 | 0 | 0 | 33 |
+| antenna A | S8k | 96 | 4 | 11 of 96 | 4 | 0 | 0 | 33 |
+| antenna A | S8u | 96 | 2 | 11 of 96 | 2 | 0 | 0 | 33 |
 | antenna B | S8o | 96 | 24 | 11 of 96 | 21 | 13 | 2 | 32 |
 | antenna B | S8 | 96 | 0 | 11 of 96 | 0 | 0 | 0 | 0 |
+| antenna B | S8k | 96 | 0 | 11 of 96 | 0 | 0 | 0 | 0 |
 | antenna B | S8u | 96 | 0 | 11 of 96 | 0 | 0 | 0 | 0 |
 | antenna M | S8o | 96 | 18 | 11 of 96 | 15 | 7 | 0 | 25 |
 | antenna M | S8 | 96 | 8 | 11 of 96 | 8 | 2 | 0 | 13 |
-| antenna M | S8u | 96 | 8 | 11 of 96 | 7 | 4 | 1 | 14 |
+| antenna M | S8k | 96 | 8 | 11 of 96 | 7 | 4 | 1 | 14 |
+| antenna M | S8u | 96 | 9 | 11 of 96 | 7 | 3 | 0 | 19 |
 
 ### By standing time
 
@@ -2790,10 +2982,12 @@ Schemes: S8o (S8 without the span guard of the alignment, the version before thi
 |---|---|---|---|---|---|---|---|---|
 | stand 300 s | S8o | 288 | 37 | 10 of 96 | 35 | 20 | 4 | 76 |
 | stand 300 s | S8 | 288 | 2 | 10 of 96 | 2 | 1 | 0 | 39 |
-| stand 300 s | S8u | 288 | 2 | 10 of 96 | 2 | 1 | 0 | 41 |
+| stand 300 s | S8k | 288 | 2 | 10 of 96 | 2 | 1 | 0 | 41 |
+| stand 300 s | S8u | 288 | 1 | 10 of 96 | 1 | 1 | 0 | 38 |
 | stand 600 s | S8o | 288 | 50 | 19 of 96 | 38 | 18 | 3 | 94 |
 | stand 600 s | S8 | 288 | 21 | 19 of 96 | 17 | 3 | 0 | 55 |
-| stand 600 s | S8u | 288 | 23 | 19 of 96 | 16 | 5 | 1 | 58 |
+| stand 600 s | S8k | 288 | 23 | 19 of 96 | 16 | 5 | 1 | 58 |
+| stand 600 s | S8u | 288 | 22 | 19 of 96 | 13 | 4 | 0 | 57 |
 
 ## Suite hboot: initial_yaw off by 0.5, 1, 2 and 3 rad, no /initialpose, a stand of 6 to 300 s, then the start (gyro bias 0.1 deg/s, accelerometer bias 0.1 m/s^2)
 
@@ -2801,78 +2995,103 @@ Schemes: S8o (S8 without the span guard of the alignment, the version before thi
 |---|---|---|---|---|---|---|---|---|
 | all | S8o | 576 | 219 | 112 of 192 | 52 | 160 | 104 | 162 |
 | all | S8 | 576 | 219 | 112 of 192 | 52 | 160 | 104 | 162 |
+| all | S8k | 576 | 77 | 112 of 192 | 6 | 3 | 0 | 11 |
 | all | S8u | 576 | 77 | 112 of 192 | 6 | 3 | 0 | 11 |
 | yaw 0.5 rad, stand 6 s | S8o | 24 | 2 | 0 of 8 | 2 | 1 | 0 | 0 |
 | yaw 0.5 rad, stand 6 s | S8 | 24 | 2 | 0 of 8 | 2 | 1 | 0 | 0 |
+| yaw 0.5 rad, stand 6 s | S8k | 24 | 0 | 0 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 6 s | S8u | 24 | 0 | 0 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 30 s | S8o | 24 | 4 | 2 of 8 | 3 | 3 | 0 | 3 |
 | yaw 0.5 rad, stand 30 s | S8 | 24 | 4 | 2 of 8 | 3 | 3 | 0 | 3 |
+| yaw 0.5 rad, stand 30 s | S8k | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 30 s | S8u | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 60 s | S8o | 24 | 2 | 1 of 8 | 2 | 1 | 1 | 1 |
 | yaw 0.5 rad, stand 60 s | S8 | 24 | 2 | 1 of 8 | 2 | 1 | 1 | 1 |
+| yaw 0.5 rad, stand 60 s | S8k | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 60 s | S8u | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 90 s | S8o | 24 | 0 | 0 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 90 s | S8 | 24 | 0 | 0 of 8 | 0 | 0 | 0 | 0 |
+| yaw 0.5 rad, stand 90 s | S8k | 24 | 1 | 0 of 8 | 1 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 90 s | S8u | 24 | 1 | 0 of 8 | 1 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 120 s | S8o | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 120 s | S8 | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
+| yaw 0.5 rad, stand 120 s | S8k | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 120 s | S8u | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 300 s | S8o | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 300 s | S8 | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
+| yaw 0.5 rad, stand 300 s | S8k | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 0.5 rad, stand 300 s | S8u | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 6 s | S8o | 24 | 15 | 3 of 8 | 9 | 5 | 1 | 9 |
 | yaw 1 rad, stand 6 s | S8 | 24 | 15 | 3 of 8 | 9 | 5 | 1 | 9 |
+| yaw 1 rad, stand 6 s | S8k | 24 | 0 | 3 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 6 s | S8u | 24 | 0 | 3 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 30 s | S8o | 24 | 18 | 4 of 8 | 9 | 12 | 4 | 14 |
 | yaw 1 rad, stand 30 s | S8 | 24 | 18 | 4 of 8 | 9 | 12 | 4 | 14 |
+| yaw 1 rad, stand 30 s | S8k | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 30 s | S8u | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 60 s | S8o | 24 | 21 | 1 of 8 | 18 | 14 | 3 | 16 |
 | yaw 1 rad, stand 60 s | S8 | 24 | 21 | 1 of 8 | 18 | 14 | 3 | 16 |
+| yaw 1 rad, stand 60 s | S8k | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 60 s | S8u | 24 | 0 | 1 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 90 s | S8o | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 90 s | S8 | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
+| yaw 1 rad, stand 90 s | S8k | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 90 s | S8u | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 120 s | S8o | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 120 s | S8 | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
+| yaw 1 rad, stand 120 s | S8k | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 120 s | S8u | 24 | 0 | 4 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 300 s | S8o | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
 | yaw 1 rad, stand 300 s | S8 | 24 | 0 | 2 of 8 | 0 | 0 | 0 | 0 |
+| yaw 1 rad, stand 300 s | S8k | 24 | 1 | 2 of 8 | 1 | 0 | 0 | 0 |
 | yaw 1 rad, stand 300 s | S8u | 24 | 1 | 2 of 8 | 1 | 0 | 0 | 0 |
 | yaw 2 rad, stand 6 s | S8o | 24 | 24 | 6 of 8 | 6 | 17 | 9 | 20 |
 | yaw 2 rad, stand 6 s | S8 | 24 | 24 | 6 of 8 | 6 | 17 | 9 | 20 |
+| yaw 2 rad, stand 6 s | S8k | 24 | 3 | 6 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 6 s | S8u | 24 | 3 | 6 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 30 s | S8o | 24 | 24 | 8 of 8 | 0 | 22 | 15 | 20 |
 | yaw 2 rad, stand 30 s | S8 | 24 | 24 | 8 of 8 | 0 | 22 | 15 | 20 |
+| yaw 2 rad, stand 30 s | S8k | 24 | 4 | 8 of 8 | 0 | 0 | 0 | 1 |
 | yaw 2 rad, stand 30 s | S8u | 24 | 4 | 8 of 8 | 0 | 0 | 0 | 1 |
 | yaw 2 rad, stand 60 s | S8o | 24 | 24 | 7 of 8 | 3 | 20 | 18 | 18 |
 | yaw 2 rad, stand 60 s | S8 | 24 | 24 | 7 of 8 | 3 | 20 | 18 | 18 |
+| yaw 2 rad, stand 60 s | S8k | 24 | 6 | 7 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 60 s | S8u | 24 | 6 | 7 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 90 s | S8o | 24 | 1 | 7 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 90 s | S8 | 24 | 1 | 7 of 8 | 0 | 0 | 0 | 0 |
+| yaw 2 rad, stand 90 s | S8k | 24 | 5 | 7 of 8 | 1 | 0 | 0 | 2 |
 | yaw 2 rad, stand 90 s | S8u | 24 | 5 | 7 of 8 | 1 | 0 | 0 | 2 |
 | yaw 2 rad, stand 120 s | S8o | 24 | 0 | 8 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 120 s | S8 | 24 | 0 | 8 of 8 | 0 | 0 | 0 | 0 |
+| yaw 2 rad, stand 120 s | S8k | 24 | 7 | 8 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 120 s | S8u | 24 | 7 | 8 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 300 s | S8o | 24 | 1 | 6 of 8 | 0 | 0 | 0 | 0 |
 | yaw 2 rad, stand 300 s | S8 | 24 | 1 | 6 of 8 | 0 | 0 | 0 | 0 |
+| yaw 2 rad, stand 300 s | S8k | 24 | 5 | 6 of 8 | 1 | 0 | 0 | 2 |
 | yaw 2 rad, stand 300 s | S8u | 24 | 5 | 6 of 8 | 1 | 0 | 0 | 2 |
 | yaw 3 rad, stand 6 s | S8o | 24 | 24 | 8 of 8 | 0 | 18 | 12 | 20 |
 | yaw 3 rad, stand 6 s | S8 | 24 | 24 | 8 of 8 | 0 | 18 | 12 | 20 |
+| yaw 3 rad, stand 6 s | S8k | 24 | 5 | 8 of 8 | 0 | 0 | 0 | 2 |
 | yaw 3 rad, stand 6 s | S8u | 24 | 5 | 8 of 8 | 0 | 0 | 0 | 2 |
 | yaw 3 rad, stand 30 s | S8o | 24 | 24 | 8 of 8 | 0 | 23 | 20 | 19 |
 | yaw 3 rad, stand 30 s | S8 | 24 | 24 | 8 of 8 | 0 | 23 | 20 | 19 |
+| yaw 3 rad, stand 30 s | S8k | 24 | 8 | 8 of 8 | 0 | 0 | 0 | 0 |
 | yaw 3 rad, stand 30 s | S8u | 24 | 8 | 8 of 8 | 0 | 0 | 0 | 0 |
 | yaw 3 rad, stand 60 s | S8o | 24 | 24 | 8 of 8 | 0 | 24 | 21 | 20 |
 | yaw 3 rad, stand 60 s | S8 | 24 | 24 | 8 of 8 | 0 | 24 | 21 | 20 |
+| yaw 3 rad, stand 60 s | S8k | 24 | 8 | 8 of 8 | 0 | 1 | 0 | 0 |
 | yaw 3 rad, stand 60 s | S8u | 24 | 8 | 8 of 8 | 0 | 1 | 0 | 0 |
 | yaw 3 rad, stand 90 s | S8o | 24 | 6 | 8 of 8 | 0 | 0 | 0 | 0 |
 | yaw 3 rad, stand 90 s | S8 | 24 | 6 | 8 of 8 | 0 | 0 | 0 | 0 |
+| yaw 3 rad, stand 90 s | S8k | 24 | 8 | 8 of 8 | 0 | 1 | 0 | 2 |
 | yaw 3 rad, stand 90 s | S8u | 24 | 8 | 8 of 8 | 0 | 1 | 0 | 2 |
 | yaw 3 rad, stand 120 s | S8o | 24 | 3 | 8 of 8 | 0 | 0 | 0 | 1 |
 | yaw 3 rad, stand 120 s | S8 | 24 | 3 | 8 of 8 | 0 | 0 | 0 | 1 |
+| yaw 3 rad, stand 120 s | S8k | 24 | 8 | 8 of 8 | 0 | 1 | 0 | 0 |
 | yaw 3 rad, stand 120 s | S8u | 24 | 8 | 8 of 8 | 0 | 1 | 0 | 0 |
 | yaw 3 rad, stand 300 s | S8o | 24 | 2 | 6 of 8 | 0 | 0 | 0 | 1 |
 | yaw 3 rad, stand 300 s | S8 | 24 | 2 | 6 of 8 | 0 | 0 | 0 | 1 |
+| yaw 3 rad, stand 300 s | S8k | 24 | 8 | 6 of 8 | 2 | 0 | 0 | 2 |
 | yaw 3 rad, stand 300 s | S8u | 24 | 8 | 6 of 8 | 2 | 0 | 0 | 2 |
 
 ### By start error
@@ -2881,15 +3100,19 @@ Schemes: S8o (S8 without the span guard of the alignment, the version before thi
 |---|---|---|---|---|---|---|---|---|
 | yaw 0.5 rad | S8o | 144 | 8 | 8 of 48 | 7 | 5 | 1 | 4 |
 | yaw 0.5 rad | S8 | 144 | 8 | 8 of 48 | 7 | 5 | 1 | 4 |
+| yaw 0.5 rad | S8k | 144 | 1 | 8 of 48 | 1 | 0 | 0 | 0 |
 | yaw 0.5 rad | S8u | 144 | 1 | 8 of 48 | 1 | 0 | 0 | 0 |
 | yaw 1 rad | S8o | 144 | 54 | 16 of 48 | 36 | 31 | 8 | 39 |
 | yaw 1 rad | S8 | 144 | 54 | 16 of 48 | 36 | 31 | 8 | 39 |
+| yaw 1 rad | S8k | 144 | 1 | 16 of 48 | 1 | 0 | 0 | 0 |
 | yaw 1 rad | S8u | 144 | 1 | 16 of 48 | 1 | 0 | 0 | 0 |
 | yaw 2 rad | S8o | 144 | 74 | 42 of 48 | 9 | 59 | 42 | 58 |
 | yaw 2 rad | S8 | 144 | 74 | 42 of 48 | 9 | 59 | 42 | 58 |
+| yaw 2 rad | S8k | 144 | 30 | 42 of 48 | 2 | 0 | 0 | 5 |
 | yaw 2 rad | S8u | 144 | 30 | 42 of 48 | 2 | 0 | 0 | 5 |
 | yaw 3 rad | S8o | 144 | 83 | 46 of 48 | 0 | 65 | 53 | 61 |
 | yaw 3 rad | S8 | 144 | 83 | 46 of 48 | 0 | 65 | 53 | 61 |
+| yaw 3 rad | S8k | 144 | 45 | 46 of 48 | 2 | 3 | 0 | 6 |
 | yaw 3 rad | S8u | 144 | 45 | 46 of 48 | 2 | 3 | 0 | 6 |
 
 ### By antenna
@@ -2898,12 +3121,15 @@ Schemes: S8o (S8 without the span guard of the alignment, the version before thi
 |---|---|---|---|---|---|---|---|---|
 | antenna A | S8o | 192 | 58 | 112 of 192 | 10 | 46 | 33 | 42 |
 | antenna A | S8 | 192 | 58 | 112 of 192 | 10 | 46 | 33 | 42 |
+| antenna A | S8k | 192 | 1 | 112 of 192 | 1 | 0 | 0 | 0 |
 | antenna A | S8u | 192 | 1 | 112 of 192 | 1 | 0 | 0 | 0 |
 | antenna B | S8o | 192 | 72 | 112 of 192 | 19 | 60 | 48 | 59 |
 | antenna B | S8 | 192 | 72 | 112 of 192 | 19 | 60 | 48 | 59 |
+| antenna B | S8k | 192 | 0 | 112 of 192 | 0 | 0 | 0 | 0 |
 | antenna B | S8u | 192 | 0 | 112 of 192 | 0 | 0 | 0 | 0 |
 | antenna M | S8o | 192 | 89 | 112 of 192 | 23 | 54 | 23 | 61 |
 | antenna M | S8 | 192 | 89 | 112 of 192 | 23 | 54 | 23 | 61 |
+| antenna M | S8k | 192 | 76 | 112 of 192 | 5 | 3 | 0 | 11 |
 | antenna M | S8u | 192 | 76 | 112 of 192 | 5 | 3 | 0 | 11 |
 
 ### By motion
@@ -2912,7 +3138,658 @@ Schemes: S8o (S8 without the span guard of the alignment, the version before thi
 |---|---|---|---|---|---|---|---|---|
 | sgstart | S8o | 288 | 115 | 65 of 96 | 19 | 93 | 58 | 79 |
 | sgstart | S8 | 288 | 115 | 65 of 96 | 19 | 93 | 58 | 79 |
+| sgstart | S8k | 288 | 41 | 65 of 96 | 2 | 1 | 0 | 0 |
 | sgstart | S8u | 288 | 41 | 65 of 96 | 2 | 1 | 0 | 0 |
 | sgdrive | S8o | 288 | 104 | 47 of 96 | 33 | 67 | 46 | 83 |
 | sgdrive | S8 | 288 | 104 | 47 of 96 | 33 | 67 | 46 | 83 |
+| sgdrive | S8k | 288 | 36 | 47 of 96 | 4 | 2 | 0 | 11 |
 | sgdrive | S8u | 288 | 36 | 47 of 96 | 4 | 2 | 0 | 11 |
+
+
+# Lever-arm study, sixth pass: the fix rate, and a short outage at the first start
+
+## Suite hrate: the same boot and stand-then-go cells at fix rates of 0.5, 1, 2, 5, 10 and 20 Hz
+
+Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is the same at every rate): *boot* = gyro bias 0.1 deg/s and accelerometer bias 0.1 m/s^2, a stand of 6, 30 or 300 s, `initial_yaw` 0.1, 0.3 or 2.0 rad off, then the start-stop cycle or the circle; *stand-then-go* = stand 300 or 900 s, gyro bias 0 or 0.2 deg/s, accelerometer bias 0 or 0.1 m/s^2, `initial_yaw` 0.1 rad off. Schemes: S8k = the alignment of the fifth and sixth rounds (span of 4 fixes); S8t = spans in seconds only; S8n = the test of the norms only (the sixth review's proposal, 30 %); S8v = S8u + the test of the norms; S8u = spans in seconds, the fix-rate limit and the spread after an outage (what the code ships; the spread acts only after an outage, none in this suite); S8 = no unknown start; S2s, S6vb = the comparators. tz = tilt > 0.05 rad or abs z > 0.5 m; z>1 = abs z > 1 m; heading>0.5 = heading error over 0.5 rad at the end; xy>1.5 = largest horizontal error over 1.5 m. Antennas A and B (a horizontal arm) and, apart, the mast M (no horizontal arm).
+
+
+### Antennas A and B, by cell
+
+| fix rate | cell | scheme | runs | tz | z>1 | heading>0.5 | xy>1.5 |
+|---|---|---|---|---|---|---|---|
+| 0.5 Hz | boot | S2s | 144 | 69 | 50 | 27 | 29 |
+| 0.5 Hz | boot | S6vb | 144 | 74 | 60 | 54 | 58 |
+| 0.5 Hz | boot | S8 | 144 | 56 | 43 | 84 | 68 |
+| 0.5 Hz | boot | S8k | 144 | 48 | 12 | 89 | 62 |
+| 0.5 Hz | boot | S8t | 144 | 32 | 10 | 38 | 47 |
+| 0.5 Hz | boot | S8n | 144 | 48 | 12 | 89 | 62 |
+| 0.5 Hz | boot | S8v | 144 | 54 | 30 | 83 | 64 |
+| 0.5 Hz | boot | S8u | 144 | 54 | 30 | 83 | 64 |
+| 0.5 Hz | stand-then-go | S2s | 128 | 72 | 51 | 29 | 41 |
+| 0.5 Hz | stand-then-go | S6vb | 128 | 106 | 99 | 71 | 102 |
+| 0.5 Hz | stand-then-go | S8 | 128 | 52 | 30 | 64 | 63 |
+| 0.5 Hz | stand-then-go | S8k | 128 | 53 | 29 | 64 | 63 |
+| 0.5 Hz | stand-then-go | S8t | 128 | 17 | 7 | 28 | 51 |
+| 0.5 Hz | stand-then-go | S8n | 128 | 53 | 29 | 64 | 63 |
+| 0.5 Hz | stand-then-go | S8v | 128 | 51 | 29 | 64 | 63 |
+| 0.5 Hz | stand-then-go | S8u | 128 | 51 | 29 | 64 | 63 |
+| 1 Hz | boot | S2s | 144 | 66 | 34 | 29 | 11 |
+| 1 Hz | boot | S6vb | 144 | 65 | 56 | 44 | 40 |
+| 1 Hz | boot | S8 | 144 | 46 | 30 | 65 | 39 |
+| 1 Hz | boot | S8k | 144 | 36 | 4 | 89 | 50 |
+| 1 Hz | boot | S8t | 144 | 1 | 0 | 0 | 0 |
+| 1 Hz | boot | S8n | 144 | 36 | 4 | 89 | 50 |
+| 1 Hz | boot | S8v | 144 | 0 | 0 | 1 | 0 |
+| 1 Hz | boot | S8u | 144 | 0 | 0 | 0 | 0 |
+| 1 Hz | stand-then-go | S2s | 128 | 78 | 38 | 31 | 7 |
+| 1 Hz | stand-then-go | S6vb | 128 | 104 | 96 | 70 | 83 |
+| 1 Hz | stand-then-go | S8 | 128 | 38 | 14 | 64 | 52 |
+| 1 Hz | stand-then-go | S8k | 128 | 41 | 14 | 64 | 52 |
+| 1 Hz | stand-then-go | S8t | 128 | 0 | 0 | 0 | 0 |
+| 1 Hz | stand-then-go | S8n | 128 | 41 | 14 | 64 | 52 |
+| 1 Hz | stand-then-go | S8v | 128 | 0 | 0 | 0 | 0 |
+| 1 Hz | stand-then-go | S8u | 128 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot | S2s | 144 | 63 | 31 | 27 | 7 |
+| 2 Hz | boot | S6vb | 144 | 76 | 67 | 45 | 27 |
+| 2 Hz | boot | S8 | 144 | 37 | 25 | 26 | 19 |
+| 2 Hz | boot | S8k | 144 | 5 | 0 | 5 | 8 |
+| 2 Hz | boot | S8t | 144 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot | S8n | 144 | 5 | 0 | 5 | 8 |
+| 2 Hz | boot | S8v | 144 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot | S8u | 144 | 0 | 0 | 0 | 0 |
+| 2 Hz | stand-then-go | S2s | 128 | 63 | 28 | 29 | 13 |
+| 2 Hz | stand-then-go | S6vb | 128 | 118 | 109 | 55 | 71 |
+| 2 Hz | stand-then-go | S8 | 128 | 1 | 0 | 0 | 0 |
+| 2 Hz | stand-then-go | S8k | 128 | 1 | 0 | 0 | 0 |
+| 2 Hz | stand-then-go | S8t | 128 | 1 | 1 | 0 | 0 |
+| 2 Hz | stand-then-go | S8n | 128 | 1 | 0 | 0 | 0 |
+| 2 Hz | stand-then-go | S8v | 128 | 1 | 1 | 0 | 0 |
+| 2 Hz | stand-then-go | S8u | 128 | 1 | 1 | 0 | 0 |
+| 5 Hz | boot | S2s | 144 | 54 | 40 | 30 | 3 |
+| 5 Hz | boot | S6vb | 144 | 78 | 65 | 34 | 22 |
+| 5 Hz | boot | S8 | 144 | 32 | 28 | 26 | 16 |
+| 5 Hz | boot | S8k | 144 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot | S8t | 144 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot | S8n | 144 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot | S8v | 144 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot | S8u | 144 | 0 | 0 | 1 | 0 |
+| 5 Hz | stand-then-go | S2s | 128 | 75 | 35 | 34 | 3 |
+| 5 Hz | stand-then-go | S6vb | 128 | 127 | 117 | 51 | 45 |
+| 5 Hz | stand-then-go | S8 | 128 | 0 | 0 | 0 | 0 |
+| 5 Hz | stand-then-go | S8k | 128 | 0 | 0 | 0 | 0 |
+| 5 Hz | stand-then-go | S8t | 128 | 0 | 0 | 0 | 0 |
+| 5 Hz | stand-then-go | S8n | 128 | 0 | 0 | 0 | 0 |
+| 5 Hz | stand-then-go | S8v | 128 | 0 | 0 | 0 | 0 |
+| 5 Hz | stand-then-go | S8u | 128 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot | S2s | 144 | 65 | 42 | 31 | 0 |
+| 10 Hz | boot | S6vb | 144 | 82 | 64 | 30 | 11 |
+| 10 Hz | boot | S8 | 144 | 41 | 30 | 69 | 24 |
+| 10 Hz | boot | S8k | 144 | 31 | 8 | 62 | 28 |
+| 10 Hz | boot | S8t | 144 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot | S8n | 144 | 32 | 4 | 59 | 31 |
+| 10 Hz | boot | S8v | 144 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot | S8u | 144 | 0 | 0 | 0 | 0 |
+| 10 Hz | stand-then-go | S2s | 128 | 66 | 30 | 35 | 1 |
+| 10 Hz | stand-then-go | S6vb | 128 | 128 | 103 | 42 | 28 |
+| 10 Hz | stand-then-go | S8 | 128 | 38 | 2 | 64 | 47 |
+| 10 Hz | stand-then-go | S8k | 128 | 39 | 1 | 64 | 47 |
+| 10 Hz | stand-then-go | S8t | 128 | 0 | 0 | 0 | 0 |
+| 10 Hz | stand-then-go | S8n | 128 | 39 | 1 | 64 | 47 |
+| 10 Hz | stand-then-go | S8v | 128 | 0 | 0 | 0 | 0 |
+| 10 Hz | stand-then-go | S8u | 128 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot | S2s | 144 | 67 | 49 | 39 | 0 |
+| 20 Hz | boot | S6vb | 144 | 80 | 41 | 33 | 9 |
+| 20 Hz | boot | S8 | 144 | 42 | 29 | 67 | 21 |
+| 20 Hz | boot | S8k | 144 | 38 | 0 | 89 | 37 |
+| 20 Hz | boot | S8t | 144 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot | S8n | 144 | 38 | 0 | 89 | 37 |
+| 20 Hz | boot | S8v | 144 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot | S8u | 144 | 0 | 0 | 0 | 0 |
+| 20 Hz | stand-then-go | S2s | 128 | 80 | 44 | 39 | 0 |
+| 20 Hz | stand-then-go | S6vb | 128 | 126 | 75 | 48 | 16 |
+| 20 Hz | stand-then-go | S8 | 128 | 40 | 0 | 65 | 42 |
+| 20 Hz | stand-then-go | S8k | 128 | 40 | 0 | 64 | 41 |
+| 20 Hz | stand-then-go | S8t | 128 | 0 | 0 | 0 | 0 |
+| 20 Hz | stand-then-go | S8n | 128 | 40 | 0 | 64 | 41 |
+| 20 Hz | stand-then-go | S8v | 128 | 0 | 0 | 0 | 0 |
+| 20 Hz | stand-then-go | S8u | 128 | 0 | 0 | 0 | 0 |
+
+### Antennas A and B, boot, by `initial_yaw` error
+
+| fix rate | cell | scheme | runs | tz | z>1 | heading>0.5 | xy>1.5 |
+|---|---|---|---|---|---|---|---|
+| 0.5 Hz | boot, yaw 0.1 | S2s | 48 | 10 | 7 | 5 | 5 |
+| 0.5 Hz | boot, yaw 0.1 | S6vb | 48 | 11 | 7 | 9 | 7 |
+| 0.5 Hz | boot, yaw 0.1 | S8 | 48 | 3 | 3 | 21 | 11 |
+| 0.5 Hz | boot, yaw 0.1 | S8k | 48 | 0 | 0 | 16 | 8 |
+| 0.5 Hz | boot, yaw 0.1 | S8t | 48 | 2 | 2 | 7 | 3 |
+| 0.5 Hz | boot, yaw 0.1 | S8n | 48 | 0 | 0 | 16 | 8 |
+| 0.5 Hz | boot, yaw 0.1 | S8v | 48 | 2 | 2 | 19 | 10 |
+| 0.5 Hz | boot, yaw 0.1 | S8u | 48 | 2 | 2 | 19 | 10 |
+| 0.5 Hz | boot, yaw 0.3 | S2s | 48 | 15 | 7 | 1 | 2 |
+| 0.5 Hz | boot, yaw 0.3 | S6vb | 48 | 15 | 8 | 6 | 8 |
+| 0.5 Hz | boot, yaw 0.3 | S8 | 48 | 9 | 3 | 21 | 10 |
+| 0.5 Hz | boot, yaw 0.3 | S8k | 48 | 6 | 0 | 25 | 7 |
+| 0.5 Hz | boot, yaw 0.3 | S8t | 48 | 6 | 0 | 13 | 2 |
+| 0.5 Hz | boot, yaw 0.3 | S8n | 48 | 6 | 0 | 25 | 7 |
+| 0.5 Hz | boot, yaw 0.3 | S8v | 48 | 8 | 2 | 18 | 10 |
+| 0.5 Hz | boot, yaw 0.3 | S8u | 48 | 8 | 2 | 18 | 10 |
+| 0.5 Hz | boot, yaw 2 | S2s | 48 | 44 | 36 | 21 | 22 |
+| 0.5 Hz | boot, yaw 2 | S6vb | 48 | 48 | 45 | 39 | 43 |
+| 0.5 Hz | boot, yaw 2 | S8 | 48 | 44 | 37 | 42 | 47 |
+| 0.5 Hz | boot, yaw 2 | S8k | 48 | 42 | 12 | 48 | 47 |
+| 0.5 Hz | boot, yaw 2 | S8t | 48 | 24 | 8 | 18 | 42 |
+| 0.5 Hz | boot, yaw 2 | S8n | 48 | 42 | 12 | 48 | 47 |
+| 0.5 Hz | boot, yaw 2 | S8v | 48 | 44 | 26 | 46 | 44 |
+| 0.5 Hz | boot, yaw 2 | S8u | 48 | 44 | 26 | 46 | 44 |
+| 1 Hz | boot, yaw 0.1 | S2s | 48 | 10 | 6 | 3 | 1 |
+| 1 Hz | boot, yaw 0.1 | S6vb | 48 | 6 | 4 | 3 | 3 |
+| 1 Hz | boot, yaw 0.1 | S8 | 48 | 0 | 0 | 16 | 2 |
+| 1 Hz | boot, yaw 0.1 | S8k | 48 | 0 | 0 | 16 | 1 |
+| 1 Hz | boot, yaw 0.1 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 1 Hz | boot, yaw 0.1 | S8n | 48 | 0 | 0 | 16 | 1 |
+| 1 Hz | boot, yaw 0.1 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 1 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 1 Hz | boot, yaw 0.3 | S2s | 48 | 14 | 7 | 7 | 3 |
+| 1 Hz | boot, yaw 0.3 | S6vb | 48 | 12 | 11 | 9 | 6 |
+| 1 Hz | boot, yaw 0.3 | S8 | 48 | 6 | 0 | 13 | 4 |
+| 1 Hz | boot, yaw 0.3 | S8k | 48 | 1 | 0 | 25 | 5 |
+| 1 Hz | boot, yaw 0.3 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 1 Hz | boot, yaw 0.3 | S8n | 48 | 1 | 0 | 25 | 5 |
+| 1 Hz | boot, yaw 0.3 | S8v | 48 | 0 | 0 | 1 | 0 |
+| 1 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 1 Hz | boot, yaw 2 | S2s | 48 | 42 | 21 | 19 | 7 |
+| 1 Hz | boot, yaw 2 | S6vb | 48 | 47 | 41 | 32 | 31 |
+| 1 Hz | boot, yaw 2 | S8 | 48 | 40 | 30 | 36 | 33 |
+| 1 Hz | boot, yaw 2 | S8k | 48 | 35 | 4 | 48 | 44 |
+| 1 Hz | boot, yaw 2 | S8t | 48 | 1 | 0 | 0 | 0 |
+| 1 Hz | boot, yaw 2 | S8n | 48 | 35 | 4 | 48 | 44 |
+| 1 Hz | boot, yaw 2 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 1 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.1 | S2s | 48 | 9 | 4 | 5 | 2 |
+| 2 Hz | boot, yaw 0.1 | S6vb | 48 | 16 | 15 | 7 | 5 |
+| 2 Hz | boot, yaw 0.1 | S8 | 48 | 1 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.1 | S8k | 48 | 1 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.1 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.1 | S8n | 48 | 1 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.1 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.3 | S2s | 48 | 11 | 3 | 5 | 1 |
+| 2 Hz | boot, yaw 0.3 | S6vb | 48 | 12 | 11 | 5 | 5 |
+| 2 Hz | boot, yaw 0.3 | S8 | 48 | 4 | 2 | 0 | 0 |
+| 2 Hz | boot, yaw 0.3 | S8k | 48 | 1 | 0 | 1 | 0 |
+| 2 Hz | boot, yaw 0.3 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.3 | S8n | 48 | 1 | 0 | 1 | 0 |
+| 2 Hz | boot, yaw 0.3 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 2 | S2s | 48 | 43 | 24 | 17 | 4 |
+| 2 Hz | boot, yaw 2 | S6vb | 48 | 48 | 41 | 33 | 17 |
+| 2 Hz | boot, yaw 2 | S8 | 48 | 32 | 23 | 26 | 19 |
+| 2 Hz | boot, yaw 2 | S8k | 48 | 3 | 0 | 4 | 8 |
+| 2 Hz | boot, yaw 2 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 2 | S8n | 48 | 3 | 0 | 4 | 8 |
+| 2 Hz | boot, yaw 2 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 2 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.1 | S2s | 48 | 8 | 6 | 4 | 0 |
+| 5 Hz | boot, yaw 0.1 | S6vb | 48 | 15 | 11 | 2 | 4 |
+| 5 Hz | boot, yaw 0.1 | S8 | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.1 | S8k | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.1 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.1 | S8n | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.1 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.3 | S2s | 48 | 5 | 1 | 1 | 1 |
+| 5 Hz | boot, yaw 0.3 | S6vb | 48 | 15 | 14 | 2 | 3 |
+| 5 Hz | boot, yaw 0.3 | S8 | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.3 | S8k | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.3 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.3 | S8n | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.3 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 5 Hz | boot, yaw 2 | S2s | 48 | 41 | 33 | 25 | 2 |
+| 5 Hz | boot, yaw 2 | S6vb | 48 | 48 | 40 | 30 | 15 |
+| 5 Hz | boot, yaw 2 | S8 | 48 | 32 | 28 | 26 | 16 |
+| 5 Hz | boot, yaw 2 | S8k | 48 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot, yaw 2 | S8t | 48 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot, yaw 2 | S8n | 48 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot, yaw 2 | S8v | 48 | 0 | 0 | 1 | 0 |
+| 5 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 1 | 0 |
+| 10 Hz | boot, yaw 0.1 | S2s | 48 | 9 | 3 | 5 | 0 |
+| 10 Hz | boot, yaw 0.1 | S6vb | 48 | 17 | 13 | 3 | 3 |
+| 10 Hz | boot, yaw 0.1 | S8 | 48 | 0 | 0 | 16 | 0 |
+| 10 Hz | boot, yaw 0.1 | S8k | 48 | 0 | 0 | 16 | 0 |
+| 10 Hz | boot, yaw 0.1 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 0.1 | S8n | 48 | 0 | 0 | 16 | 0 |
+| 10 Hz | boot, yaw 0.1 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 0.3 | S2s | 48 | 11 | 4 | 4 | 0 |
+| 10 Hz | boot, yaw 0.3 | S6vb | 48 | 17 | 8 | 1 | 1 |
+| 10 Hz | boot, yaw 0.3 | S8 | 48 | 0 | 0 | 12 | 0 |
+| 10 Hz | boot, yaw 0.3 | S8k | 48 | 0 | 0 | 16 | 0 |
+| 10 Hz | boot, yaw 0.3 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 0.3 | S8n | 48 | 0 | 0 | 16 | 0 |
+| 10 Hz | boot, yaw 0.3 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 2 | S2s | 48 | 45 | 35 | 22 | 0 |
+| 10 Hz | boot, yaw 2 | S6vb | 48 | 48 | 43 | 26 | 7 |
+| 10 Hz | boot, yaw 2 | S8 | 48 | 41 | 30 | 41 | 24 |
+| 10 Hz | boot, yaw 2 | S8k | 48 | 31 | 8 | 30 | 28 |
+| 10 Hz | boot, yaw 2 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 2 | S8n | 48 | 32 | 4 | 27 | 31 |
+| 10 Hz | boot, yaw 2 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 10 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 0.1 | S2s | 48 | 10 | 3 | 3 | 0 |
+| 20 Hz | boot, yaw 0.1 | S6vb | 48 | 16 | 8 | 5 | 4 |
+| 20 Hz | boot, yaw 0.1 | S8 | 48 | 0 | 0 | 16 | 0 |
+| 20 Hz | boot, yaw 0.1 | S8k | 48 | 0 | 0 | 16 | 0 |
+| 20 Hz | boot, yaw 0.1 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 0.1 | S8n | 48 | 0 | 0 | 16 | 0 |
+| 20 Hz | boot, yaw 0.1 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 0.3 | S2s | 48 | 16 | 9 | 7 | 0 |
+| 20 Hz | boot, yaw 0.3 | S6vb | 48 | 16 | 6 | 2 | 1 |
+| 20 Hz | boot, yaw 0.3 | S8 | 48 | 1 | 0 | 12 | 0 |
+| 20 Hz | boot, yaw 0.3 | S8k | 48 | 0 | 0 | 25 | 0 |
+| 20 Hz | boot, yaw 0.3 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 0.3 | S8n | 48 | 0 | 0 | 25 | 0 |
+| 20 Hz | boot, yaw 0.3 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 2 | S2s | 48 | 41 | 37 | 29 | 0 |
+| 20 Hz | boot, yaw 2 | S6vb | 48 | 48 | 27 | 26 | 4 |
+| 20 Hz | boot, yaw 2 | S8 | 48 | 41 | 29 | 39 | 21 |
+| 20 Hz | boot, yaw 2 | S8k | 48 | 38 | 0 | 48 | 37 |
+| 20 Hz | boot, yaw 2 | S8t | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 2 | S8n | 48 | 38 | 0 | 48 | 37 |
+| 20 Hz | boot, yaw 2 | S8v | 48 | 0 | 0 | 0 | 0 |
+| 20 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 0 | 0 |
+
+### Mast M, by cell
+
+| fix rate | cell | scheme | runs | tz | z>1 | heading>0.5 | xy>1.5 |
+|---|---|---|---|---|---|---|---|
+| 0.5 Hz | boot | S2s | 72 | 29 | 22 | 11 | 9 |
+| 0.5 Hz | boot | S6vb | 72 | 38 | 32 | 29 | 23 |
+| 0.5 Hz | boot | S8 | 72 | 39 | 27 | 37 | 26 |
+| 0.5 Hz | boot | S8k | 72 | 30 | 20 | 41 | 19 |
+| 0.5 Hz | boot | S8t | 72 | 27 | 17 | 14 | 10 |
+| 0.5 Hz | boot | S8n | 72 | 30 | 20 | 41 | 19 |
+| 0.5 Hz | boot | S8v | 72 | 34 | 24 | 37 | 20 |
+| 0.5 Hz | boot | S8u | 72 | 34 | 24 | 37 | 20 |
+| 0.5 Hz | stand-then-go | S2s | 64 | 40 | 23 | 13 | 17 |
+| 0.5 Hz | stand-then-go | S6vb | 64 | 58 | 55 | 45 | 49 |
+| 0.5 Hz | stand-then-go | S8 | 64 | 31 | 27 | 31 | 22 |
+| 0.5 Hz | stand-then-go | S8k | 64 | 32 | 28 | 28 | 22 |
+| 0.5 Hz | stand-then-go | S8t | 64 | 27 | 23 | 10 | 19 |
+| 0.5 Hz | stand-then-go | S8n | 64 | 32 | 28 | 28 | 22 |
+| 0.5 Hz | stand-then-go | S8v | 64 | 32 | 28 | 29 | 23 |
+| 0.5 Hz | stand-then-go | S8u | 64 | 32 | 28 | 29 | 23 |
+| 1 Hz | boot | S2s | 72 | 29 | 15 | 8 | 0 |
+| 1 Hz | boot | S6vb | 72 | 38 | 32 | 27 | 15 |
+| 1 Hz | boot | S8 | 72 | 35 | 29 | 40 | 2 |
+| 1 Hz | boot | S8k | 72 | 26 | 18 | 41 | 5 |
+| 1 Hz | boot | S8t | 72 | 25 | 8 | 7 | 0 |
+| 1 Hz | boot | S8n | 72 | 26 | 18 | 41 | 5 |
+| 1 Hz | boot | S8v | 72 | 24 | 6 | 6 | 0 |
+| 1 Hz | boot | S8u | 72 | 24 | 6 | 6 | 0 |
+| 1 Hz | stand-then-go | S2s | 64 | 37 | 21 | 21 | 0 |
+| 1 Hz | stand-then-go | S6vb | 64 | 59 | 58 | 36 | 39 |
+| 1 Hz | stand-then-go | S8 | 64 | 30 | 16 | 29 | 9 |
+| 1 Hz | stand-then-go | S8k | 64 | 31 | 18 | 27 | 12 |
+| 1 Hz | stand-then-go | S8t | 64 | 20 | 15 | 9 | 0 |
+| 1 Hz | stand-then-go | S8n | 64 | 31 | 18 | 27 | 12 |
+| 1 Hz | stand-then-go | S8v | 64 | 19 | 13 | 7 | 0 |
+| 1 Hz | stand-then-go | S8u | 64 | 19 | 13 | 7 | 0 |
+| 2 Hz | boot | S2s | 72 | 23 | 11 | 10 | 0 |
+| 2 Hz | boot | S6vb | 72 | 39 | 28 | 18 | 7 |
+| 2 Hz | boot | S8 | 72 | 27 | 12 | 15 | 0 |
+| 2 Hz | boot | S8k | 72 | 21 | 9 | 11 | 0 |
+| 2 Hz | boot | S8t | 72 | 15 | 4 | 4 | 0 |
+| 2 Hz | boot | S8n | 72 | 21 | 10 | 11 | 0 |
+| 2 Hz | boot | S8v | 72 | 15 | 4 | 4 | 0 |
+| 2 Hz | boot | S8u | 72 | 15 | 4 | 4 | 0 |
+| 2 Hz | stand-then-go | S2s | 64 | 35 | 14 | 19 | 0 |
+| 2 Hz | stand-then-go | S6vb | 64 | 61 | 58 | 39 | 31 |
+| 2 Hz | stand-then-go | S8 | 64 | 17 | 10 | 4 | 0 |
+| 2 Hz | stand-then-go | S8k | 64 | 20 | 15 | 5 | 0 |
+| 2 Hz | stand-then-go | S8t | 64 | 17 | 12 | 3 | 0 |
+| 2 Hz | stand-then-go | S8n | 64 | 20 | 15 | 5 | 0 |
+| 2 Hz | stand-then-go | S8v | 64 | 17 | 12 | 3 | 0 |
+| 2 Hz | stand-then-go | S8u | 64 | 17 | 12 | 3 | 0 |
+| 5 Hz | boot | S2s | 72 | 30 | 16 | 14 | 0 |
+| 5 Hz | boot | S6vb | 72 | 38 | 23 | 21 | 6 |
+| 5 Hz | boot | S8 | 72 | 17 | 7 | 8 | 0 |
+| 5 Hz | boot | S8k | 72 | 12 | 0 | 0 | 0 |
+| 5 Hz | boot | S8t | 72 | 12 | 0 | 0 | 0 |
+| 5 Hz | boot | S8n | 72 | 12 | 0 | 0 | 0 |
+| 5 Hz | boot | S8v | 72 | 12 | 0 | 0 | 0 |
+| 5 Hz | boot | S8u | 72 | 12 | 0 | 0 | 0 |
+| 5 Hz | stand-then-go | S2s | 64 | 39 | 22 | 24 | 0 |
+| 5 Hz | stand-then-go | S6vb | 64 | 54 | 48 | 36 | 26 |
+| 5 Hz | stand-then-go | S8 | 64 | 10 | 1 | 3 | 0 |
+| 5 Hz | stand-then-go | S8k | 64 | 18 | 3 | 3 | 0 |
+| 5 Hz | stand-then-go | S8t | 64 | 18 | 3 | 3 | 0 |
+| 5 Hz | stand-then-go | S8n | 64 | 18 | 3 | 3 | 0 |
+| 5 Hz | stand-then-go | S8v | 64 | 18 | 3 | 3 | 0 |
+| 5 Hz | stand-then-go | S8u | 64 | 18 | 3 | 3 | 0 |
+| 10 Hz | boot | S2s | 72 | 32 | 20 | 18 | 0 |
+| 10 Hz | boot | S6vb | 72 | 37 | 28 | 22 | 7 |
+| 10 Hz | boot | S8 | 72 | 21 | 11 | 31 | 0 |
+| 10 Hz | boot | S8k | 72 | 21 | 6 | 28 | 2 |
+| 10 Hz | boot | S8t | 72 | 14 | 1 | 3 | 0 |
+| 10 Hz | boot | S8n | 72 | 22 | 4 | 29 | 2 |
+| 10 Hz | boot | S8v | 72 | 14 | 1 | 3 | 0 |
+| 10 Hz | boot | S8u | 72 | 14 | 1 | 3 | 0 |
+| 10 Hz | stand-then-go | S2s | 64 | 39 | 21 | 33 | 0 |
+| 10 Hz | stand-then-go | S6vb | 64 | 54 | 46 | 38 | 32 |
+| 10 Hz | stand-then-go | S8 | 64 | 21 | 17 | 28 | 6 |
+| 10 Hz | stand-then-go | S8k | 64 | 23 | 17 | 30 | 3 |
+| 10 Hz | stand-then-go | S8t | 64 | 16 | 2 | 1 | 0 |
+| 10 Hz | stand-then-go | S8n | 64 | 23 | 17 | 30 | 3 |
+| 10 Hz | stand-then-go | S8v | 64 | 16 | 2 | 1 | 0 |
+| 10 Hz | stand-then-go | S8u | 64 | 16 | 2 | 1 | 0 |
+| 20 Hz | boot | S2s | 72 | 29 | 17 | 21 | 0 |
+| 20 Hz | boot | S6vb | 72 | 38 | 30 | 16 | 18 |
+| 20 Hz | boot | S8 | 72 | 20 | 10 | 33 | 0 |
+| 20 Hz | boot | S8k | 72 | 22 | 1 | 46 | 0 |
+| 20 Hz | boot | S8t | 72 | 16 | 0 | 3 | 0 |
+| 20 Hz | boot | S8n | 72 | 22 | 1 | 46 | 0 |
+| 20 Hz | boot | S8v | 72 | 16 | 0 | 3 | 0 |
+| 20 Hz | boot | S8u | 72 | 16 | 0 | 3 | 0 |
+| 20 Hz | stand-then-go | S2s | 64 | 39 | 21 | 27 | 0 |
+| 20 Hz | stand-then-go | S6vb | 64 | 59 | 52 | 40 | 39 |
+| 20 Hz | stand-then-go | S8 | 64 | 21 | 2 | 32 | 0 |
+| 20 Hz | stand-then-go | S8k | 64 | 22 | 6 | 32 | 1 |
+| 20 Hz | stand-then-go | S8t | 64 | 16 | 0 | 0 | 0 |
+| 20 Hz | stand-then-go | S8n | 64 | 22 | 6 | 32 | 1 |
+| 20 Hz | stand-then-go | S8v | 64 | 16 | 0 | 0 | 0 |
+| 20 Hz | stand-then-go | S8u | 64 | 16 | 0 | 0 | 0 |
+
+### Zero lever Z (the same data; it does not depend on the scheme, one scheme shown), by cell
+
+| fix rate | cell | scheme | runs | tz | z>1 | heading>0.5 | xy>1.5 |
+|---|---|---|---|---|---|---|---|
+| 0.5 Hz | boot | S8u | 72 | 30 | 23 | 18 | 15 |
+| 0.5 Hz | stand-then-go | S8u | 64 | 26 | 15 | 12 | 12 |
+| 1 Hz | boot | S8u | 72 | 28 | 17 | 9 | 0 |
+| 1 Hz | stand-then-go | S8u | 64 | 29 | 9 | 16 | 0 |
+| 2 Hz | boot | S8u | 72 | 24 | 16 | 9 | 0 |
+| 2 Hz | stand-then-go | S8u | 64 | 21 | 9 | 10 | 0 |
+| 5 Hz | boot | S8u | 72 | 23 | 10 | 3 | 0 |
+| 5 Hz | stand-then-go | S8u | 64 | 25 | 7 | 12 | 0 |
+| 10 Hz | boot | S8u | 72 | 29 | 13 | 5 | 0 |
+| 10 Hz | stand-then-go | S8u | 64 | 26 | 7 | 10 | 0 |
+| 20 Hz | boot | S8u | 72 | 27 | 9 | 4 | 0 |
+| 20 Hz | stand-then-go | S8u | 64 | 29 | 8 | 9 | 0 |
+
+### Numbers quoted in README.md and experiments/README.md: hrate
+
+- 0.5 Hz (a fix every 2 s), S8k, antennas A and B, 272 runs: tz 101, z>1 41, heading>0.5 at the end 153, xy>1.5 125.
+- 0.5 Hz (a fix every 2 s), S8u, antennas A and B, 272 runs: tz 105, z>1 59, heading>0.5 at the end 147, xy>1.5 127.
+- 1 Hz (a fix every 1 s), S8k, antennas A and B, 272 runs: tz 77, z>1 18, heading>0.5 at the end 153, xy>1.5 102.
+- 1 Hz (a fix every 1 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
+- 2 Hz (a fix every 0.5 s), S8k, antennas A and B, 272 runs: tz 6, z>1 0, heading>0.5 at the end 5, xy>1.5 8.
+- 2 Hz (a fix every 0.5 s), S8u, antennas A and B, 272 runs: tz 1, z>1 1, heading>0.5 at the end 0, xy>1.5 0.
+- 5 Hz (a fix every 0.2 s), S8k, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 1, xy>1.5 0.
+- 5 Hz (a fix every 0.2 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 1, xy>1.5 0.
+- 10 Hz (a fix every 0.1 s), S8k, antennas A and B, 272 runs: tz 70, z>1 9, heading>0.5 at the end 126, xy>1.5 75.
+- 10 Hz (a fix every 0.1 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
+- 20 Hz (a fix every 0.05 s), S8k, antennas A and B, 272 runs: tz 78, z>1 0, heading>0.5 at the end 153, xy>1.5 78.
+- 20 Hz (a fix every 0.05 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
+- 0.5 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 42, heading>0.5 at the end 48.
+- 0.5 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 44, heading>0.5 at the end 46.
+- 1 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 35, heading>0.5 at the end 48.
+- 1 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
+- 2 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 3, heading>0.5 at the end 4.
+- 2 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
+- 5 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 1.
+- 5 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 1.
+- 10 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 31, heading>0.5 at the end 30.
+- 10 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
+- 20 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 38, heading>0.5 at the end 48.
+- 20 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
+- 0.5 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 53, heading>0.5 at the end 64.
+- 0.5 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 51, heading>0.5 at the end 64.
+- 1 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 41, heading>0.5 at the end 64.
+- 1 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+- 2 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 1, heading>0.5 at the end 0.
+- 2 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 1, heading>0.5 at the end 0.
+- 5 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+- 5 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+- 10 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 39, heading>0.5 at the end 64.
+- 10 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+- 20 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 40, heading>0.5 at the end 64.
+- 20 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+
+## Suite hgap, the short outages: the fixes stop just before or in the middle of the first acceleration after a stand
+
+The outage begins `off` s after the end of the stand (sgstart accelerates from 6 s on: 5 s is 1 s before the acceleration, 7.5 s in the middle of it; sgdrive accelerates from 0 s: -1 s, 1.5 s, 5 s) and lasts 1.5, 3, 5 or 12 s. Stand 300 or 900 s, gyro bias 0 or 0.2 deg/s, accelerometer bias 0 or 0.1 m/s^2, 4 seeds, antennas A, B (lever arm with a horizontal part), M (mast) and Z (zero lever, the same data). S8k = the S8u of the fifth and sixth rounds; S8w = spans in seconds and the fix-rate limit, no spread of the covariance after an outage (`lever_outage_spread` 0); S8v = S8u + the test of the norms (`lever_align_norm` 0.3); S8u = the code that ships (spread factor 0.1, no test of the norms). tz, z>1, xy>1.5 as above; excess = the run has tz and the zero-lever run of the same data has none; diverged = abs z > 100 m or tilt > 1.5 rad.
+
+
+### All short outages
+
+| cell | scheme | antennas | runs | tz | excess | z>1 | xy>1.5 | diverged |
+|---|---|---|---|---|---|---|---|---|
+| all | S8o | A, B | 1280 | 48 | 31 | 13 | 32 | 0 |
+| all | S8o | M | 640 | 108 | 67 | 33 | 0 | 0 |
+| all | S8 | A, B | 1280 | 92 | 58 | 22 | 75 | 0 |
+| all | S8 | M | 640 | 110 | 69 | 51 | 21 | 16 |
+| all | S8k | A, B | 1280 | 83 | 51 | 21 | 76 | 0 |
+| all | S8k | M | 640 | 154 | 93 | 59 | 19 | 16 |
+| all | S8w | A, B | 1280 | 83 | 51 | 21 | 76 | 0 |
+| all | S8w | M | 640 | 154 | 93 | 59 | 19 | 16 |
+| all | S8v | A, B | 1280 | 32 | 12 | 8 | 34 | 0 |
+| all | S8v | M | 640 | 133 | 79 | 16 | 0 | 0 |
+| all | S8u | A, B | 1280 | 32 | 12 | 8 | 34 | 0 |
+| all | S8u | M | 640 | 132 | 78 | 16 | 0 | 0 |
+| all | S8u | Z | 640 | 226 | - | 84 | 0 | 0 |
+
+### By start of the outage
+
+| cell | scheme | antennas | runs | tz | excess | z>1 | xy>1.5 | diverged |
+|---|---|---|---|---|---|---|---|---|
+| sgdrive, off-1 | S8o | A, B | 256 | 30 | 16 | 6 | 31 | 0 |
+| sgdrive, off-1 | S8o | M | 128 | 31 | 15 | 5 | 0 | 0 |
+| sgdrive, off-1 | S8 | A, B | 256 | 55 | 26 | 11 | 42 | 0 |
+| sgdrive, off-1 | S8 | M | 128 | 42 | 22 | 33 | 15 | 12 |
+| sgdrive, off-1 | S8k | A, B | 256 | 48 | 21 | 11 | 42 | 0 |
+| sgdrive, off-1 | S8k | M | 128 | 43 | 23 | 31 | 13 | 11 |
+| sgdrive, off-1 | S8w | A, B | 256 | 48 | 21 | 11 | 42 | 0 |
+| sgdrive, off-1 | S8w | M | 128 | 43 | 23 | 31 | 13 | 11 |
+| sgdrive, off-1 | S8v | A, B | 256 | 30 | 12 | 8 | 32 | 0 |
+| sgdrive, off-1 | S8v | M | 128 | 31 | 15 | 2 | 0 | 0 |
+| sgdrive, off-1 | S8u | A, B | 256 | 30 | 12 | 8 | 32 | 0 |
+| sgdrive, off-1 | S8u | M | 128 | 31 | 15 | 3 | 0 | 0 |
+| sgdrive, off-1 | S8u | Z | 128 | 53 | - | 20 | 0 | 0 |
+| sgdrive, off1.5 | S8o | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8o | M | 128 | 1 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8 | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8 | M | 128 | 1 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8k | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8k | M | 128 | 12 | 6 | 1 | 0 | 0 |
+| sgdrive, off1.5 | S8w | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8w | M | 128 | 12 | 6 | 1 | 0 | 0 |
+| sgdrive, off1.5 | S8v | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8v | M | 128 | 12 | 6 | 1 | 0 | 0 |
+| sgdrive, off1.5 | S8u | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off1.5 | S8u | M | 128 | 12 | 6 | 1 | 0 | 0 |
+| sgdrive, off1.5 | S8u | Z | 128 | 37 | - | 17 | 0 | 0 |
+| sgdrive, off5 | S8o | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off5 | S8o | M | 128 | 11 | 5 | 0 | 0 | 0 |
+| sgdrive, off5 | S8 | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off5 | S8 | M | 128 | 11 | 5 | 0 | 0 | 0 |
+| sgdrive, off5 | S8k | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off5 | S8k | M | 128 | 32 | 15 | 7 | 0 | 0 |
+| sgdrive, off5 | S8w | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off5 | S8w | M | 128 | 32 | 15 | 7 | 0 | 0 |
+| sgdrive, off5 | S8v | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off5 | S8v | M | 128 | 32 | 15 | 8 | 0 | 0 |
+| sgdrive, off5 | S8u | A, B | 256 | 0 | 0 | 0 | 0 | 0 |
+| sgdrive, off5 | S8u | M | 128 | 32 | 15 | 7 | 0 | 0 |
+| sgdrive, off5 | S8u | Z | 128 | 46 | - | 22 | 0 | 0 |
+| sgstart, off5 | S8o | A, B | 256 | 16 | 15 | 7 | 1 | 0 |
+| sgstart, off5 | S8o | M | 128 | 42 | 35 | 27 | 0 | 0 |
+| sgstart, off5 | S8 | A, B | 256 | 35 | 32 | 11 | 33 | 0 |
+| sgstart, off5 | S8 | M | 128 | 33 | 30 | 17 | 6 | 4 |
+| sgstart, off5 | S8k | A, B | 256 | 33 | 30 | 10 | 34 | 0 |
+| sgstart, off5 | S8k | M | 128 | 34 | 30 | 19 | 6 | 5 |
+| sgstart, off5 | S8w | A, B | 256 | 33 | 30 | 10 | 34 | 0 |
+| sgstart, off5 | S8w | M | 128 | 34 | 30 | 19 | 6 | 5 |
+| sgstart, off5 | S8v | A, B | 256 | 0 | 0 | 0 | 2 | 0 |
+| sgstart, off5 | S8v | M | 128 | 25 | 24 | 4 | 0 | 0 |
+| sgstart, off5 | S8u | A, B | 256 | 0 | 0 | 0 | 2 | 0 |
+| sgstart, off5 | S8u | M | 128 | 24 | 23 | 4 | 0 | 0 |
+| sgstart, off5 | S8u | Z | 128 | 36 | - | 10 | 0 | 0 |
+| sgstart, off7.5 | S8o | A, B | 256 | 2 | 0 | 0 | 0 | 0 |
+| sgstart, off7.5 | S8o | M | 128 | 23 | 12 | 1 | 0 | 0 |
+| sgstart, off7.5 | S8 | A, B | 256 | 2 | 0 | 0 | 0 | 0 |
+| sgstart, off7.5 | S8 | M | 128 | 23 | 12 | 1 | 0 | 0 |
+| sgstart, off7.5 | S8k | A, B | 256 | 2 | 0 | 0 | 0 | 0 |
+| sgstart, off7.5 | S8k | M | 128 | 33 | 19 | 1 | 0 | 0 |
+| sgstart, off7.5 | S8w | A, B | 256 | 2 | 0 | 0 | 0 | 0 |
+| sgstart, off7.5 | S8w | M | 128 | 33 | 19 | 1 | 0 | 0 |
+| sgstart, off7.5 | S8v | A, B | 256 | 2 | 0 | 0 | 0 | 0 |
+| sgstart, off7.5 | S8v | M | 128 | 33 | 19 | 1 | 0 | 0 |
+| sgstart, off7.5 | S8u | A, B | 256 | 2 | 0 | 0 | 0 | 0 |
+| sgstart, off7.5 | S8u | M | 128 | 33 | 19 | 1 | 0 | 0 |
+| sgstart, off7.5 | S8u | Z | 128 | 54 | - | 15 | 0 | 0 |
+
+### By length of the outage
+
+| cell | scheme | antennas | runs | tz | excess | z>1 | xy>1.5 | diverged |
+|---|---|---|---|---|---|---|---|---|
+| 1.5 s | S8o | A, B | 320 | 10 | 4 | 3 | 5 | 0 |
+| 1.5 s | S8o | M | 160 | 34 | 20 | 7 | 0 | 0 |
+| 1.5 s | S8 | A, B | 320 | 21 | 9 | 3 | 10 | 0 |
+| 1.5 s | S8 | M | 160 | 24 | 14 | 17 | 9 | 7 |
+| 1.5 s | S8k | A, B | 320 | 16 | 6 | 3 | 10 | 0 |
+| 1.5 s | S8k | M | 160 | 35 | 19 | 17 | 9 | 6 |
+| 1.5 s | S8w | A, B | 320 | 16 | 6 | 3 | 10 | 0 |
+| 1.5 s | S8w | M | 160 | 35 | 19 | 17 | 9 | 6 |
+| 1.5 s | S8v | A, B | 320 | 10 | 3 | 3 | 10 | 0 |
+| 1.5 s | S8v | M | 160 | 33 | 19 | 5 | 0 | 0 |
+| 1.5 s | S8u | A, B | 320 | 10 | 3 | 3 | 10 | 0 |
+| 1.5 s | S8u | M | 160 | 33 | 19 | 6 | 0 | 0 |
+| 1.5 s | S8u | Z | 160 | 55 | - | 19 | 0 | 0 |
+| 3 s | S8o | A, B | 320 | 5 | 4 | 1 | 4 | 0 |
+| 3 s | S8o | M | 160 | 25 | 14 | 8 | 0 | 0 |
+| 3 s | S8 | A, B | 320 | 21 | 15 | 6 | 26 | 0 |
+| 3 s | S8 | M | 160 | 30 | 17 | 16 | 6 | 4 |
+| 3 s | S8k | A, B | 320 | 20 | 14 | 6 | 28 | 0 |
+| 3 s | S8k | M | 160 | 43 | 25 | 18 | 7 | 7 |
+| 3 s | S8w | A, B | 320 | 20 | 14 | 6 | 28 | 0 |
+| 3 s | S8w | M | 160 | 43 | 25 | 18 | 7 | 7 |
+| 3 s | S8v | A, B | 320 | 8 | 5 | 4 | 11 | 0 |
+| 3 s | S8v | M | 160 | 35 | 19 | 2 | 0 | 0 |
+| 3 s | S8u | A, B | 320 | 8 | 5 | 4 | 11 | 0 |
+| 3 s | S8u | M | 160 | 34 | 18 | 1 | 0 | 0 |
+| 3 s | S8u | Z | 160 | 61 | - | 19 | 0 | 0 |
+| 5 s | S8o | A, B | 320 | 12 | 7 | 4 | 12 | 0 |
+| 5 s | S8o | M | 160 | 25 | 17 | 7 | 0 | 0 |
+| 5 s | S8 | A, B | 320 | 22 | 12 | 3 | 20 | 0 |
+| 5 s | S8 | M | 160 | 29 | 19 | 10 | 3 | 3 |
+| 5 s | S8k | A, B | 320 | 22 | 12 | 3 | 19 | 0 |
+| 5 s | S8k | M | 160 | 40 | 24 | 13 | 2 | 2 |
+| 5 s | S8w | A, B | 320 | 22 | 12 | 3 | 19 | 0 |
+| 5 s | S8w | M | 160 | 40 | 24 | 13 | 2 | 2 |
+| 5 s | S8v | A, B | 320 | 9 | 3 | 1 | 10 | 0 |
+| 5 s | S8v | M | 160 | 39 | 24 | 4 | 0 | 0 |
+| 5 s | S8u | A, B | 320 | 9 | 3 | 1 | 10 | 0 |
+| 5 s | S8u | M | 160 | 40 | 24 | 4 | 0 | 0 |
+| 5 s | S8u | Z | 160 | 69 | - | 28 | 0 | 0 |
+| 12 s | S8o | A, B | 320 | 21 | 16 | 5 | 11 | 0 |
+| 12 s | S8o | M | 160 | 24 | 16 | 11 | 0 | 0 |
+| 12 s | S8 | A, B | 320 | 28 | 22 | 10 | 19 | 0 |
+| 12 s | S8 | M | 160 | 27 | 19 | 8 | 3 | 2 |
+| 12 s | S8k | A, B | 320 | 25 | 19 | 9 | 19 | 0 |
+| 12 s | S8k | M | 160 | 36 | 25 | 11 | 1 | 1 |
+| 12 s | S8w | A, B | 320 | 25 | 19 | 9 | 19 | 0 |
+| 12 s | S8w | M | 160 | 36 | 25 | 11 | 1 | 1 |
+| 12 s | S8v | A, B | 320 | 5 | 1 | 0 | 3 | 0 |
+| 12 s | S8v | M | 160 | 26 | 17 | 5 | 0 | 0 |
+| 12 s | S8u | A, B | 320 | 5 | 1 | 0 | 3 | 0 |
+| 12 s | S8u | M | 160 | 25 | 17 | 5 | 0 | 0 |
+| 12 s | S8u | Z | 160 | 41 | - | 18 | 0 | 0 |
+
+### By stand and gyro bias
+
+| cell | scheme | antennas | runs | tz | excess | z>1 | xy>1.5 | diverged |
+|---|---|---|---|---|---|---|---|---|
+| stand 300 s, gyro bias 0 | S8o | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8o | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8 | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8 | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8k | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8k | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8w | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8w | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8v | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8v | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8u | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8u | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0 | S8u | Z | 160 | 48 | - | 13 | 0 | 0 |
+| stand 300 s, gyro bias 0.2 | S8o | A, B | 320 | 7 | 5 | 0 | 10 | 0 |
+| stand 300 s, gyro bias 0.2 | S8o | M | 160 | 13 | 7 | 1 | 0 | 0 |
+| stand 300 s, gyro bias 0.2 | S8 | A, B | 320 | 8 | 5 | 0 | 10 | 0 |
+| stand 300 s, gyro bias 0.2 | S8 | M | 160 | 11 | 7 | 6 | 1 | 0 |
+| stand 300 s, gyro bias 0.2 | S8k | A, B | 320 | 4 | 1 | 0 | 10 | 0 |
+| stand 300 s, gyro bias 0.2 | S8k | M | 160 | 14 | 9 | 7 | 0 | 0 |
+| stand 300 s, gyro bias 0.2 | S8w | A, B | 320 | 4 | 1 | 0 | 10 | 0 |
+| stand 300 s, gyro bias 0.2 | S8w | M | 160 | 14 | 9 | 7 | 0 | 0 |
+| stand 300 s, gyro bias 0.2 | S8v | A, B | 320 | 1 | 1 | 0 | 7 | 0 |
+| stand 300 s, gyro bias 0.2 | S8v | M | 160 | 9 | 5 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0.2 | S8u | A, B | 320 | 1 | 1 | 0 | 7 | 0 |
+| stand 300 s, gyro bias 0.2 | S8u | M | 160 | 9 | 5 | 0 | 0 | 0 |
+| stand 300 s, gyro bias 0.2 | S8u | Z | 160 | 63 | - | 23 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8o | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8o | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8 | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8 | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8k | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8k | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8w | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8w | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8v | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8v | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8u | A, B | 320 | 1 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8u | M | 160 | 0 | 0 | 0 | 0 | 0 |
+| stand 900 s, gyro bias 0 | S8u | Z | 160 | 54 | - | 21 | 0 | 0 |
+| stand 900 s, gyro bias 0.2 | S8o | A, B | 320 | 39 | 26 | 13 | 22 | 0 |
+| stand 900 s, gyro bias 0.2 | S8o | M | 160 | 95 | 60 | 32 | 0 | 0 |
+| stand 900 s, gyro bias 0.2 | S8 | A, B | 320 | 82 | 53 | 22 | 65 | 0 |
+| stand 900 s, gyro bias 0.2 | S8 | M | 160 | 99 | 62 | 45 | 20 | 16 |
+| stand 900 s, gyro bias 0.2 | S8k | A, B | 320 | 77 | 50 | 21 | 66 | 0 |
+| stand 900 s, gyro bias 0.2 | S8k | M | 160 | 140 | 84 | 52 | 19 | 16 |
+| stand 900 s, gyro bias 0.2 | S8w | A, B | 320 | 77 | 50 | 21 | 66 | 0 |
+| stand 900 s, gyro bias 0.2 | S8w | M | 160 | 140 | 84 | 52 | 19 | 16 |
+| stand 900 s, gyro bias 0.2 | S8v | A, B | 320 | 29 | 11 | 8 | 27 | 0 |
+| stand 900 s, gyro bias 0.2 | S8v | M | 160 | 124 | 74 | 16 | 0 | 0 |
+| stand 900 s, gyro bias 0.2 | S8u | A, B | 320 | 29 | 11 | 8 | 27 | 0 |
+| stand 900 s, gyro bias 0.2 | S8u | M | 160 | 123 | 73 | 16 | 0 | 0 |
+| stand 900 s, gyro bias 0.2 | S8u | Z | 160 | 61 | - | 27 | 0 | 0 |
+
+### Numbers quoted in README.md and experiments/README.md: the short outages
+
+- S8o, antennas A and B: 1280 runs, tz 48, z>1 13, xy>1.5 32, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 5.0 m.
+- S8o, the mast M: 640 runs, tz 108, z>1 33, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 9.6 m.
+- S8o, zero lever: 640 runs, tz 226, z>1 84, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 10.2 m.
+- S8, antennas A and B: 1280 runs, tz 92, z>1 22, xy>1.5 75, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 7.1 m.
+- S8, the mast M: 640 runs, tz 110, z>1 51, xy>1.5 21, diverged (abs z>100 m or tilt>1.5 rad) 16, largest height error 2656.6 m.
+- S8, zero lever: 640 runs, tz 226, z>1 84, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 10.2 m.
+- S8k, antennas A and B: 1280 runs, tz 83, z>1 21, xy>1.5 76, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 18.6 m.
+- S8k, the mast M: 640 runs, tz 154, z>1 59, xy>1.5 19, diverged (abs z>100 m or tilt>1.5 rad) 16, largest height error 2310.2 m.
+- S8k, zero lever: 640 runs, tz 226, z>1 84, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 10.2 m.
+- S8w, antennas A and B: 1280 runs, tz 83, z>1 21, xy>1.5 76, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 18.6 m.
+- S8w, the mast M: 640 runs, tz 154, z>1 59, xy>1.5 19, diverged (abs z>100 m or tilt>1.5 rad) 16, largest height error 2310.2 m.
+- S8w, zero lever: 640 runs, tz 226, z>1 84, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 10.2 m.
+- S8v, antennas A and B: 1280 runs, tz 32, z>1 8, xy>1.5 34, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 1.3 m.
+- S8v, the mast M: 640 runs, tz 133, z>1 16, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 2.7 m.
+- S8v, zero lever: 640 runs, tz 226, z>1 84, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 10.2 m.
+- S8u, antennas A and B: 1280 runs, tz 32, z>1 8, xy>1.5 34, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 1.3 m.
+- S8u, the mast M: 640 runs, tz 132, z>1 16, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 2.7 m.
+- S8u, zero lever: 640 runs, tz 226, z>1 84, xy>1.5 0, diverged (abs z>100 m or tilt>1.5 rad) 0, largest height error 10.2 m.
+- S8k, antennas A and B, outages that end before the circle starts or that do not cover its start (1024 runs): tz 35, xy>1.5 34.
+- S8k, antennas A and B, the outage begins 1 s before the circle (sgdrive, off-1; 256 runs): tz 48, xy>1.5 42; antenna A alone 42 of 128.
+- S8u, antennas A and B, outages that end before the circle starts or that do not cover its start (1024 runs): tz 2, xy>1.5 2.
+- S8u, antennas A and B, the outage begins 1 s before the circle (sgdrive, off-1; 256 runs): tz 30, xy>1.5 32; antenna A alone 32 of 128.
+- S8k, mast M, stand 900 s at 0.2 deg/s (160 runs): tz 140, z>1 52, diverged 16.
+- S8u, mast M, stand 900 s at 0.2 deg/s (160 runs): tz 123, z>1 16, diverged 0.
