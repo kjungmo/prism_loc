@@ -36,6 +36,7 @@
 //   Suites g60 and g300 (study 6, first pass) run the 15 schemes above S7; the suites h* (study 6,
 //   second pass: the observability grid below) run S0, S1s, S2s, S6vb and the S7 family.
 //
+//   S8r, S8a, S8   (third pass, below) S7a35 + the honest heading at the release; S8 is what the code ships.
 // Grid (one "configuration" = one row of the grid; every configuration is run with
 // NSEED seeds and every scheme sees the identical data, common random numbers):
 //   duration       60 s (suite g60), 300 s (suite g300)
@@ -131,11 +132,30 @@
 // that declares the heading unobserved while the robot stands does not estimate it. The chosen scheme
 // is the first by the order (1 to 6) and the report lists which of 2, 3, 4 it fails.
 //
+// Third pass (suites hsg and hsgv): standing, then moving. The fourth review found that a robot on GNSS and IMU that stands for minutes
+// and then starts tilts the filter and runs the height away (S7a35: the bound holds the heading sigma at 0.35 rad while the true error,
+// 1.1 rad after 600 s at a vertical gyro bias of 0.002 rad/s, keeps growing; the release at the start runs a full update on a heading
+// about 3 sigma off). No motion of the second pass stood longer than 14 s before it accelerated. The suite and the bar below were
+// written after the reviewer's probe (a copy of this file with a stand-then-go motion) had shown the failure, and before the first run of
+// the suite as committed; the schemes S8r, S8a and S8 were developed on its runs (several exploratory passes, not part of the result;
+// they found a variance that went indefinite, a restore that fired at every update, a rate and a dropout in which the alignment must not act).
+// hsgv is the same configurations on other data (kSeedV), run once after the schemes were fixed.
+//   motions        sgstart (stand, then the startstop cycle from rest), sgdrive (stand, then 0 -> 1.5 m/s in 3 s, then a circle of radius 6 m at
+//                  1.5 m/s), sgturn (stand, then the turn-on-the-spot cycle, 0.3 rad/s for 4 s of every 5 s); 160 s of motion
+//   standing       300, 600, 900, 1,800 s; gyro bias 0, 0.05, 0.1, 0.2 deg/s per axis (random signs); accelerometer bias 0, 0.1 m/s^2;
+//                  antennas A, B, M, Z; 4 seeds; GNSS and IMU only, no dropout, no reseed
+//   schemes        S2s, S6vb, S7a35 (the comparators), S8r (S7a35 + the shadow variance put back at the release), S8a (+ the kinematic
+//                  alignment from a change of velocity of 0.25 m/s), S8 (+ the blind update: lever_blind)
+//   the bar        (1) in each motion the lever-arm rows have no more tz than the zero-lever rows of the same data (summed over pairs); (2) no
+//                  lever-arm run with |z| > 1 m or tilt > 0.3 rad in sgstart or sgdrive with the antennas A and B (they have a horizontal arm);
+//                  reported besides: the excess (tz where the paired zero-lever run has none), circ, xy, heading at the end.
+//   regression     S8 is also run on every cell of the second pass (LEVER_ONLY=S8 and experiments/merge_rows.py), so that the second-pass tables
+//                  show it next to S7a35.
 // Build and run from the repository root (see experiments/README.md, study 6):
 //   g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3
 //       prism_loc_fusion/src/*.cpp experiments/eskf_lever.cpp -o /tmp/exp_lever
 //   /tmp/exp_lever g60 0 1 out/lever_g60      # suite, shard, number of shards, output prefix
-// (suites: g60 g300 smoke h300 h600 h900 h1800 hndt hslope hyaw hvib hsmoke)
+// (suites: g60 g300 smoke h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv hsmoke)
 // Writes <prefix>_runs.csv (one row per run and scheme) and <prefix>_agg.csv (one row per
 // configuration and scheme). Deterministic for one compiler and standard library
 // (std::normal_distribution is implementation defined).
@@ -170,10 +190,11 @@ constexpr double kYawStart = 0.1;            // heading error at start, rad (sig
 constexpr double kTiltDiv = 0.05, kZDiv = 0.5, kXyDiv = 1.0, kHeadDiv = 0.5;
 constexpr double kEpochFrom = 10.0;
 constexpr std::uint64_t kSeed = 20261018u;
+constexpr std::uint64_t kSeedV = 20271019u;   // suite hsgv: the configurations of hsg on other data (a check of the schemes developed on hsg)
 
 const Vec3 kAntenna[4] = {Vec3(0.5, 0.0, 1.0), Vec3(-0.3, 0.2, 1.0), Vec3(0.0, 0.0, 0.0), Vec3(0.0, 0.0, 1.5)};
 const char* kAntennaName[4] = {"A", "B", "Z", "M"};
-const char* kMotionName[6] = {"stand", "turn", "drive", "spin", "line", "startstop"};
+const char* kMotionName[9] = {"stand", "turn", "drive", "spin", "line", "startstop", "sgstart", "sgturn", "sgdrive"};
 
 struct Variant {
   const char* name;
@@ -185,6 +206,10 @@ struct Variant {
   unsigned consider_moving{0u};
   double cap{0.0}, rel_dv{0.0};             // EskfParams::lever_heading_sigma_max (rad), lever_release_dv (m/s); 0 = off
   bool reseed_accel{false};                 // a reseed takes roll and pitch from the accelerometer
+  bool restore{false};                      // EskfParams::lever_restore (the honest heading at a release); off for every scheme of the earlier passes
+  double align{0.0};                        // EskfParams::lever_align_sigma, rad
+  double align_dv{0.25};                    // EskfParams::lever_align_dv, m/s
+  bool blind{false};                        // EskfParams::lever_blind
 };
 const Variant kVariants[] = {
     {"ignore", true, 0, 1, false},
@@ -220,6 +245,15 @@ const Variant kVariantsH[] = {
     // Added after the first results (the bound of 0.35 rad was ahead of 0.5 and 0.7): the release thresholds at that bound
     {"S7a35r05", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 0.5, true},
     {"S7a35r20", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 2.0, true},
+    // Third pass (suite hsg): S7a35 + the honest heading at the release. S8r: the shadow variance is put back at the release, and
+    // that is all. S8a: and a heading over 1 rad of spread is first re-acquired by the kinematic alignment (Eskf::alignHeading,
+    // from a change of velocity of 0.25 m/s) instead of a linearised update. S8: and, while the heading is unknown and not alignable,
+    // the lever Jacobian leaves out the attitude columns (lever_blind). S8 is what the code ships (EskfParams defaults).
+    {"S8r", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 0.0},
+    {"S8a", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0},
+    {"S8", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true},
+    // S8s: S8 with lever_align_sigma 0.6 rad (the alignment also at a start from a stand of a few seconds): a trial, run with LEVER_ONLY=S8s
+    {"S8s", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 0.6, 0.25, true},
 };
 constexpr int kNumH = sizeof(kVariantsH) / sizeof(kVariantsH[0]);
 
@@ -235,6 +269,7 @@ struct Config {
   double yaw0{0.1};        // heading error at the start, rad (sign drawn per run); the first pass: kYawStart
   double sim_acc{0.02};    // accelerometer white noise of the simulated IMU, m/s^2 per axis (kSimAcc); suite hvib: more
   bool hsuite{false};
+  double stand_s{0.0};     // third pass (suite hsg, motions sgstart/sgturn/sgdrive): the robot stands for this long, then moves
 };
 
 struct Truth { Vec3 p, v, a; double yaw, wz; };
@@ -262,6 +297,17 @@ Truth truthAt(int motion, double t) {
     T.p = Vec3(34.5 * cycle + x, 0.0, 0.0);
     T.v = Vec3(v, 0.0, 0.0);
     T.a = Vec3(a, 0.0, 0.0);
+  } else if (motion == 6) {  // circle: 0 -> 1.5 m/s along x in 3 s, then a circle of radius 6 m at 1.5 m/s (a = 0.375 m/s^2), left turn
+    const double R = 6.0, V = 1.5;
+    if (t < 3.0) {
+      T.p = Vec3(0.25 * t * t, 0.0, 0.0); T.v = Vec3(0.5 * t, 0.0, 0.0); T.a = Vec3(0.5, 0.0, 0.0);
+    } else {
+      const double phi = (V / R) * (t - 3.0), x0 = 2.25;
+      T.p = Vec3(x0 + R * std::sin(phi), R * (1.0 - std::cos(phi)), 0.0);
+      T.v = Vec3(V * std::cos(phi), V * std::sin(phi), 0.0);
+      T.a = Vec3(-V * V / R * std::sin(phi), V * V / R * std::cos(phi), 0.0);
+      T.yaw = phi; T.wz = V / R;
+    }
   } else if (motion == 2) {  // planar lemniscate
     const double A = 8.0, B = 4.0, w = 2.0 * M_PI / 30.0;
     T.p = Vec3(A * std::sin(w * t), B * std::sin(2.0 * w * t), 0.0);
@@ -271,6 +317,15 @@ Truth truthAt(int motion, double t) {
     T.wz = (T.v.x() * T.a.y() - T.v.y() * T.a.x()) / (T.v.x() * T.v.x() + T.v.y() * T.v.y());
   }
   return T;
+}
+
+// Truth of a configuration: the motions sg* stand at the origin (heading 0) for stand_s seconds and then
+// start the motion they name (startstop, turn, circle) from rest.
+Truth truthOf(const Config& c, double t) {
+  if (c.motion < 6) return truthAt(c.motion, t);
+  if (t < c.stand_s) return Truth{Vec3::Zero(), Vec3::Zero(), Vec3::Zero(), 0.0, 0.0};
+  static const int kBase[3] = {5, 1, 6};
+  return truthAt(kBase[c.motion - 6], t - c.stand_s);
 }
 
 Eigen::Matrix3d rotZ(double yaw) { return Eigen::AngleAxisd(yaw, Vec3::UnitZ()).toRotationMatrix(); }
@@ -329,7 +384,7 @@ Data makeData(const Config& c, std::uint64_t seed) {
   d.reseed_yaw_err = 0.01;
   d.f.resize(n + 1); d.w.resize(n + 1);
   for (int k = 0; k <= n; ++k) {
-    const Truth T = truthAt(c.motion, k * kDt);
+    const Truth T = truthOf(c, k * kDt);
     if (c.slope == 0.0) {   // the first pass: exactly the arithmetic it had
       d.f[k] = rotZ(T.yaw).transpose() * (T.a + Vec3(0, 0, 9.81)) + d.ba + gauss3(rng, c.sim_acc);
       d.w[k] = Vec3(0, 0, T.wz) + d.bg + gauss3(rng, kSimGyro);
@@ -368,6 +423,10 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
   ep.lever_consider_moving = v.consider_moving;
   ep.lever_heading_sigma_max = v.cap;
   ep.lever_release_dv = v.rel_dv;
+  ep.lever_restore = v.restore;
+  ep.lever_align_sigma = v.align;
+  ep.lever_align_dv = v.align_dv;
+  ep.lever_blind = v.blind;
   Eskf f(ep);
   const Vec3 lever = kAntenna[c.ant];
   const bool lever_on = !v.ignore;
@@ -389,7 +448,7 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
   // Initialise as the node does: attitude from one accelerometer sample, position from the
   // first fix moved from the antenna to the body origin.
   const int n = static_cast<int>(d.f.size()) - 1;
-  const Truth T0 = truthAt(c.motion, 0.0);
+  const Truth T0 = truthOf(c, 0.0);
   NominalState x0;
   x0.q = attitudeFromAccel(d.f[0], T0.yaw + d.yaw_err);
   const Vec3 fix0 = T0.p + bodyRot(c, T0.yaw) * lever + d.gnss_noise[0];
@@ -408,7 +467,7 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
   for (int k = 1; k <= n; ++k) {
     const double t = k * kDt;
     if (k == reseed_k) {
-      const Truth Tr = truthAt(c.motion, t);
+      const Truth Tr = truthOf(c, t);
       NominalState xr;
       xr.p = Tr.p + d.reseed_p_off;
       xr.v = Vec3::Zero();   // /initialpose carries no velocity: the node starts at rest
@@ -421,7 +480,7 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
     f.predict(d.f[k], d.w[k], kDt);
     const int i = k / gnss_every;
     if (k % gnss_every == 0 && !(c.drop && t >= drop0 && t < drop1)) {
-      const Truth T = truthAt(c.motion, t);
+      const Truth T = truthOf(c, t);
       const Vec3 fix = T.p + bodyRot(c, T.yaw) * lever + d.gnss_noise[i];
       if (lever_on) {
         if (!lever.isZero(0.0)) { ++n_lever; if (f.leverReleaseOpen()) ++n_open; }
@@ -430,11 +489,11 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
       } else f.updatePosition(fix, Rg);
     }
     if (c.ndt && k % gnss_every == gnss_every / 2) {
-      const Truth T = truthAt(c.motion, t);
+      const Truth T = truthOf(c, t);
       f.updatePose(T.p + d.ndt_p[i], bodyQuat(c, T.yaw) * so3Exp(d.ndt_r[i]), Rn);
     }
     if (k % 100 == 0 && t >= kEpochFrom) {
-      const Truth T = truthAt(c.motion, t);
+      const Truth T = truthOf(c, t);
       const NominalState& x = f.state();
       const Eigen::Quaterniond qt = bodyQuat(c, T.yaw);
       e.segment<3>(0) = T.p - x.p;
@@ -551,6 +610,15 @@ std::vector<Config> suite(const std::string& name) {
     for (double sa : {0.02, 0.05, 0.1, 0.2, 0.4})
       for (int motion : {0, 4})
         addH(300, motion, 0.1, 0.1, false, 0.0, false, 0.0, 4, kYawStart, sa);
+  } else if (name == "hsg" || name == "hsgv") {       // third pass: stand for minutes, then start (startstop, turn on the spot, circle); 160 s of motion, 4 seeds
+    for (int stand : {300, 600, 900, 1800})
+      for (double gb : {0.0, 0.05, 0.1, 0.2})
+        for (double ab : {0.0, 0.1})
+          for (int motion : {6, 7, 8}) {
+            const int first = id;
+            addH(stand + 160, motion, gb, ab, false, 0.0, false, 0.0, 4);
+            for (int i = first; i < id; ++i) cs[i].stand_s = stand;
+          }
   } else if (name == "hsmoke") {
     addH(60, 0, 0.1, 0.0, false, 0.0, false, 0.0, 2);
     addH(60, 5, 0.5, 0.1, true, 10.0, true, 0.05, 2);
@@ -561,7 +629,7 @@ std::vector<Config> suite(const std::string& name) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc < 5) { std::fprintf(stderr, "usage: %s g60|g300|smoke|h300|h600|h900|h1800|hndt|hslope|hyaw|hvib|hsmoke SHARD NSHARDS OUT_PREFIX\n", argv[0]); return 2; }
+  if (argc < 5) { std::fprintf(stderr, "usage: %s g60|g300|smoke|h300|h600|h900|h1800|hndt|hslope|hyaw|hvib|hsg|hsgv|hsmoke SHARD NSHARDS OUT_PREFIX\n", argv[0]); return 2; }
   const std::string sname = argv[1];
   const int shard = std::atoi(argv[2]), nshards = std::atoi(argv[3]);
   const std::string prefix = argv[4];
@@ -581,7 +649,7 @@ int main(int argc, char** argv) {
     if (c.id % nshards != shard) continue;
     std::vector<Data> data;
     const unsigned data_id = c.data_id >= 0 ? c.data_id : c.id;
-    for (int s = 0; s < c.nseed; ++s) data.push_back(makeData(c, kSeed + 1000u * data_id + s));
+    for (int s = 0; s < c.nseed; ++s) data.push_back(makeData(c, (sname == "hsgv" ? kSeedV : kSeed) + 1000u * data_id + s));
     char cfg[200];
     char noise[32];
     if (c.sim_acc != kSimAcc) std::snprintf(noise, sizeof noise, "vib%g", c.sim_acc);   // accelerometer noise other than the default: told to the filter
@@ -594,6 +662,14 @@ int main(int argc, char** argv) {
       // LEVER_ONLY=name,name: run just these schemes (the rows of the others are what a full run writes; rerun to extend a result)
       if (const char* only = std::getenv("LEVER_ONLY")) {
         if (!std::strstr((std::string(",") + only + ",").c_str(), (std::string(",") + variants[vi].name + ",").c_str())) continue;
+      } else if (c.hsuite) {
+        // Without LEVER_ONLY: the second pass runs the schemes of the second pass (S0 ... S7a35r20), the third pass (suite hsg) the
+        // comparators S2s, S6vb, S7a35 and the S8 family. The S8 rows of the second-pass suites are added with LEVER_ONLY=S8.
+        const bool third = variants[vi].name[0] == 'S' && variants[vi].name[1] == '8';
+        const std::string nm = variants[vi].name;
+        if (nm == "S8s") continue;   // the trial of a lower alignment threshold (README, study 6): only with LEVER_ONLY=S8s
+        const bool sg_set = third || nm == "S2s" || nm == "S6vb" || nm == "S7a35";
+        if (c.stand_s > 0.0 ? !sg_set : third) continue;
       }
       std::vector<RunOut> outs;
       for (int s = 0; s < c.nseed; ++s) outs.push_back(runScheme(c, variants[vi], data[s]));
