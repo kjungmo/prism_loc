@@ -151,11 +151,21 @@
 //                  reported besides: the excess (tz where the paired zero-lever run has none), circ, xy, heading at the end.
 //   regression     S8 is also run on every cell of the second pass (LEVER_ONLY=S8 and experiments/merge_rows.py), so that the second-pass tables
 //                  show it next to S7a35.
+// Fifth pass (suites hgap and hboot; the fifth review round). Two failures of S8 that the reviewer's probes (copies of this file with the two suites) showed:
+//   hgap   the GNSS fixes stop 10 s before the robot starts (the start-stop cycle, or the circle) and come back after 30 s or 120 s: the kinematic
+//          alignment took the last fix before the outage and the IMU sum of the whole outage as one change of velocity. Stand 300 or 600 s, gyro bias 0, 0.1, 0.2 deg/s,
+//          accelerometer bias 0, 0.1 m/s^2, antennas A, B, M, Z, 4 seeds. S8o is S8 without the check of the two spans (EskfParams::lever_align_span_guard = false).
+//   hboot  the default boot of a robot on GNSS and IMU with a lever arm: no /initialpose, initial_yaw 0.5, 1, 2 or 3 rad off (the harness's yaw0), a stand of 6, 30, 60, 90, 120 or
+//          300 s, then the start-stop cycle or the circle, gyro bias 0.1 deg/s, accelerometer bias 0.1 m/s^2. S8 starts with the 0.71 rad of heading spread of its own covariance;
+//          S8u (what the code ships) holds the spread of an unknown heading, pi / sqrt(3) rad, in the shadow at the first start (Eskf::markHeadingUnknown), so that the first start aligns.
+//   Like the suites hsg and hsgv they were written after the probes had shown the failures and run once as committed. No bar was declared before the probes: the reviewer's prototype of S8u
+//   came first. S8u was chosen because it removes the failure on hboot, and then run on every earlier suite (LEVER_ONLY=S8,S8u) to see what it costs; the costs are counts in
+//   README.md ("Fifth pass") and report.md, not a criterion that decided. The mast M (no horizontal arm) is the cell where S8u does not help.
 // Build and run from the repository root (see experiments/README.md, study 6):
 //   g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3
 //       prism_loc_fusion/src/*.cpp experiments/eskf_lever.cpp -o /tmp/exp_lever
 //   /tmp/exp_lever g60 0 1 out/lever_g60      # suite, shard, number of shards, output prefix
-// (suites: g60 g300 smoke h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv hsmoke)
+// (suites: g60 g300 smoke h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv hgap hboot hsmoke)
 // Writes <prefix>_runs.csv (one row per run and scheme) and <prefix>_agg.csv (one row per
 // configuration and scheme). Deterministic for one compiler and standard library
 // (std::normal_distribution is implementation defined).
@@ -210,6 +220,8 @@ struct Variant {
   double align{0.0};                        // EskfParams::lever_align_sigma, rad
   double align_dv{0.25};                    // EskfParams::lever_align_dv, m/s
   bool blind{false};                        // EskfParams::lever_blind
+  double start_sigma{0.0};                  // EskfParams::lever_start_sigma, rad: the heading of the first start is a guess (0 = trusted, as before)
+  bool span_guard{true};                    // EskfParams::lever_align_span_guard (false: S8o, the version before the fifth review)
 };
 const Variant kVariants[] = {
     {"ignore", true, 0, 1, false},
@@ -253,6 +265,13 @@ const Variant kVariantsH[] = {
     {"S8a", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0},
     {"S8", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true},
     // S8s: S8 with lever_align_sigma 0.6 rad (the alignment also at a start from a stand of a few seconds): a trial, run with LEVER_ONLY=S8s
+    // S8u (fifth pass): S8 + a start whose heading is a guess (initial_yaw, no /initialpose) holds the spread of an unknown heading,
+    // pi / sqrt(3) rad, in the shadow (Eskf::markHeadingUnknown). S8u is what the code ships; S8 is the version before. The harness marks only the
+    // first start of a run, a reseed (/initialpose) is a heading source and is not marked.
+    // S8o: S8 with the span guard of the alignment off (EskfParams::lever_align_span_guard = false), the version of the fourth review round's fix before
+    // the fifth review: what an outage across a start did to it (suite hgap).
+    {"S8o", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 0.0, false},
+    {"S8u", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178},
     {"S8s", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 0.6, 0.25, true},
 };
 constexpr int kNumH = sizeof(kVariantsH) / sizeof(kVariantsH[0]);
@@ -427,6 +446,8 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
   ep.lever_align_sigma = v.align;
   ep.lever_align_dv = v.align_dv;
   ep.lever_blind = v.blind;
+  ep.lever_start_sigma = v.start_sigma;
+  ep.lever_align_span_guard = v.span_guard;
   Eskf f(ep);
   const Vec3 lever = kAntenna[c.ant];
   const bool lever_on = !v.ignore;
@@ -455,10 +476,12 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
   x0.p = lever_on ? Vec3(fix0 - x0.q * lever) : fix0;
   x0.v = Vec3::Zero();
   f.initialize(x0, covariance(x0.q, d.f[0]));
+  if (!lever.isZero(0.0) && v.start_sigma > 0.0) f.markHeadingUnknown();
 
   RunOut out;
   const int reseed_k = c.reseed ? n / 2 : -1;
-  const double drop0 = c.dur == 60 ? 30.0 : (c.dur <= 300 ? 120.0 : 0.4 * c.dur);
+  // Suites with a stand (hsg, hgap): an outage begins 10 s before the robot starts.
+  const double drop0 = c.stand_s > 0.0 ? c.stand_s - 10.0 : (c.dur == 60 ? 30.0 : (c.dur <= 300 ? 120.0 : 0.4 * c.dur));
   const double drop1 = drop0 + (c.drop_s >= 0.0 ? c.drop_s : (c.dur == 60 ? 10.0 : 30.0));
   const double tsq = lever.head<2>().norm();       // horizontal lever arm, for the circle criterion
   long n_lever = 0, n_capped = 0, n_open = 0;
@@ -619,6 +642,24 @@ std::vector<Config> suite(const std::string& name) {
             addH(stand + 160, motion, gb, ab, false, 0.0, false, 0.0, 4);
             for (int i = first; i < id; ++i) cs[i].stand_s = stand;
           }
+  } else if (name == "hgap") {   // fifth pass: an outage of the fixes that spans the start after a stand (30 s and 120 s, from 10 s before the start)
+    for (int stand : {300, 600})
+      for (double gb : {0.0, 0.1, 0.2})
+        for (double ab : {0.0, 0.1})
+          for (int motion : {6, 8})
+            for (double drop_s : {30.0, 120.0}) {
+              const int first = id;
+              addH(stand + 160, motion, gb, ab, false, drop_s, false, 0.0, 4);
+              for (int i = first; i < id; ++i) cs[i].stand_s = stand;
+            }
+  } else if (name == "hboot") {   // fifth pass: the default boot, a wrong initial_yaw (0.5 to 3 rad), no /initialpose, a short or long stand, then the start
+    for (int stand : {6, 30, 60, 90, 120, 300})
+      for (double yaw0 : {0.5, 1.0, 2.0, 3.0})
+        for (int motion : {6, 8}) {
+          const int first = id;
+          addH(stand + 160, motion, 0.1, 0.1, false, 0.0, false, 0.0, 4, yaw0);
+          for (int i = first; i < id; ++i) cs[i].stand_s = stand;
+        }
   } else if (name == "hsmoke") {
     addH(60, 0, 0.1, 0.0, false, 0.0, false, 0.0, 2);
     addH(60, 5, 0.5, 0.1, true, 10.0, true, 0.05, 2);
@@ -629,7 +670,7 @@ std::vector<Config> suite(const std::string& name) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc < 5) { std::fprintf(stderr, "usage: %s g60|g300|smoke|h300|h600|h900|h1800|hndt|hslope|hyaw|hvib|hsg|hsgv|hsmoke SHARD NSHARDS OUT_PREFIX\n", argv[0]); return 2; }
+  if (argc < 5) { std::fprintf(stderr, "usage: %s g60|g300|smoke|h300|h600|h900|h1800|hndt|hslope|hyaw|hvib|hsg|hsgv|hgap|hboot|hsmoke SHARD NSHARDS OUT_PREFIX\n", argv[0]); return 2; }
   const std::string sname = argv[1];
   const int shard = std::atoi(argv[2]), nshards = std::atoi(argv[3]);
   const std::string prefix = argv[4];
@@ -663,13 +704,16 @@ int main(int argc, char** argv) {
       if (const char* only = std::getenv("LEVER_ONLY")) {
         if (!std::strstr((std::string(",") + only + ",").c_str(), (std::string(",") + variants[vi].name + ",").c_str())) continue;
       } else if (c.hsuite) {
-        // Without LEVER_ONLY: the second pass runs the schemes of the second pass (S0 ... S7a35r20), the third pass (suite hsg) the
-        // comparators S2s, S6vb, S7a35 and the S8 family. The S8 rows of the second-pass suites are added with LEVER_ONLY=S8.
+        // Without LEVER_ONLY: the second pass runs the schemes of the second pass (S0 ... S7a35r20), the third pass (suites hsg, hsgv) the
+        // comparators S2s, S6vb, S7a35 and the S8 family (S8r, S8a, S8, S8u), the fifth pass (suites hgap, hboot) S8o, S8 and S8u.
+        // The S8 and S8u rows of the second-pass suites are added with LEVER_ONLY=S8,S8u.
         const bool third = variants[vi].name[0] == 'S' && variants[vi].name[1] == '8';
         const std::string nm = variants[vi].name;
         if (nm == "S8s") continue;   // the trial of a lower alignment threshold (README, study 6): only with LEVER_ONLY=S8s
         const bool sg_set = third || nm == "S2s" || nm == "S6vb" || nm == "S7a35";
-        if (c.stand_s > 0.0 ? !sg_set : third) continue;
+        if (nm == "S8o" && sname != "hgap" && sname != "hboot") continue;   // S8o is for the fifth-pass suites (and LEVER_ONLY=S8o)
+        if (sname == "hgap" || sname == "hboot") { if (nm != "S8o" && nm != "S8" && nm != "S8u") continue; }   // fifth pass: S8o, S8, S8u
+        else if (c.stand_s > 0.0 ? !sg_set : third) continue;
       }
       std::vector<RunOut> outs;
       for (int s = 0; s < c.nseed; ++s) outs.push_back(runScheme(c, variants[vi], data[s]));
