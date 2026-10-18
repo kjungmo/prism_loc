@@ -24,6 +24,7 @@ from collections import Counter, OrderedDict, defaultdict
 REF = 'S6vb'   # the scheme the node uses (EskfParams defaults)
 SCHEMES = ['ignore', 'S0', 'S0s', 'S1', 'S1s', 'S2', 'S2s', 'S3s', 'S4s', 'S5s', 'S6s', 'S6t', 'S6v', 'S6va', 'S6vb']
 FIRST_SUITES = ('g60', 'g300')
+SG_SUITES = ('hsg', 'hsgv')    # third pass: standing, then moving (reported apart; not part of the second-pass pools)
 
 
 def load(prefixes):
@@ -37,6 +38,12 @@ def load(prefixes):
                     row['cfg'] = row['suite'] + '-' + row['cfg']   # suite-id: the ids restart in each suite
                     out.append(row)
     return runs, agg
+
+
+def mdn(xs):
+    """Median, nan for no data (a run of a subset of the suites leaves some groups empty)."""
+    xs = list(xs)
+    return statistics.median(xs) if xs else float('nan')
 
 
 def pct(a, b):
@@ -87,14 +94,14 @@ def table(title, runs, agg, keyfn, keys=None, schemes=SCHEMES):
                 return f'{100 * i / n:.0f} / {100 * o / n:.0f} / {100 * u / n:.0f}'
 
             def med(col):
-                return statistics.median(float(a[col]) for a in as_)
+                return mdn(float(a[col]) for a in as_)
 
             def mp(col, f=3):
                 xs = [float(r[col]) for r in rs]
-                return f'{statistics.median(xs):.{f}f} / {q(xs, 0.95):.{f}f}'
+                return f'{mdn(xs):.{f}f} / {q(xs, 0.95):.{f}f}'
 
             print(f'| {s} | {nd}/{len(rs)} ({pct(nd, len(rs)).strip()} %) | {mp("max_xy", 2)} | {mp("max_z", 2)} | {mp("max_tilt", 3)} | '
-                  f'{mp("max_head", 2)} | {statistics.median(float(r["end_head"]) for r in rs):.2f} | '
+                  f'{mp("max_head", 2)} | {mdn(float(r["end_head"]) for r in rs):.2f} | '
                   f'{band("nees_pos_end", "pos_lo", "pos_hi")} | {band("nees_att_end", "att_lo", "att_hi")} | {band("nees_all_end", "all_lo", "all_hi")} | '
                   f'{med("nees_pos_end"):.1f} / {med("nees_att_end"):.1f} / {med("nees_all_end"):.1f} |')
 
@@ -117,7 +124,7 @@ def summary(runs_l, agg_l):
         cells = []
         for (n, f), tot in zip(slices, n_slice):
             d = sum(1 for r in runs_l if r['scheme'] == sc and f(r) and r['diverged'] == '1')
-            cells.append(f'{100.0 * d / tot:.1f}')
+            cells.append(f'{100.0 * d / tot:.1f}' if tot else 'n/a')   # a slice with no runs (one suite only)
         a = [x for x in agg_l if x['scheme'] == sc]
         i = sum(1 for x in a if float(x['pos_lo']) <= float(x['nees_pos_end']) <= float(x['pos_hi']))
         o = sum(1 for x in a if float(x['nees_pos_end']) > float(x['pos_hi']))
@@ -196,7 +203,7 @@ def first_pass(runs, agg):
 # ---------------------------------------------------------------------------------------------
 # Second pass: the observability grid (suites h*)
 # ---------------------------------------------------------------------------------------------
-HS = ['S0', 'S1s', 'S2s', 'S6vb', 'S7', 'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7n', 'S7a35r05', 'S7a35r20']
+HS = ['S0', 'S1s', 'S2s', 'S6vb', 'S7', 'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7n', 'S7a35r05', 'S7a35r20', 'S8']   # S8: added after the fourth review
 CAND = ['S7', 'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7a35r05', 'S7a35r20']
 RELEASES = {'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7n', 'S7a35r05', 'S7a35r20'}     # schemes with lever_release_dv > 0
 NPARAM = {'S7': 1, 'S7a': 2, 'S7a35': 2, 'S7a50': 2, 'S7r05': 2, 'S7r20': 2, 'S7a35r05': 2, 'S7a35r20': 2}
@@ -261,9 +268,9 @@ def ftable(title, rows, keyfn, keys=None, schemes=HS, note=None):
             nho = sum(headf(r) and not (tz(r) or circ(r) or xy1(r)) for r in rs)
             mx = [f(r, 'max_xy') for r in rs]
             print(f'| {sc} | {nn} | {nt} ({pct(nt, nn).strip()} %) | {nz} | {nc} | {nx} | {nh} ({pct(nh, nn).strip()} %) | {nho} | '
-                  f'{statistics.median(mx):.2f} / {q(mx, 0.95):.2f} | {q([f(r, "max_z") for r in rs], 0.95):.2f} | '
-                  f'{q([f(r, "max_tilt") for r in rs], 0.95):.3f} | {statistics.median(f(r, "end_head") for r in rs):.2f} | '
-                  f'{statistics.median(f(r, "rel_frac") for r in rs):.2f} | {statistics.median(f(r, "cap_frac") for r in rs):.2f} |')
+                  f'{mdn(mx):.2f} / {q(mx, 0.95):.2f} | {q([f(r, "max_z") for r in rs], 0.95):.2f} | '
+                  f'{q([f(r, "max_tilt") for r in rs], 0.95):.3f} | {mdn(f(r, "end_head") for r in rs):.2f} | '
+                  f'{mdn(f(r, "rel_frac") for r in rs):.2f} | {mdn(f(r, "cap_frac") for r in rs):.2f} |')
 
 
 def paired_with_zero(main_rows):
@@ -349,7 +356,7 @@ def selection(rows, agg):
         tb, ta, ha = tilt_below(sc), tilt_above(sc), head_above(sc)
         c_pen = int(ins + 1e-12 < ref_in) + int(tb > 0.2)
         h_pen = int(sc in RELEASES and drive_head[sc] > drive_head['S6vb'])
-        mxy = statistics.median(f(r, 'max_xy') for r in env)
+        mxy = mdn(f(r, 'max_xy') for r in env)
         results.append((sc, e_any, x, c_pen, h_pen, mxy, NPARAM.get(sc, 99)))
         print(f'| {sc} | {e_tz} | {e_circ} | {e_any} | {e_excess} | {x} | {100 * ins:.0f} | {100 * tb:.0f} | {100 * ta:.0f} | {100 * ha:.0f} | {c_pen} | '
               f'{drive_head[sc]} | {h_pen} | {mxy:.3f} | {NPARAM.get(sc, "")} |')
@@ -393,8 +400,8 @@ SHIPPED = "S7a35"
 
 
 def second_pass(runs, agg):
-    runs = [r for r in runs if r['suite'] not in FIRST_SUITES]
-    agg = [a for a in agg if a['suite'] not in FIRST_SUITES]
+    runs = [r for r in runs if r['suite'] not in FIRST_SUITES + SG_SUITES]
+    agg = [a for a in agg if a['suite'] not in FIRST_SUITES + SG_SUITES]
     if not runs:
         return None
     suites = sorted({r['suite'] for r in runs})
@@ -467,7 +474,7 @@ def second_pass(runs, agg):
                         continue
                     et = [f(r, 'end_tilt') for r in rs]
                     print(f'| {slope} | {"on" if nd == "1" else "off"} | {sc} | {len(rs)} | {sum(tz(r) for r in rs)} | '
-                          f'{sum(e > 0.02 for e in et)} | {statistics.median(et):.4f} | {q(et, 0.95):.4f} |')
+                          f'{sum(e > 0.02 for e in et)} | {mdn(et):.4f} | {q(et, 0.95):.4f} |')
     ya = [r for r in runs if r['suite'] == 'hyaw' and r['antenna'] != 'Z']
     if ya:
         print('\n### A heading that starts far off (suite hyaw: 300 s, GNSS and IMU only, lever-arm rows)\n')
@@ -482,7 +489,7 @@ def second_pass(runs, agg):
                     if not rs:
                         continue
                     eh = [f(r, 'end_head') for r in rs]
-                    print(f'| {y0} | {m} | {sc} | {len(rs)} | {sum(e < 0.2 for e in eh)} | {statistics.median(eh):.2f} | {q(eh, 0.95):.2f} | {sum(tz(r) for r in rs)} |')
+                    print(f'| {y0} | {m} | {sc} | {len(rs)} | {sum(e < 0.2 for e in eh)} | {mdn(eh):.2f} | {q(eh, 0.95):.2f} | {sum(tz(r) for r in rs)} |')
     vb = [r for r in runs if r['suite'] == 'hvib' and r['antenna'] != 'Z']
     if vb:
         print('\n### Accelerometer noise (suite hvib: 300 s, standing and straight line at 1.5 m/s, gyro bias 0.1 deg/s, accelerometer bias 0.1 m/s^2; lever-arm rows)\n')
@@ -521,7 +528,7 @@ def quoted_first(runs, agg):
     print(f'- Zero lever, GNSS and IMU only: {sum(r["diverged"] == "1" for r in z)} of {len(z)} runs diverged.')
     for sc in ('S0', 'S6vb'):
         xs = [f(r, 'max_xy') for r in lev if r['scheme'] == sc and r['ndt'] == '0' and r['gyro_bias_dps'] == '0']
-        print(f'- {sc}, GNSS and IMU only, gyro bias 0: median of the largest horizontal error {statistics.median(xs):.2f} m over {len(xs)} runs.')
+        print(f'- {sc}, GNSS and IMU only, gyro bias 0: median of the largest horizontal error {mdn(xs):.2f} m over {len(xs)} runs.')
     for sc in ('S0', 'S0s', 'S6vb'):
         g = [r for r in lev if r['scheme'] == sc and r['ndt'] == '0']
         print(f'- {sc}, GNSS and IMU only, {len(g)} runs: diverged {sum(r["diverged"] == "1" for r in g)}.')
@@ -532,9 +539,9 @@ def quoted_first(runs, agg):
         print(f'- S6vb, NEES of all 15 states above its band, {name}: {above} of {len(aa)} configurations ({100.0 * above / len(aa):.0f} %).')
 
 
-def quoted_second(runs, agg, best):
+def quoted_second(runs, agg, best, prev='S6vb'):
     """The numbers of the second pass that README.md and the PR text quote."""
-    chosen, prev = best, 'S6vb'
+    chosen = best
     main_rows = [r for r in runs if r['suite'] in H_MAIN]
     lev = [r for r in main_rows if r['antenna'] != 'Z' and r['ndt'] == '0']
     zr = [r for r in main_rows if r['antenna'] == 'Z' and r['ndt'] == '0' and r['scheme'] == 'S0']
@@ -546,7 +553,7 @@ def quoted_second(runs, agg, best):
         if not n:
             return f'- {label}: no runs'
         return (f'- {label}: {n} runs, tz {sum(tz(r) for r in rs)}, circ {sum(circ(r) for r in rs)}, xy>1 {sum(xy1(r) for r in rs)}, '
-                f'heading>0.5 {sum(headf(r) for r in rs)}, median max xy {statistics.median(f(r, "max_xy") for r in rs):.2f} m, '
+                f'heading>0.5 {sum(headf(r) for r in rs)}, median max xy {mdn(f(r, "max_xy") for r in rs):.2f} m, '
                 f'p95 {q([f(r, "max_xy") for r in rs], 0.95):.2f} m')
 
     for sc in (prev, chosen):
@@ -602,8 +609,10 @@ def quoted_second(runs, agg, best):
     # release and bound activity
     for mot in ('stand', 'line', 'startstop', 'turn', 'drive', 'spin'):
         rs = [r for r in lev if r['scheme'] == chosen and r['motion'] == mot and r['dur'] == '300']
-        print(f'- {chosen}, {mot} 300 s: share of lever updates with the release open: median {statistics.median(f(r, "rel_frac") for r in rs):.2f}, mean {statistics.mean(f(r, "rel_frac") for r in rs):.2f}; '
-              f'with the bound active: median {statistics.median(f(r, "cap_frac") for r in rs):.2f}, mean {statistics.mean(f(r, "cap_frac") for r in rs):.2f}.')
+        if not rs:   # h300 was not among the suites
+            continue
+        print(f'- {chosen}, {mot} 300 s: share of lever updates with the release open: median {mdn(f(r, "rel_frac") for r in rs):.2f}, mean {statistics.mean(f(r, "rel_frac") for r in rs):.2f}; '
+              f'with the bound active: median {mdn(f(r, "cap_frac") for r in rs):.2f}, mean {statistics.mean(f(r, "cap_frac") for r in rs):.2f}.')
     # NDT, slope, wrong start heading
     nd = [r for r in runs if r['suite'] == 'hndt' and r['antenna'] != 'Z']
     for sc in ('S0', prev, chosen):
@@ -612,14 +621,18 @@ def quoted_second(runs, agg, best):
     for slope in ('0', '0.05', '0.1'):
         for sc in (prev, chosen, 'S7n'):
             rs = [r for r in sl if r['slope'] == slope and r['scheme'] == sc]
+            if not rs:   # hslope was not among the suites
+                continue
             print(f'- reseed on a body tilted by {slope} rad, GNSS and IMU only, {sc}: {len(rs)} runs, tz {sum(tz(r) for r in rs)}, tilt at the end > 0.02 rad {sum(f(r, "end_tilt") > 0.02 for r in rs)}, '
-                  f'median end tilt {statistics.median(f(r, "end_tilt") for r in rs):.4f} rad.')
+                  f'median end tilt {mdn(f(r, "end_tilt") for r in rs):.4f} rad.')
     ya = [r for r in runs if r['suite'] == 'hyaw' and r['antenna'] != 'Z']
     for y0 in ('0.5', '1', '2'):
         for sc in (prev, chosen, 'S7'):
             for mot in ('stand', 'startstop', 'drive'):
                 rs = [r for r in ya if r['yaw0'] == y0 and r['scheme'] == sc and r['motion'] == mot]
-                print(f'- start heading {y0} rad off, {mot} 300 s, {sc}: {len(rs)} runs, recovered (< 0.2 rad at the end) {sum(f(r, "end_head") < 0.2 for r in rs)}, tz {sum(tz(r) for r in rs)}, median end heading {statistics.median(f(r, "end_head") for r in rs):.2f} rad.')
+                if not rs:   # hyaw was not among the suites
+                    continue
+                print(f'- start heading {y0} rad off, {mot} 300 s, {sc}: {len(rs)} runs, recovered (< 0.2 rad at the end) {sum(f(r, "end_head") < 0.2 for r in rs)}, tz {sum(tz(r) for r in rs)}, median end heading {mdn(f(r, "end_head") for r in rs):.2f} rad.')
     # consistency
     ag = [a for a in agg if a['suite'] in H_MAIN and a['antenna'] != 'Z' and a['ndt'] == '0']
     for sc in (prev, chosen):
@@ -639,16 +652,106 @@ def quoted_second(runs, agg, best):
     print(f'- Zero lever in the second pass: {len(zz)} runs, every scheme identical in {sum(1 for d in zz.values() if len(set(d.values())) == 1)}.')
 
 
+SG_MOTIONS = ('sgstart', 'sgdrive', 'sgturn')
+SG_SCHEMES = ['S2s', 'S6vb', 'S7a35', 'S8r', 'S8a', 'S8']
+
+
+def third_pass(sg_rows):
+    """Standing for minutes, then moving (suites hsg and hsgv): the failure of the fourth review round and the bar of eskf_lever.cpp."""
+    print('\n\n# Lever-arm study, third pass: standing, then moving\n')
+    print('Suites hsg (the schemes S8r, S8a and S8 were developed on these runs) and hsgv (the same configurations on other data, run once after the '
+          'schemes were fixed). Each run stands for 300, 600, 900 or 1,800 s at the origin with a gyro bias of 0 to 0.2 deg/s per axis, then starts '
+          '(sgstart: 0 to 1.5 m/s in 3 s, then the start-stop cycle), drives (sgdrive: the same start, then a circle of radius 6 m at 1.5 m/s) or turns on the spot '
+          '(sgturn: 0.3 rad/s for 4 s of every 5 s) for 160 s. GNSS and IMU only; antennas A, B, M and the zero lever Z; 4 seeds. '
+          'tz = tilt > 0.05 rad or abs z > 0.5 m at an epoch from 10 s on (the standing time counts); "excess" = the lever-arm run has tz and the '
+          'zero-lever run of the same data has not; "z>1" = abs z > 1 m; "tilt>0.3" = tilt > 0.3 rad. The bar (declared in eskf_lever.cpp): in each '
+          'motion, the lever-arm rows have no more tz than the zero-lever rows of the same data (pairs counted: tz of the lever run <= tz of its zero-lever '
+          'run, summed), and no run with z>1 or tilt>0.3 in the envelope motions (sgstart, sgdrive with an antenna that has a horizontal arm: A, B).\n')
+    for su in SG_SUITES:
+        rows = [r for r in sg_rows if r['suite'] == su]
+        if not rows:
+            continue
+        zref = {}
+        for r in rows:
+            if r['antenna'] == 'Z':
+                zref[(int(r['cfg'].split('-')[1]) // 4, r['seed'])] = r
+        print(f'\n## Suite {su}\n')
+        schemes = [sc for sc in SG_SCHEMES if any(r['scheme'] == sc for r in rows)]
+
+        def cnt(rs):
+            both = excess = zonly = 0
+            for r in rs:
+                z = zref[(int(r['cfg'].split('-')[1]) // 4, r['seed'])]
+                a, b = tz(r), tz(z)
+                both += a and b
+                excess += a and not b
+                zonly += (not a) and b
+            n = len(rs)
+            return (n, sum(tz(r) for r in rs), both + zonly, excess, sum(f(r, 'max_z') > 1.0 for r in rs), sum(f(r, 'max_tilt') > 0.3 for r in rs),
+                    sum(circ(r) for r in rs), sum(xy1(r) for r in rs), sum(f(r, 'end_head') > 0.5 for r in rs))
+        hdr = ('| scheme | runs | tz | tz of the paired zero-lever runs | excess | z>1 | tilt>0.3 | circ | xy>1 | heading>0.5 at the end |\n'
+               '|---|---|---|---|---|---|---|---|---|---|')
+
+        def block(title, pick):
+            print(f'\n### {title}\n')
+            print(hdr)
+            for sc in schemes:
+                rs = [r for r in rows if r['scheme'] == sc and r['antenna'] != 'Z' and pick(r)]
+                if not rs:
+                    continue
+                n, t, ztz, ex, z1, t3, ci, x1, eh = cnt(rs)
+                zt = sum(tz(zref[(int(r['cfg'].split('-')[1]) // 4, r['seed'])]) for r in rs)
+                print(f'| {sc} | {n} | {t} | {zt} | {ex} | {z1} | {t3} | {ci} | {x1} | {eh} |')
+        block('All lever-arm runs (antennas A, B, M)', lambda r: True)
+        for m in SG_MOTIONS:
+            block(f'{m}', lambda r, m=m: r['motion'] == m)
+        for stand in (300, 600, 900, 1800):
+            block(f'Standing {stand} s', lambda r, stand=stand: int(r['dur']) - 160 == stand)
+        for gb in ('0', '0.05', '0.1', '0.2'):
+            block(f'Gyro bias {gb} deg/s per axis', lambda r, gb=gb: r['gyro_bias_dps'] == gb)
+        for ant in ('A', 'B', 'M'):
+            block(f'Antenna {ant}', lambda r, ant=ant: r['antenna'] == ant)
+        print('\n### The bar, per scheme\n')
+        print('| scheme | tz <= zero lever in sgstart | in sgdrive | in sgturn | z>1 or tilt>0.3, envelope (A, B; sgstart, sgdrive) | z>1 or tilt>0.3, all |')
+        print('|---|---|---|---|---|---|')
+        for sc in schemes:
+            cells = []
+            for m in SG_MOTIONS:
+                rs = [r for r in rows if r['scheme'] == sc and r['antenna'] != 'Z' and r['motion'] == m]
+                t = sum(tz(r) for r in rs)
+                zt = sum(tz(zref[(int(r['cfg'].split('-')[1]) // 4, r['seed'])]) for r in rs)
+                cells.append(f'{"yes" if t <= zt else "no"} ({t} against {zt})')
+            env = [r for r in rows if r['scheme'] == sc and r['antenna'] in ('A', 'B') and r['motion'] in ('sgstart', 'sgdrive')]
+            allr = [r for r in rows if r['scheme'] == sc and r['antenna'] != 'Z']
+            cat = lambda rs: sum(f(r, 'max_z') > 1.0 or f(r, 'max_tilt') > 0.3 for r in rs)
+            print(f'| {sc} | {cells[0]} | {cells[1]} | {cells[2]} | {cat(env)} of {len(env)} | {cat(allr)} of {len(allr)} |')
+        zr = [r for r in rows if r['antenna'] == 'Z']
+        by = defaultdict(set)
+        for r in zr:
+            by[(r['cfg'], r['seed'])].add(tuple(r[c] for c in ('diverged', 'max_xy', 'max_z', 'max_tilt', 'max_head', 'end_xy', 'end_z', 'end_tilt', 'end_head', 'max_circ')))
+        print(f'\nZero lever in {su}: {len(by)} runs, every scheme identical in {sum(1 for v in by.values() if len(v) == 1)}.')
+
+
 def main():
     runs, agg = load(sys.argv[1:])
     first_r = [r for r in runs if r['suite'] in FIRST_SUITES]
     first_a = [a for a in agg if a['suite'] in FIRST_SUITES]
     if first_r:
         first_pass(first_r, first_a)
-        quoted_first(first_r, first_a)
+        if {r['suite'] for r in first_r} >= set(FIRST_SUITES):
+            quoted_first(first_r, first_a)
+        else:
+            print('\n(The numbers quoted from the first pass need both g60 and g300; left out.)')
     best = second_pass(runs, agg)
+    second_r = [r for r in runs if r['suite'] not in FIRST_SUITES + SG_SUITES]
+    second_a = [a for a in agg if a['suite'] not in FIRST_SUITES + SG_SUITES]
     if best:
-        quoted_second([r for r in runs if r['suite'] not in FIRST_SUITES], [a for a in agg if a['suite'] not in FIRST_SUITES], best)
+        quoted_second(second_r, second_a, best)
+        if any(r['scheme'] == 'S8' for r in second_r):   # the shipped scheme of the fourth review round, on the same cells
+            quoted_second(second_r, second_a, 'S8', prev='S7a35')
+    sg_r = [r for r in runs if r['suite'] in SG_SUITES]
+    if sg_r:
+        third_pass(sg_r)
 
 if __name__ == '__main__':
     main()

@@ -61,5 +61,27 @@ struct EskfParams {
   // (a turn at speed, a start, a stop); 0 = off. Independent of the speed estimate.
   double lever_release_dv{1.0};
   double lever_release_tau{4.0};
+  // Honest heading (README, "What one antenna and an IMU can observe", points 5 to 7; experiments/eskf_lever.cpp, third pass).
+  // The bound above hides the true heading variance from the update, and the vertical gyro bias keeps turning the true heading while
+  // the robot stands: the error is about 1.1 rad after 600 s at 0.002 rad/s, far over the bound (0.35 rad). A full update at the
+  // release that trusts the bounded sigma turned the heading the wrong way and tilted the filter. With lever_restore on:
+  //  - the filter carries the spread it holds (the 2 x 2 covariance of heading and vertical gyro bias, never bounded): headingSigmaHonest();
+  //  - while that spread (rad) is over lever_align_sigma and the bound has cut it, a lever update tries the kinematic alignment
+  //    (Eskf::alignHeading): the heading is rotated by the angle between the change of velocity the IMU gave and the one the antenna
+  //    fixes gave over the last lever_align_window s, if both are over lever_align_dv (m/s), the fixes have no gap over lever_align_gap
+  //    (s) and the body rate stays under 0.5 lever_align_dv / |t_xy|; the heading gets the variance lever_heading_sigma_max^2 and the
+  //    horizontal velocity lever_align_vel_std (m/s) of spread. 0 = never;
+  //  - if the spread is under lever_align_sigma the release puts it back and the bound is not applied while the release is open;
+  //  - lever_blind: if the spread is over lever_align_sigma and the alignment finds nothing, the update leaves the attitude columns
+  //    out of the lever Jacobian (as a filter without a lever arm does) and counts the circle of the lever, |t_xy|^2 on each
+  //    horizontal axis, in R: the antenna says where the circle is and tells roll and pitch nothing. The release stays closed.
+  // lever_restore off is the behaviour of the version before, bit for bit (the other settings are then not used).
+  bool lever_restore{true};
+  double lever_align_sigma{1.0};
+  double lever_align_dv{0.25};
+  double lever_align_window{3.0};
+  double lever_align_gap{1.0};
+  bool lever_blind{true};
+  double lever_align_vel_std{0.15};
 };
 }  // namespace prism_loc_fusion

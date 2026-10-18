@@ -272,10 +272,61 @@ about 5 σ, so the threshold has a noise floor (the `hvib` table in `report.md` 
 the heading wrong while the robot stands (heading over 0.5 rad in 2,509 runs against 1,599) and its position NEES is inside its band in
 18 % of the standing configurations (31 % for `S7a35`).
 
+### Third pass (round 5): standing for minutes, then moving
+
+The fourth review found that the second pass had moved the round-3 failure instead of removing it. No motion of the grid stood longer than
+14 s before it accelerated, and the filter's start values (heading sigma 0.7 rad against the error) never had a drifted heading under a bounded sigma.
+A robot on GNSS and IMU with a lever arm that stood for 600 s with a vertical gyro bias of 0.002 rad/s (the review's bias) had a heading
+error of 1.1 rad, the bound held the sigma at 0.35 rad, and the release at the first start ran a full update on a heading about 3 sigma off:
+the heading jumped the wrong way, tilt and height diverged (antenna A: +1.3 m and 0.15 rad; antenna B: +2.5 m, -2.6 m, +2.5 m, 0.2 rad), and the filter then reported a heading
+sigma of 0.004 rad with the bound's WARN cleared. The design memo was not adequate for this: its prototype never stood long enough
+before accelerating, and it took the bounded covariance as the covariance of the release.
+
+New suites `hsg` (the schemes below were developed on these runs) and `hsgv` (the same configurations on other data, run once after the schemes were fixed):
+stand 300, 600, 900 or 1,800 s at gyro bias 0 to 0.2 deg/s, then `sgstart` (the start-stop cycle), `sgdrive` (a start, then a circle of 6 m radius at 1.5 m/s) or `sgturn` (turn on the spot) for 160 s;
+antennas A, B, M and Z; 4 seeds; 1,152 lever-arm runs and 384 zero-lever runs per scheme and suite. The bar is written in the header of `eskf_lever.cpp`:
+in each motion the lever-arm rows have no more `tz` than the zero-lever rows of the same data, and none has |z| over 1 m or tilt over 0.3 rad in `sgstart` and `sgdrive` with the antennas that have a horizontal arm.
+
+What was found, in the order it was found (every step is a scheme in `eskf_lever.cpp`; the exploratory passes between them are not part of the result):
+1. **The failure reproduces** (`S7a35`, hsg): `tz` in 375 of 1,152 lever-arm runs, against 324 for the zero-lever runs of the same data; |z| over 1 m in 271.
+2. **Putting the shadow variance back at the release is not enough** (`S8r`: 428). Standing for 600 s, the filter's own heading spread is 6 rad (the 0.01 rad/s prior of the vertical gyro bias times 600 s); a linearised full update at that spread
+   tilts the filter too. The honest variance is the right one to report, and the wrong one to linearise at.
+3. **Kinematic alignment** (`S8a`: 78). Over the last 3 s the antenna fixes give the change of velocity of the antenna, which does not depend on the filter's heading; the IMU, resolved with the filter's heading,
+   gives the same change rotated by the heading error. The angle between them is the heading correction, for any error. Three things had to be right: a covariance that stays positive (projecting the heading out of `P`
+   instead of zeroing its entries: a first version made `P_vv` indefinite and the filter blew up); the restore must act only after the bound has cut the variance (a first version acted at every update and
+   removed the cross-covariances the full update needs); and the velocity the filter integrated with the wrong heading must be replaced by the antenna's.
+   A change of velocity of 0.25 m/s starts it (at the stage of `S8a`, 0.4 m/s gave `tz` 102 and 42 runs with |z| over 1 m against 86 and 16 at 0.25 m/s: the first 1.5 s of motion with a heading 2 rad off already tilt the filter).
+   A window with a gap of more than 1 s in the fixes, or with a body rate over `0.5 · 0.25 m/s / |t_xy|`, is not used (without the guard a GNSS dropout together with a spin or a turn made `S8` lose the heading, 2.7 to 3 rad at the end, in dozens of runs of the second pass).
+   Taking back the roll, pitch and accelerometer bias corrections of the window (tried, not kept) changed nothing.
+4. **Blind update** (`S8`: 26). While the heading is held back, over 1 rad of spread and not alignable (a turn on the spot, or a stand), the attitude columns of the lever Jacobian are left out and the circle of the lever is put in `R`:
+   the antenna says where the circle is and tells roll and pitch nothing. It removes the turn failure (`sgturn`: 22 of 384 runs with `tz` for `S8a`, 0 for `S8`) and the rest of the standing failures.
+
+Results (`report.md`, third pass; lever-arm runs, 1,152 per scheme and suite):
+
+| | `S7a35` (the version before) | `S8r` | `S8a` | `S8` (shipped) | zero lever, same data |
+|---|---|---|---|---|---|
+| hsg: `tz` | 375 | 428 | 78 | **26** | 324 |
+| hsg: |z| over 1 m / tilt over 0.3 rad | 271 / 161 | 292 / 182 | 15 / 5 | **1 / 0** | |
+| hsg: `tz` where the zero-lever run has none | 215 | 249 | 49 | 12 | |
+| hsgv (other data): `tz` | 381 | 431 | 83 | **21** | 366 |
+| hsgv: |z| over 1 m / tilt over 0.3 rad | 279 / 157 | 290 / 189 | 21 / 6 | **0 / 0** | |
+| hsgv: the bar (`sgstart`, `sgdrive`, `sgturn`) | no, no, no | no, no, no | yes, yes, no | **yes, yes, yes** | |
+| hsgv: heading error over 0.5 rad at the end, `sgstart` | 138 of 384 | 138 | 0 | **0** | |
+
+What is left, in hsg: 12 runs with `tz` where the zero-lever run has none (11 with the 1.5 m mast M, whose vertical arm amplifies a tilt error of 0.05 rad), one run with |z| over 1 m
+(mast, 0.2 deg/s, stand 900 s); `sgturn` ends with the heading over 0.5 rad in 267 of 384 runs (nothing in a turn on the spot tells the heading; the zero-lever filter has the same: 106 of 128 runs) and the position of `base_link` over 1 m from the truth in 35 (`xy`, the circle of the lever).
+
+The second pass, with the rows of `S8` added (`LEVER_ONLY=S8`, `merge_rows.py`): the clean envelope has 0 `tz` for both schemes; all cells 883 `tz` for `S8` against 880; 213 runs over 1 m against 156 (of the 78 runs that
+are over 1 m for `S8` and not for `S7a35`, 59 are antenna A at 0.5 deg/s, where the heading is 2.7 rad off and the circle of the lever is 1.0 m: 1.00 to 1.05 m against 0.96 to 0.99 m); spinning 300 s at 0.5 deg/s: `tz` 0 of 24 (2 for `S7a35`), `circ` 2 (0); with the lidar `tz` 0 for both;
+reseed on a slope: `tz` 2, 2 and 1 of 144 for 0, 0.05 and 0.1 rad (0, 0, 0), tilt at the end over 0.02 rad in 0 (the ablation `S7n`: 41 and 60).
+**Worse than `S7a35`:** a start heading 1 rad or 2 rad off (suite `hyaw`, `startstop`, 24 runs each): recovered (heading error under 0.2 rad at the end) in 14 and 8 runs (21 and 3 for `S7a35`); `tz` 19 and 24 (16 and 24). The alignment starts at a spread of 1 rad, and the filter
+starts at 0.71 rad. A trial with the threshold at 0.6 rad (`S8s`, `LEVER_ONLY=S8s`, not part of the committed results) recovers all 24 runs at both errors (`tz` 1 and 1), but has `tz` 41 against 26 in hsg and 12 against 5 in the reseed-on-a-slope suite
+(an alignment on a normal start adds its own error). The shipped threshold is 1.0 rad; a start heading off by more than about 0.5 rad followed by a short stand stays outside what was measured to work.
 
 ```sh
-experiments/run_eskf_lever.sh /tmp/lever 4   # builds, runs the ten suites, writes report.md (first pass 2 CPU hours, second pass about 2.5 CPU hours;
-                                             # the committed results took 57 minutes of wall time with 4 jobs for 11 schemes, 13 more for the two added ones)
+experiments/run_eskf_lever.sh /tmp/lever 4   # builds, runs the twelve suites, writes report.md (first pass 2 CPU hours, second pass about 2.5 CPU hours;
+                                             # the committed results took 57 minutes of wall time with 4 jobs for 11 schemes, 13 more for the two added ones;
+                                             # hsg and hsgv: 6 schemes, about 25 minutes each with 11 jobs)
 LEVER_ONLY=S7a35r05,S7a35r20 ...            # run only these schemes (how the two added schemes were run; a full run gives the same rows)
 ```
 

@@ -2,6 +2,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <cmath>
+#include <deque>
 #include "prism_loc_fusion/types.hpp"
 namespace prism_loc_fusion {
 class Eskf {
@@ -41,6 +42,10 @@ class Eskf {
   //  - Release: while predict() has seen horizontal acceleration (releaseAccumulator() above
   //    EskfParams::lever_release_dv) the mask is lever_consider_moving: a start, a stop or a
   //    turn at speed shows the heading to one antenna and an IMU, as it does without a lever.
+  //  - Honest heading (EskfParams::lever_restore): the bound hides the heading spread the filter really holds, which grows while
+  //    the robot stands. The filter keeps it (headingSigmaHonest(), covarianceHonest()), re-finds the heading from the first change
+  //    of velocity after a stand (alignHeading()) instead of releasing at the bounded sigma, and while it cannot, leaves roll and
+  //    pitch out of the lever term (leverBlind()). The bound is not applied while the release is open.
   // A lever of exactly zero is updatePosition(), with identical arithmetic.
   void updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vector3d& lever,
                            const Eigen::Matrix3d& R);
@@ -68,8 +73,22 @@ class Eskf {
   // The same, with the attitude itself replaced (the node takes roll and pitch from the
   // accelerometer at a reseed). The position stays where it is.
   void replaceAttitude(const Eigen::Quaterniond& q, const Eigen::Matrix3d& P_att);
-  // Heading standard deviation (rad): sqrt(u^T P_theta u), u = R^T z.
+  // Heading standard deviation (rad): sqrt(u^T P_theta u), u = R^T z. This is what the filter's
+  // covariance holds, which the bound (lever_heading_sigma_max) keeps small while the robot
+  // stands; see headingSigmaHonest().
   double headingSigma() const;
+  // Heading standard deviation (rad) without the bound: the larger of headingSigma() and the
+  // shadow of the heading variance that predict() carries while the bound holds the heading back
+  // (lever_restore). The same as headingSigma() when nothing is held back.
+  double headingSigmaHonest() const;
+  // True if the last updatePositionLever() restored the honest heading variance (the first
+  // update after a release that follows a held-back stretch), and if it re-acquired the heading
+  // from the motion first (lever_align_sigma).
+  bool leverRestored() const { return lever_restored_; }
+  bool leverAligned() const { return lever_aligned_; }
+  // True if the last updatePositionLever() took the heading as unknown (lever_blind): held back, over
+  // lever_align_sigma, and not alignable from the motion.
+  bool leverBlind() const { return lever_blind_; }
   // True if the last updatePositionLever() had to scale the heading down to
   // lever_heading_sigma_max. False before the first one and after one that did not.
   bool leverHeadingCapped() const { return lever_capped_; }
@@ -79,6 +98,11 @@ class Eskf {
   bool leverReleaseOpen() const { return params_.lever_release_dv > 0.0 && dv_acc_ > params_.lever_release_dv; }
   const NominalState& state() const { return x_; }
   const Mat15& covariance() const { return P_; }
+  // The covariance to publish for a filter with a GNSS antenna at `lever`: P, with the heading variance the bound has held back
+  // put back (the shadow, headingSigmaHonest()) and the position of the body origin made as uncertain as that heading makes it
+  // (up to the circle of radius |lever_xy| around the antenna: |lever_xy|^2 times the heading variance, at most 1, on each
+  // horizontal axis). Equal to covariance() when nothing is held back or lever_restore is off.
+  Mat15 covarianceHonest(const Eigen::Vector3d& lever) const;
  private:
   void inject(const Vec15& dx);
   NominalState x_;
@@ -87,5 +111,19 @@ class Eskf {
   double rate_{0.0};   // norm of the bias-corrected angular rate of the last predict()
   double dv_acc_{0.0};       // see lever_release_dv; touches neither x nor P
   bool lever_capped_{false};
+  bool lever_restored_{false}, lever_aligned_{false}, lever_blind_{false};
+  // Shadow of the heading (lever_restore): covariance of (heading, vertical gyro bias), valid
+  // from the first lever update after a reset; see EskfParams::lever_restore.
+  bool shadow_valid_{false};
+  bool shadow_held_{false};   // the bound has cut the heading variance since the shadow was last set from P
+  double s_hh_{0.0}, s_hb_{0.0}, s_bb_{0.0};
+  void syncShadow(const Eigen::Vector3d& up);
+  void setHeadingVariance(const Eigen::Vector3d& up, double var);
+  bool alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up);
+  struct Fix { double t; Eigen::Vector2d s, p; double rate_max; };   // clock_, cum_a_, the antenna fix and the largest body rate since the previous fix, of one lever update
+  std::deque<Fix> fixes_;
+  double clock_{0.0};
+  double rate_max_{0.0};
+  Eigen::Vector2d cum_a_{Eigen::Vector2d::Zero()};   // sum of the world-frame horizontal acceleration since the start, see alignHeading()
 };
 }  // namespace prism_loc_fusion

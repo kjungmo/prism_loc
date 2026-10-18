@@ -817,9 +817,13 @@ TEST(EskfLever, ReleaseLetsTheFixTurnTheHeadingOnlyWhileTheImuSeesAcceleration) 
   EXPECT_LT(headingTurnedByFix(c), 1e-14);
 }
 
-// The bound applies while the release is open too: the full update still sees a heading sigma of at most the bound.
+// The bound applies while the release is open too (the version before the honest release, lever_restore off): the full
+// update still sees a heading sigma of at most the bound. With lever_restore (the default) the bound is not applied
+// while the release is open: the full update sees the heading variance the filter holds (see
+// HonestReleaseIsNotBounded).
 TEST(EskfLever, BoundAlsoAppliesWhileReleased) {
   EskfParams ep;
+  ep.lever_restore = false;
   Eskf f = accelerated(ep, 1.0, 2.0, 0.0);
   ASSERT_TRUE(f.leverReleaseOpen());
   Eskf::Mat15 P = f.covariance();
@@ -838,6 +842,7 @@ TEST(EskfLever, AccumulatorDoesNotTouchStateOrCovariance) {
   on.lever_release_tau = 4.0;
   off.lever_release_tau = 0.0;
   on.lever_consider_moving = off.lever_consider_moving = on.lever_consider;
+  on.lever_restore = off.lever_restore = false;   // with it, an open release also lifts the bound: a difference in P
   Eskf a = accelerated(on, 1.0, 2.0, 0.5), b = accelerated(off, 1.0, 2.0, 0.5);
   EXPECT_GT(a.releaseAccumulator(), 1.0);
   EXPECT_EQ(b.releaseAccumulator(), 0.0);
@@ -970,4 +975,158 @@ TEST(EskfLever, ReleaseCountsTheHorizontalAccelerationInTheWorldFrame) {
   EXPECT_GT(Eigen::Vector2d(f_rest.x(), f_rest.y()).norm(), 2.0);                          // the body-frame reading has a horizontal part
   EXPECT_NEAR(run(tilted, f_rest, 500), 0.0, 1e-9);                                        // the world-frame one has none
   EXPECT_GT(run(tilted, f_rest + tilted.q.toRotationMatrix().transpose() * Eigen::Vector3d(1.0, 0.0, 0.0), 200), 1.5);   // 1 m/s^2 north on it
+}
+
+// --- the honest release: the shadow of the heading variance, the kinematic alignment, the blind update
+//     (lever_restore, lever_align_sigma, lever_align_dv, lever_blind) ---
+
+// With the release open and the heading variance held by nothing (the filter's own, 4 rad^2), the bound is not applied
+// and the full update sees all of it; the honest version of BoundAlsoAppliesWhileReleased.
+TEST(EskfLever, HonestReleaseIsNotBounded) {
+  EskfParams ep;
+  Eskf f = accelerated(ep, 1.0, 2.0, 0.0);
+  ASSERT_TRUE(f.leverReleaseOpen());
+  Eskf::Mat15 P = f.covariance();
+  P(8, 8) = 4.0;
+  f.initialize(f.state(), P);
+  // initialize() cleared the accumulator? No: the accumulator belongs to predict(); open stays true.
+  ASSERT_TRUE(f.leverReleaseOpen());
+  nullFix(f, Eigen::Vector3d(0.5, 0.0, 1.0));
+  EXPECT_FALSE(f.leverHeadingCapped());
+  EXPECT_NEAR(f.headingSigma(), 2.0, 1e-6);
+  EXPECT_FALSE(f.leverBlind());
+}
+
+namespace {
+struct GoRun {
+  double heading_err_end{0.0}, tilt_end{0.0}, z_max{0.0}, sigma_capped{0.0}, sigma_honest{0.0};
+  int aligned{0}, blind_updates{0};
+  bool blind_when_standing{false};
+};
+// A robot that stands for `stand_s` on GNSS and IMU alone, its heading `yaw0` off from the start (the filter keeps 0.5 rad^2),
+// with a vertical gyro bias, then accelerates at 0.5 m/s^2 along x for 3 s and cruises for `cruise_s`. Antenna at `lever`.
+GoRun runStandGo(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, double cruise_s, double yaw0, double bias_dps, unsigned seed) {
+  Rng rng(seed);
+  ep.sigma_acc = 0.02;
+  ep.sigma_gyro = 0.002;
+  Eskf f(ep);
+  Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+  P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+  P0.block<3, 3>(9, 9) *= 1e-2;
+  P0.block<3, 3>(12, 12) *= 1e-4;
+  auto noise3 = [&rng](double s) { return Eigen::Vector3d(rng.gaussian(0, s), rng.gaussian(0, s), rng.gaussian(0, s)); };
+  NominalState x0;
+  x0.q = so3Exp(Eigen::Vector3d(0, 0, yaw0));
+  x0.p = lever + noise3(0.02) - x0.q * lever;
+  f.initialize(x0, P0);
+  const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
+  const Eigen::Vector3d bias(0.0, 0.0, bias_dps * M_PI / 180.0);
+  const double dt = 0.01;
+  GoRun out;
+  const int n_stand = static_cast<int>(stand_s / dt), n = n_stand + static_cast<int>((3.0 + cruise_s) / dt);
+  for (int k = 1; k <= n; ++k) {
+    const double t = k * dt - stand_s;   // time since the start
+    double a = 0.0, x = 0.0;
+    if (t > 0.0 && t <= 3.0) { a = 0.5; x = 0.25 * t * t; }
+    else if (t > 3.0) { x = 2.25 + 1.5 * (t - 3.0); }
+    f.predict(Eigen::Vector3d(a, 0, 9.81) + noise3(0.02), bias + noise3(0.002), dt);
+    if (k % 20 == 0) {
+      f.updatePositionLever(Eigen::Vector3d(x, 0, 0) + lever + noise3(0.02), lever, R);
+      out.aligned += f.leverAligned() ? 1 : 0;
+      if (k <= n_stand && f.leverBlind()) out.blind_when_standing = true;
+      out.blind_updates += f.leverBlind() ? 1 : 0;
+    }
+    if (k == n_stand) { out.sigma_capped = f.headingSigma(); out.sigma_honest = f.headingSigmaHonest(); }
+    if (k > n_stand) out.z_max = std::max(out.z_max, std::fabs(f.state().p.z()));
+  }
+  const Eigen::Vector3d att = so3Log(f.state().q);
+  out.heading_err_end = std::fabs(att.z());       // truth yaw is 0 after the start (straight line)
+  out.tilt_end = att.head<2>().norm();
+  return out;
+}
+}  // namespace
+
+// The failure of the fourth review: a robot that stands for minutes on GNSS and IMU and then starts. The heading was off by
+// the integrated vertical gyro bias (1.2 rad here), the bound held the filter at 0.35 rad, and the full update at the release
+// turned the heading the wrong way and tilted the filter. Now: the filter reports the honest spread while it stands, finds the heading from the
+// first 0.5 m/s^2 of the start, and ends the start with a small heading error, a level attitude and the right height.
+// The control is the previous behaviour (lever_restore off): wrong heading, tilt, height.
+TEST(EskfLever, StartAfterALongStandFindsTheHeading) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  const double bias_dps = 0.1;
+  // 0.1 deg/s on the vertical axis for 600 s: 1.05 rad of heading; start estimate off by the same, plus the 0.1 rad of the start
+  const GoRun now = runStandGo(EskfParams(), lever, 600.0, 15.0, 0.1, bias_dps, 3);
+  EXPECT_NEAR(now.sigma_capped, EskfParams().lever_heading_sigma_max, 1e-3);   // the bound holds the covariance
+  EXPECT_GT(now.sigma_honest, 3.0);                                            // the shadow does not
+  EXPECT_GE(now.aligned, 1);
+  EXPECT_LT(now.heading_err_end, 0.35);
+  EXPECT_LT(now.tilt_end, 0.03);
+  EXPECT_LT(now.z_max, 0.3);
+  EskfParams old;
+  old.lever_restore = false;
+  const GoRun before = runStandGo(old, lever, 600.0, 15.0, 0.1, bias_dps, 3);
+  EXPECT_EQ(before.aligned, 0);
+  EXPECT_GT(before.heading_err_end + before.tilt_end * 10.0 + before.z_max, now.heading_err_end + now.tilt_end * 10.0 + now.z_max);
+}
+
+// The same on every antenna mount, with the filter started 1.5 rad off in heading and no gyro bias: the alignment finds
+// any heading, not only one near the filter's.
+TEST(EskfLever, AlignmentFindsAnyHeading) {
+  for (const Eigen::Vector3d& lever : {Eigen::Vector3d(0.5, 0.0, 1.0), Eigen::Vector3d(-0.3, 0.2, 1.0), Eigen::Vector3d(0.0, 0.0, 1.5)}) {
+    for (double yaw0 : {-2.8, -1.5, 0.1, 2.0, 3.1}) {
+      const GoRun r = runStandGo(EskfParams(), lever, 300.0, 10.0, yaw0, 0.0, 5);
+      const std::string at = "lever x " + std::to_string(lever.x()) + " yaw0 " + std::to_string(yaw0);
+      EXPECT_GE(r.aligned, 1) << at;
+      EXPECT_LT(r.heading_err_end, 0.35) << at;
+      // The 1.5 m mast has no horizontal arm, so the lever term tells it nothing about the heading, and its vertical arm
+      // amplifies a tilt error: it ends the 10 s with up to 0.055 rad (the others under 0.03).
+      EXPECT_LT(r.tilt_end, lever.head<2>().norm() > 0.0 ? 0.03 : 0.06) << at;
+      EXPECT_LT(r.z_max, 0.3) << at;
+    }
+  }
+}
+
+// Standing is not a change of velocity: no alignment, and once the honest spread is over lever_align_sigma the update is blind
+// (the attitude columns of the lever Jacobian are left out). Before that (a short stand) it is not blind.
+TEST(EskfLever, NoAlignmentWithoutAChangeOfVelocityAndBlindWhileTheHeadingIsUnknown) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  const GoRun short_stand = runStandGo(EskfParams(), lever, 20.0, 0.0, 0.1, 0.0, 7);   // spread 0.5 rad^2 + the bias prior: still under 1 rad at 20 s? it is not
+  (void)short_stand;
+  const GoRun long_stand = runStandGo(EskfParams(), lever, 300.0, 0.0, 0.1, 0.0, 7);
+  EXPECT_TRUE(long_stand.blind_when_standing);
+  EXPECT_GT(long_stand.sigma_honest, 1.0);
+  // no start (cruise 0 still has the 3 s of acceleration); count alignments that happened while standing
+  EskfParams ep;
+  Eskf f(ep);
+  Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+  P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+  P0.block<3, 3>(9, 9) *= 1e-2;
+  P0.block<3, 3>(12, 12) *= 1e-4;
+  NominalState x0;
+  x0.p = Eigen::Vector3d(0.0, 0.0, 0.0);
+  f.initialize(x0, P0);
+  const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
+  int aligned = 0;
+  for (int k = 1; k <= 20000; ++k) {
+    f.predict(Eigen::Vector3d(0, 0, 9.81), Eigen::Vector3d(0, 0, 0.002), 0.01);
+    if (k % 20 == 0) {
+      f.updatePositionLever(x0.q * lever, lever, R);
+      aligned += f.leverAligned() ? 1 : 0;
+    }
+  }
+  EXPECT_EQ(aligned, 0);
+  EXPECT_TRUE(f.leverBlind());
+  EXPECT_GT(f.headingSigmaHonest(), 1.0);
+  EXPECT_NEAR(f.headingSigma(), ep.lever_heading_sigma_max, 1e-3);
+}
+
+// lever_restore off is the version before: none of the new states is ever reached, and the honest heading sigma is the
+// filter's.
+TEST(EskfLever, RestoreOffNeverAlignsOrGoesBlind) {
+  EskfParams ep;
+  ep.lever_restore = false;
+  const GoRun r = runStandGo(ep, Eigen::Vector3d(0.5, 0.0, 1.0), 300.0, 5.0, 0.1, 0.1, 3);
+  EXPECT_EQ(r.aligned, 0);
+  EXPECT_EQ(r.blind_updates, 0);
+  EXPECT_DOUBLE_EQ(r.sigma_honest, r.sigma_capped);
 }

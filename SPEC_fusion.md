@@ -83,7 +83,7 @@ is not above it.
 world frame, a step with `dt ≤ 0` or a non-finite value adds nothing). It reads the sensor and the
 estimated attitude and changes neither `x` nor `P`. While `dv > lever_release_dv` the update uses
 `lever_consider_moving` (default 0: the full update, heading and vertical gyro bias included). The
-bound applies in both cases. The speed gate of the previous version (`lever_motion_speed`,
+bound applies in both cases unless `lever_restore` is on (below). The speed gate of the previous version (`lever_motion_speed`,
 `lever_motion_rate`, default 0 = off) is kept for the experiment; `lever_motion_*` and the release
 choose the same mask, the release is applied last.
 
@@ -96,6 +96,31 @@ the same Jacobian), and after minutes the tilt and the height diverge. The bound
 variance the update is fed in range. What it costs: once the true heading error is over the
 bound, the published heading and horizontal covariance are optimistic by up to
 `|t_xy|·|heading error|`, at most `2|t_xy|` (README, "what is not observable").
+
+*Honest heading at the release* (`lever_restore`, default on; off = the version before, bit for bit). The bound hides the
+true heading variance from the update, and the vertical gyro bias keeps turning the true heading while the robot stands
+(1.05 rad after 600 s at 0.1 deg/s; the filter's own spread is then 6 rad with the 0.01 rad/s prior). A full update at the
+release that trusts the bounded 0.35 rad turned the heading the wrong way and tilted the filter (fourth review round). So:
+1. *Shadow.* `predict` also carries the 2 x 2 covariance of (heading, vertical gyro bias) with the same prediction, never
+   bounded; it is set from `P` at the first lever update after a reset and after every update that estimates the heading (the
+   release open, the alignment). `headingSigmaHonest()` reads it; `covarianceHonest(lever)` is `P` with the heading variance
+   put back and `|t_xy|²·(min(σ_honest², 1) − min(σ², 1))` added to `P_xx`, `P_yy` (what the node publishes).
+2. *Kinematic alignment* (`lever_align_sigma` 1 rad, `lever_align_dv` 0.25 m/s, `lever_align_window` 3 s). When the bound has cut the
+   variance (a lever update scaled it since the shadow was set) and the shadow sigma is over `lever_align_sigma`, each lever
+   update tries `alignHeading`: from the antenna fixes of the last 3 s it forms the antenna's change of velocity (position
+   differences over 0.8 s spans, no filter state involved) and compares it with the change of velocity the IMU gave in the filter's
+   heading (the sum of the world-frame horizontal acceleration that `predict` kept). If both are over `lever_align_dv`, the heading
+   is rotated by the angle between them (`atan2`, any error up to ±π), about the antenna so that the antenna does not move; the
+   horizontal velocity is set to the antenna's, carried to now by the IMU sum (`lever_align_vel_std` 0.15 m/s); the heading
+   variance is `lever_heading_sigma_max²`, independent of every other state (`P ← D P Dᵀ`, `D = I − uuᵀ` on the attitude block, so `P`
+   stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`. It does nothing with a gap of more than `lever_align_gap` (1 s) between two fixes
+   or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
+3. *Release.* If the release is open and the variance was held back but the shadow is under `lever_align_sigma`, the shadow is put
+   back (`P ← D P Dᵀ` as above, then the shadow variance) and the bound is not applied while the release is open.
+4. *Blind* (`lever_blind`, default on). If the variance was held back, the shadow is over `lever_align_sigma` and the alignment finds nothing, the
+   update leaves the attitude columns of `H` out (`H_θ = 0`, a filter without a lever arm) and adds `|t_xy|²` to `R_xx`, `R_yy`: the
+   antenna says where the circle of the lever is and tells roll and pitch nothing. The release stays closed. Without it a turn on
+   the spot after a long stand tilted the filter (`S8a`: 22 of 384 runs; with it 0).
 
 *Why the release.* A horizontal specific force resolved with a wrong heading mispredicts the
 velocity (`F(δv, δθ) = −R[a]×`), so a start, a stop or a turn at speed shows the heading to one
@@ -201,8 +226,10 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
   at the heading the filter has), unless the lidar has corrected the filter since the start;
   a fix at a lever arm that arrives before the first IMU sample (a start from `/initialpose`) is held back until it.
 
-`/diagnostics` adds, after the existing values: `heading_source` (`lidar`, `initialpose` or
-`none`: the last heading source), `heading_sigma_rad` (the filter's sigma about the vertical),
+`/diagnostics` adds, after the existing values: `heading_source` (`lidar`, `initialpose`, `motion` or
+`none`: the last heading source; `motion` = the kinematic alignment), `heading_sigma_rad` (the spread the filter holds about the vertical,
+`headingSigmaHonest()`: it grows while the bound hides it), `heading_sigma_used_rad` (the bounded one the update uses),
+`lever_blind` (`true`, `false`, `n/a`),
 `heading_capped` (`true` while the stretch of lever updates that ended now was bounded, only with
 fixes younger than 2 s), `lever_release` (`open`, `closed`, `n/a` without a lever arm) and
 `gnss_only_s` (seconds since the last heading source or since the start). With a lever arm, the bound
