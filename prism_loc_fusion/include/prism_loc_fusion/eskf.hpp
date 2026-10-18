@@ -1,6 +1,7 @@
 #pragma once
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <cmath>
 #include "prism_loc_fusion/types.hpp"
 namespace prism_loc_fusion {
 class Eskf {
@@ -27,7 +28,19 @@ class Eskf {
   // accelerometer bias are corrected. That needs a roll and pitch variance of about 1e-4 rad^2
   // at the start (attitudeCovariance(), tiltVarianceFromAccel()): with 0.5 rad^2 the first
   // fixes after a start or a reseed tilt the filter.
-  // Without NDT or another heading source the heading drifts with the vertical gyro bias.
+  //
+  // Two more rules decide how much of the heading the update sees (README, "GNSS antenna off
+  // base_frame"; experiments/eskf_lever.cpp, second pass):
+  //  - Bound: the heading standard deviation seen by the update is limited to
+  //    EskfParams::lever_heading_sigma_max by scaling the heading error variable
+  //    (P <- D P D^T). The vertical gyro bias is never corrected while the robot stands, so
+  //    the heading variance would grow without limit, the term -R[t]x would leave its linear
+  //    range, and the tilt and height would diverge after minutes. The bound keeps it in range;
+  //    the price is that, once the true heading error is over the bound, the reported heading
+  //    and horizontal uncertainty are optimistic by up to the horizontal lever arm.
+  //  - Release: while predict() has seen horizontal acceleration (releaseAccumulator() above
+  //    EskfParams::lever_release_dv) the mask is lever_consider_moving: a start, a stop or a
+  //    turn at speed shows the heading to one antenna and an IMU, as it does without a lever.
   // A lever of exactly zero is updatePosition(), with identical arithmetic.
   void updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vector3d& lever,
                            const Eigen::Matrix3d& R);
@@ -52,6 +65,18 @@ class Eskf {
   // with every other state. Valid only for a filter that has had no measurement since
   // initialize() (the node uses it for a lever arm found after the filter started).
   void replaceAttitudeCovariance(const Eigen::Matrix3d& P_att);
+  // The same, with the attitude itself replaced (the node takes roll and pitch from the
+  // accelerometer at a reseed). The position stays where it is.
+  void replaceAttitude(const Eigen::Quaterniond& q, const Eigen::Matrix3d& P_att);
+  // Heading standard deviation (rad): sqrt(u^T P_theta u), u = R^T z.
+  double headingSigma() const;
+  // True if the last updatePositionLever() had to scale the heading down to
+  // lever_heading_sigma_max. False before the first one and after one that did not.
+  bool leverHeadingCapped() const { return lever_capped_; }
+  // Decaying integral of the horizontal specific force (m/s) and whether it is above
+  // lever_release_dv (the consider states are then released).
+  double releaseAccumulator() const { return dv_acc_; }
+  bool leverReleaseOpen() const { return params_.lever_release_dv > 0.0 && dv_acc_ > params_.lever_release_dv; }
   const NominalState& state() const { return x_; }
   const Mat15& covariance() const { return P_; }
  private:
@@ -60,5 +85,7 @@ class Eskf {
   Mat15 P_{Mat15::Identity()};
   EskfParams params_;
   double rate_{0.0};   // norm of the bias-corrected angular rate of the last predict()
+  double dv_acc_{0.0};       // see lever_release_dv; touches neither x nor P
+  bool lever_capped_{false};
 };
 }  // namespace prism_loc_fusion

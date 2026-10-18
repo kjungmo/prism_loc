@@ -41,6 +41,14 @@ void Eskf::predict(const Eigen::Vector3d& accel, const Eigen::Vector3d& gyro, do
   Q.block<3, 3>(12, 12) = I3 * sbg2 * dt;
 
   P_ = F * P_ * F.transpose() + Q;
+
+  // Recent horizontal acceleration, for the release of the lever-arm consider states. It
+  // reads a_w and changes neither the state nor P.
+  if (dt > 0.0 && params_.lever_release_tau > 0.0) {
+    const double a_h = std::hypot(a_w.x(), a_w.y());
+    if (std::isfinite(a_h))
+      dv_acc_ = dv_acc_ * std::exp(-dt / params_.lever_release_tau) + a_h * dt;
+  }
 }
 
 void Eskf::updatePosition(const Eigen::Vector3d& p_meas, const Eigen::Matrix3d& R) {
@@ -86,6 +94,17 @@ void Eskf::replaceAttitudeCovariance(const Eigen::Matrix3d& P_att) {
   P_.block<3, 3>(6, 6) = P_att;
 }
 
+void Eskf::replaceAttitude(const Eigen::Quaterniond& q, const Eigen::Matrix3d& P_att) {
+  x_.q = q.normalized();
+  replaceAttitudeCovariance(P_att);
+}
+
+double Eskf::headingSigma() const {
+  const Eigen::Vector3d u = x_.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
+  const double var = u.dot(P_.block<3, 3>(6, 6) * u);
+  return var > 0.0 ? std::sqrt(var) : (std::isnan(var) ? var : 0.0);   // a NaN covariance reads as NaN, not as 0
+}
+
 void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vector3d& lever,
                                const Eigen::Matrix3d& R) {
   if (lever.isZero(0.0)) {  // the body origin itself: the plain position update, bit for bit
@@ -105,6 +124,22 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
   const int iterations = std::max(1, params_.lever_iterations);
   const Eigen::Vector3d up = x_.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
   const Eigen::Matrix3d along = up * up.transpose();
+  // Release: while the IMU measures horizontal acceleration the heading is observable.
+  if (leverReleaseOpen()) consider = params_.lever_consider_moving;
+  // Keep the heading uncertainty this update sees inside the range where -R[t]x is a fair
+  // linear model of the lever term (lever_heading_sigma_max).
+  lever_capped_ = false;
+  if (params_.lever_heading_sigma_max > 0.0) {
+    const double var_h = up.dot(P_.block<3, 3>(6, 6) * up);
+    const double cap2 = params_.lever_heading_sigma_max * params_.lever_heading_sigma_max;
+    if (var_h > cap2) {
+      const double c = std::sqrt(cap2 / var_h);
+      Mat15 D = Mat15::Identity();
+      D.block<3, 3>(6, 6) += (c - 1.0) * along;
+      P_ = D * P_ * D.transpose();
+      lever_capped_ = true;
+    }
+  }
   const Eigen::Matrix3d across = Eigen::Matrix3d::Identity() - along;
   // Remove from the gain the parts that are not to be corrected.
   auto limit = [&](Eigen::Matrix<double, 15, 3>& K) {

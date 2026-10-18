@@ -14,6 +14,8 @@
 #include <tf2/time.h>
 namespace prism_loc_fusion_ros {
 using prism_loc_fusion::NominalState;
+// /diagnostics: seconds of a bounded heading with no heading source before the status turns WARN.
+static constexpr double kHeadingWarnS = 30.0;
 using Mat15 = prism_loc_fusion::Eskf::Mat15;
 
 static Eigen::Quaterniond attitudeFromAccel(const Eigen::Vector3d& f, double yaw) {
@@ -22,6 +24,12 @@ static Eigen::Quaterniond attitudeFromAccel(const Eigen::Vector3d& f, double yaw
   return (Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
           Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
           Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())).normalized();
+}
+
+// Heading of the body about the world vertical (ZYX convention: q = Rz(yaw) Ry(pitch) Rx(roll)).
+static double yawOf(const Eigen::Quaterniond& q) {
+  const Eigen::Matrix3d R = q.toRotationMatrix();
+  return std::atan2(R(1, 0), R(0, 0));
 }
 
 FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& options)
@@ -286,6 +294,18 @@ void FusionLocalizationNode::onDiagnostics() {
                   base_frame_.c_str(), odom_frame_.c_str(), base_frame_.c_str());
     warnings.emplace_back(buf);
   }
+  // A lever arm with GNSS and IMU alone: the heading is not observed while the robot stands or travels without
+  // accelerating, and the filter holds its uncertainty at the bound (EskfParams::lever_heading_sigma_max). Say so.
+  const bool lever_arm = gnss_mount_.resolved() && !gnss_mount_.ext().T.translation().isZero(0.0);
+  const bool capped_now = filter_init_ && lever_arm && capped_active_ && any_gnss_fix_ && secs(last_gnss_wall_) < 2.0;
+  const double since_heading = heading_source_ == HeadingSource::kNone ? secs(init_wall_) : secs(heading_source_wall_);
+  if (capped_now && secs(capped_since_wall_) >= kHeadingWarnS && since_heading >= kHeadingWarnS) {
+    std::snprintf(buf, sizeof(buf), "heading not observed: GNSS and IMU only for %.0f s, the heading uncertainty is held at %.2f rad "
+                  "and base_link can be wrong by up to the horizontal lever arm (%.2f m) either way; drive with a turn, a start or a "
+                  "stop, use the lidar, or send /initialpose", since_heading, eskf_->headingSigma(),
+                  gnss_mount_.ext().T.translation().head<2>().norm());
+    warnings.emplace_back(buf);
+  }
   if (imu_gaps_ > imu_gaps_reported_) {
     std::snprintf(buf, sizeof(buf), "%ld IMU gap(s) in the last second (samples lost; %ld total)",
                   imu_gaps_ - imu_gaps_reported_, imu_gaps_);
@@ -338,6 +358,11 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("points_mount", points_mount_.describe(base_frame_));
   kv("imu_mount", imu_mount_.describe(base_frame_));
   kv("gnss_mount", gnss_mount_.describe(base_frame_));
+  kv("heading_source", heading_source_ == HeadingSource::kLidar ? "lidar" : heading_source_ == HeadingSource::kInitialPose ? "initialpose" : "none");
+  kv("heading_sigma_rad", filter_init_ ? num(eskf_->headingSigma(), "%.3f") : "n/a");
+  kv("heading_capped", capped_now ? "true" : "false");
+  kv("lever_release", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverReleaseOpen() ? "open" : "closed");
+  kv("gnss_only_s", !filter_init_ ? "n/a" : num(since_heading, "%.1f"));
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
   arr.status.push_back(st);
@@ -371,14 +396,22 @@ bool FusionLocalizationNode::tryInitialize() {
   // read; a start from /initialpose can come before that (tilt_seed_pending_).
   tilt_seed_pending_ = false;
   if (gnss_mount_.resolved() && !gnss_mount_.ext().T.translation().isZero(0.0)) {
-    if (last_acc_valid_) seedTilt(P0, x0.q);
-    else tilt_seed_pending_ = true;
+    if (last_acc_valid_) {
+      // A start from /initialpose carries the attitude of the message, level when it comes from RViz, which on a
+      // slope is wrong by the slope with a tilt variance that says 1e-4 rad^2: take roll and pitch from the
+      // accelerometer at the heading of the message.
+      if (attitude_from_pose_) x0.q = attitudeFromAccel(last_acc_, yawOf(x0.q));
+      seedTilt(P0, x0.q);
+    } else tilt_seed_pending_ = true;
   } else if (!gnss_mount_.resolved()) {
     tilt_seed_pending_ = true;
   }
   eskf_->initialize(x0, P0);
   ndt_since_init_ = 0;
   filter_init_ = true;
+  attitude_from_pose_ = false;
+  init_wall_ = Steady::now();
+  capped_active_ = false;
   RCLCPP_INFO(get_logger(), "fusion3d: initialized at (%.2f, %.2f, %.2f)", x0.p.x(), x0.p.y(), x0.p.z());
   return true;
 }
@@ -471,6 +504,8 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   ++ndt_since_init_;
   any_ndt_ = true;
   last_ndt_wall_ = Steady::now();
+  heading_source_ = HeadingSource::kLidar;
+  heading_source_wall_ = last_ndt_wall_;
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
 }
 
@@ -531,12 +566,20 @@ void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr
     // it since, give the attitude the covariance a start with the mount would have had.
     tilt_seed_pending_ = false;
     if (!lever.isZero(0.0) && ndt_since_init_ == 0) {
+      // The state came from /initialpose (level when sent from RViz): roll and pitch from the accelerometer at its heading.
+      const Eigen::Quaterniond q = attitudeFromAccel(last_acc_, yawOf(eskf_->state().q));
       Mat15 Pa = Mat15::Zero();
-      seedTilt(Pa, eskf_->state().q);
-      eskf_->replaceAttitudeCovariance(Pa.block<3, 3>(6, 6));
+      seedTilt(Pa, q);
+      eskf_->replaceAttitude(q, Pa.block<3, 3>(6, 6));
     }
   }
+  const auto now_w = Steady::now();
+  if (!any_gnss_fix_ || std::chrono::duration<double>(now_w - last_gnss_wall_).count() > 2.0) capped_active_ = false;   // a gap in the fixes ends the stretch
   eskf_->updatePositionLever(enu, lever, R);
+  if (!lever.isZero(0.0)) {
+    if (!eskf_->leverHeadingCapped()) capped_active_ = false;
+    else if (!capped_active_) { capped_active_ = true; capped_since_wall_ = now_w; }
+  }
   any_gnss_fix_ = true;
   last_gnss_wall_ = Steady::now();
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
@@ -549,8 +592,11 @@ void FusionLocalizationNode::onInitialPose(
   const auto& o = msg->pose.pose.orientation;
   init_attitude_ = Eigen::Quaterniond(o.w, o.x, o.y, o.z).normalized();
   have_position_ = have_attitude_ = true;
+  attitude_from_pose_ = true;
   initialpose_seen_ = true;
   filter_init_ = false;
+  heading_source_ = HeadingSource::kInitialPose;
+  heading_source_wall_ = Steady::now();
   RCLCPP_INFO(get_logger(), "fusion3d: initialpose set");
 }
 
