@@ -56,6 +56,14 @@ class FusionLocalizationNode : public rclcpp::Node {
   Eigen::Vector3d last_acc_{Eigen::Vector3d::Zero()};   // latest specific force, base_frame
   bool last_acc_valid_{false};
   bool tilt_seed_pending_{false};    // started before the antenna mount was known
+  bool attitude_from_pose_{false};   // the attitude to start from is the one of /initialpose (roll and pitch: from the accelerometer)
+  // Where the heading came from last (/diagnostics): the lidar (an accepted NDT correction), /initialpose, or
+  // neither (the initial_yaw parameter, then the IMU alone). The lever-arm update bounds the heading
+  // uncertainty it uses (EskfParams::lever_heading_sigma_max); capped_active_ is true while every lever update
+  // since capped_since_wall_ was bounded.
+  enum class HeadingSource { kNone, kInitialPose, kLidar };
+  HeadingSource heading_source_{HeadingSource::kNone};
+  bool capped_active_{false};
   long ndt_since_init_{0};           // NDT corrections since the filter started
   prism_loc_fusion::GeodeticConverter geo_;
   std::unique_ptr<NdtRegistration> ndt_;
@@ -74,6 +82,7 @@ class FusionLocalizationNode : public rclcpp::Node {
   double startup_timeout_s_{30.0}, input_timeout_s_{1.0}, input_timeout_periods_{5.0};
   double correction_timeout_s_{5.0};
   Steady::time_point start_wall_, last_imu_wall_, last_points_wall_, last_ndt_wall_, last_gnss_wall_;
+  Steady::time_point init_wall_, heading_source_wall_, capped_since_wall_;
   bool any_ndt_{false}, any_gnss_fix_{false};
   double imu_period_s_{0.0};   // smoothed IMU stamp interval (gaps excluded)
   long imu_count_{0}, imu_gaps_{0}, imu_gaps_reported_{0}, ndt_rejected_{0};

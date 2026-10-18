@@ -28,23 +28,38 @@ struct EskfParams {
   // Lever-arm update (Eskf::updatePositionLever), a GNSS antenna off the body origin.
   // lever_consider: the error states the update does NOT correct but only counts in its
   // innovation covariance (Schmidt-Kalman "consider" states), a bit mask of LeverConsider.
-  // While the body is moving (the filter's speed above lever_motion_speed, m/s, and clear of
-  // 3 times its own uncertainty, or its body rate above lever_motion_rate, rad/s) the mask is
-  // lever_consider_moving. A threshold of 0 switches that test off; both 0 switch the gate off.
-  // Defaults (chosen in experiments/eskf_lever.cpp, README study 6): standing or turning on
-  // the spot, the heading and the vertical gyro bias are left out, because one antenna does not
-  // separate them from the position of the body; travelling faster than 0.6 m/s nothing is
-  // left out, because an antenna that travels does show them (lower thresholds, 0.3 and 0.15 m/s,
-  // diverged more often on a standing robot). The body rate test is off: with
-  // it the full update ran during spins on the spot, where it was over-confident.
-  // Roll, pitch, the horizontal gyro biases, position, velocity and the accelerometer bias are
-  // always corrected. The node does not set these.
+  // Default: the heading and the vertical gyro bias, because one antenna with an IMU does not
+  // observe them while the robot stands, turns on the spot or travels without accelerating
+  // (README, "GNSS antenna off base_frame"). Roll, pitch, the horizontal gyro biases, position,
+  // velocity and the accelerometer bias are always corrected. The node does not set these.
+  //
+  // lever_consider_moving is the mask used instead while the robot is observably moving:
+  // (a) lever_release_dv below, the default way; (b) a speed gate (the filter's speed above
+  // lever_motion_speed, m/s, and clear of 3 times its own uncertainty) or a body-rate gate
+  // (lever_motion_rate, rad/s), both off by default (0): the speed gate of the previous
+  // version, kept for experiments/eskf_lever.cpp (scheme S6vb). A threshold of 0 switches that
+  // test off.
   unsigned lever_consider{kConsiderHeading | kConsiderGyroBiasVertical};
-  double lever_motion_speed{0.6};
+  double lever_motion_speed{0.0};
   double lever_motion_rate{0.0};
   unsigned lever_consider_moving{0u};
   // Gauss-Newton iterations of the lever-arm update (1 = the ordinary one-step update;
   // more is the iterated update of Bell and Cathey 1993, relinearised at each pass).
   int lever_iterations{1};
+  // Bound on the heading standard deviation (rad) that a lever-arm update sees, 0 = off.
+  // When sqrt(u^T P_theta u), u = R^T z, is over the bound, the heading error variable is
+  // scaled by c = bound / sigma before the update (P <- D P D^T, D = I + (c - 1) u u^T on the
+  // attitude block): the heading variance by c^2, every heading cross-covariance by c, the
+  // tilt untouched, P stays positive. Without it the heading variance of a robot that stands
+  // grows as (vertical gyro bias sigma x t)^2 without bound, the lever term -R[t]x leaves its
+  // linear range and the tilt and height diverge (README, study 6).
+  double lever_heading_sigma_max{0.35};
+  // Release of the consider states (lever_consider_moving instead of lever_consider) while
+  // the IMU measures horizontal acceleration: a decaying integral of the horizontal part of
+  // the world-frame specific force, dv = dv exp(-dt / lever_release_tau) + |a_xy| dt (m/s),
+  // above lever_release_dv. A single antenna with an IMU observes the heading only then
+  // (a turn at speed, a start, a stop); 0 = off. Independent of the speed estimate.
+  double lever_release_dv{1.0};
+  double lever_release_tau{4.0};
 };
 }  // namespace prism_loc_fusion

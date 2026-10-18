@@ -47,7 +47,8 @@ so a mount that is ignored or applied the wrong way round fails.
                scenarios also assert, in the published pose covariance 0.25 to 0.6 s after the first fix and
                after each /initialpose: roll/pitch variance at most 2e-3 rad^2 (it starts at about 1e-4 from the
                accelerometer; the heading's 0.5 rad^2 would fail); without lidar clouds the heading variance
-               between 0.3 and 0.7 rad^2 (one antenna does not observe it); with clouds the heading variance at
+               between 0.1 and 0.7 rad^2 (one antenna does not observe it: it starts at 0.5 and the first fix bounds it to
+               0.35^2 = 0.12); with clouds the heading variance at
                most 0.05 rad^2 and the position covariance trace at most 0.06 m^2.
   gnss_reseed  antenna A, standing, the review's bias; /initialpose at t = 15 s (0.04 m,
                -0.03 m, 0.01 rad off); the checks above at t = 30, 45 s (heading within 0.06 rad
@@ -73,6 +74,29 @@ so a mount that is ignored or applied the wrong way round fails.
                first accelerometer sample, which seeds the roll/pitch covariance) and poses follow
                within 1 s of the first IMU sample; with the antenna at base_link (_base, no TF) the
                fixes are used as before and at least 3 poses are published during that second
+  gnss_reseed_slope_a, gnss_reseed_slope_b, gnss_late_pose_slope, gnss_pose_first_slope
+               the robot stands on a slope (the body tilted by roll -0.05, pitch 0.1 rad (_a, _late, _first) or
+               roll 0.08, pitch -0.04 rad (_b) against the horizontal), GNSS and IMU only, the review's gyro bias,
+               /initialpose with a LEVEL attitude, as RViz sends it, at 15 s (_a, _b), before the first fix
+               (_late) or before the first IMU sample (_first). The three ways in which a start from
+               /initialpose reaches the filter take roll and pitch from the accelerometer, so that 0.25 to 0.6 s
+               after each start the tilt error of the published pose is at most 0.03 rad (a level attitude would
+               be 0.11 rad off) and the checks of gnss_late_pose hold at t = 30, 45 s
+  gnss_start_stop
+               GNSS and IMU only, antenna A, standing 8 s, a start (1 m/s^2 for 2 s, to 2 m/s), 5 s at 2 m/s, a stop, standing
+               again; the filter starts with the heading 0.3 rad off. /diagnostics lever_release is closed standing and
+               at constant speed, open during the start and during the stop; after the stop the heading error is at most
+               0.15 rad, heading_sigma_rad is under the bound (0.33), the horizontal error at most 0.3 m, tilt within 0.03 rad
+               and height within 0.15 m all along, and the status has no WARN "heading not observed"
+  gnss_gap     GNSS and IMU only, antenna A, standing: WARN "heading not observed" after 35 s; 5 s without fixes: heading_capped
+               false and no WARN; fixes again: no WARN 3 s after, WARN again 34 s after (the 30 s start again)
+  gnss_stand_long (not in the default run: 10 minutes, `--scenario gnss_stand_long` or `--long`)
+               antenna A, standing, the review's gyro bias, GNSS and IMU only, 600 s. Every 20 s: height within
+               0.25 m (LONG_HEIGHT_TOL), tilt within 0.03 rad, heading within 0.05 rad + vertical bias x t (it is not
+               estimated), horizontal error within the circle of radius 0.5 m around the antenna plus 0.6 m, and /diagnostics:
+               heading_source none, heading_sigma_rad 0.30 to 0.40, heading_capped true, lever_release closed, and from
+               60 s on a WARN "heading not observed" (OK at 20 s). The failure of the third review round
+               (tilt, then height, diverge after minutes of standing) shows from about 190 s on
   slash        frame_id "/base_link" on the IMU and the fix, "/lidar" on the cloud (with
                base_link -> lidar on TF): one leading slash is dropped, pose within
                tolerance
@@ -89,7 +113,9 @@ so a mount that is ignored or applied the wrong way round fails.
                a frame without a transform: ERROR "IMU not used" (the only error now)
                and no new pose; back on the first frame the ERROR is gone again
 
-    fusion_extrinsic_check.py PARAMS_YAML [--scenario NAME] [--tolerate-imu-gaps]
+    fusion_extrinsic_check.py PARAMS_YAML [--scenario NAME] [--tolerate-imu-gaps] [--long]
+
+--long adds the scenarios of LONG_SCENARIOS (gnss_stand_long) to "all".
 
 --tolerate-imu-gaps accepts a WARN that reports nothing but "IMU gap(s)" where the status
 has to be OK (never "IMU stopped", never an ERROR). CI passes it: on a two-core runner
@@ -220,6 +246,9 @@ class Rig:
         self.turned = 0.0        # yaw the robot has turned so far (rad), as the gyro reported it
         self.noise = None        # NOISE to add white noise to the IMU and the fixes
         self.gyro_bias = np.zeros(3)   # constant gyro bias, in the IMU frame (rad/s)
+        self.tilt = (0.0, 0.0)   # roll, pitch of the body against the horizontal (a robot on a slope), rad
+        self.path = None         # (distance, speed, acceleration) along the heading at t seconds after path_t0, or None (standing)
+        self.path_t0 = 0.0
         self.noise_rng = np.random.default_rng(17)
         self.last_imu_s = None   # stamp of the previous IMU sample
         self.t0 = time.monotonic()
@@ -249,6 +278,11 @@ class Rig:
         m.header.frame_id = frame
         f = np.array([0.0, 0.0, 9.81])               # specific force of a level robot turning on the spot, in base_link
         w = np.array([0.0, 0.0, yaw_rate])
+        if self.path is not None:
+            f[0] = self.path(time.monotonic() - self.path_t0)[2]   # along the heading: the specific force has the acceleration in it
+        if self.tilt != (0.0, 0.0):                  # on a slope: the vertical is not the body's z axis
+            r_tilt = rot_rpy(self.tilt[0], self.tilt[1], 0.0)
+            f, w = r_tilt.T @ f, r_tilt.T @ w
         if mount is not None:
             f = rot_rpy(*mount[1]).T @ f             # ... as the mounted IMU measures them
             w = rot_rpy(*mount[1]).T @ w
@@ -282,8 +316,8 @@ class Rig:
         self.pts_pub.publish(m)
 
     def send_gnss(self, frame, mount):
-        p = BASE_XYZ if mount is None else \
-            BASE_XYZ + rot_rpy(0.0, 0.0, BASE_YAW + self.turned) @ np.array(mount[0])
+        p = BASE_XYZ + self.travelled() if mount is None else \
+            BASE_XYZ + self.travelled() + rot_rpy(self.tilt[0], self.tilt[1], BASE_YAW + self.turned) @ np.array(mount[0])
         if self.noise:
             p = p + self.noise_rng.normal(0.0, self.noise['gnss'], 3)
         a, f = 6378137.0, 1.0 / 298.257223563
@@ -332,6 +366,12 @@ class Rig:
     def statuses(self, t_from, t_to=float('inf')):
         return [s for t, s in self.diags if t_from <= t <= t_to]
 
+    def travelled(self):
+        """Where the robot is along its heading (a path other than standing), as an offset from BASE_XYZ."""
+        if self.path is None:
+            return np.zeros(3)
+        return self.path(time.monotonic() - self.path_t0)[0] * np.array([math.cos(BASE_YAW), math.sin(BASE_YAW), 0.0])
+
     def pose_error(self, last_s=3.0):
         """Mean pose over the last 3 s against the truth: (dx, dy, dz, roll, pitch, dyaw, n)."""
         t1 = time.monotonic()
@@ -343,7 +383,8 @@ class Rig:
             p, q = m.pose.pose.position, m.pose.pose.orientation
             r, pi, y = rpy_quat(q.x, q.y, q.z, q.w)
             dyaw = (y - BASE_YAW - self.turned + math.pi) % (2 * math.pi) - math.pi
-            out += np.array([p.x - BASE_XYZ[0], p.y - BASE_XYZ[1], p.z - BASE_XYZ[2], r, pi, dyaw])
+            out += np.array([p.x - BASE_XYZ[0], p.y - BASE_XYZ[1], p.z - BASE_XYZ[2], r - self.tilt[0], pi - self.tilt[1], dyaw])
+        out[:3] -= len(ms) * self.travelled()   # the truth moves when the path does
         return tuple(out / len(ms)) + (len(ms),)
 
 
@@ -357,6 +398,18 @@ def check_pose(rig, results, what, axes='xyzrpw'):
     results.append((ok, f'{what}: base_link pose error x {e[0]:+.3f} y {e[1]:+.3f} z {e[2]:+.3f} m, roll {e[3]:+.4f} '
                         f'pitch {e[4]:+.4f} yaw {e[5]:+.4f} rad over {e[6]} poses (checked "{axes}": need <= {POS_TOL} m, '
                         f'<= {ANG_TOL} rad)'))
+
+
+def att_vars(m):
+    """(tilt variance, heading variance) rad^2 of a published pose. The attitude block of the covariance is the filter's
+    local one, about the body axes; the heading is about the vertical u = R^T z in the body frame and the tilt about the two
+    axes across it, so on a slope the body's x and y variances hold part of the heading's."""
+    c = m.pose.covariance
+    P = np.array([[c[21], c[22], c[23]], [c[27], c[28], c[29]], [c[33], c[34], c[35]]])
+    o = m.pose.pose.orientation
+    u = rot_rpy(*rpy_quat(o.x, o.y, o.z, o.w)).T @ np.array([0.0, 0.0, 1.0])
+    head = float(u @ P @ u)
+    return (float(np.trace(P)) - head) / 2.0, head
 
 
 def clean(st):
@@ -482,18 +535,22 @@ def gnss_only_noisy(rig, results, mount, yaw_rate):
     results.append((v.get('gnss_mount', '').startswith('base_link -> gnss xyz'), f'{what}: gnss_mount "{v.get("gnss_mount")}"'))
 
 
+SLOPE_A, SLOPE_B = (-0.05, 0.1), (0.08, -0.04)           # roll, pitch of a robot on a slope, rad
 GYRO_BIAS = np.array([0.003, -0.002, 0.002])             # rad/s, the bias of the review of PR 7
 GYRO_BIAS_BIG = np.array([1.0, -1.0, 1.0]) * math.radians(0.5)   # 0.5 deg/s on each axis
 
 
 def gnss_bias_run(rig, results, mount, yaw_rate, bias, what, checkpoints, reseed_at=None, late_pose=False,
-                  prelude=None, cloud=None, max_trace=None, heading_allowed=None):
+                  prelude=None, cloud=None, max_trace=None, heading_allowed=None, tilt=(0.0, 0.0)):
     """GNSS and IMU only with a constant gyro bias. checkpoints: seconds after the first fix at
     which the pose is read (after streaming `yaw_rate` for 4 s of every 5 s, still for the last
     second). The thresholds are those of the docstring. prelude(rig) runs before the first fix; cloud
     (frame, mount) adds lidar clouds all along; max_trace bounds the position covariance trace at every
-    checkpoint; heading_allowed replaces 0.05 rad + bias x time as the heading bound (a lidar corrects it)."""
+    checkpoint; heading_allowed replaces 0.05 rad + bias x time as the heading bound (a lidar corrects it); tilt
+    (roll, pitch) puts the body on a slope: the tilt error of the poses 0.25 to 0.6 s after each start is checked
+    against that truth, which a start from a level /initialpose would miss by the slope."""
     rig.noise = NOISE
+    rig.tilt = tuple(tilt)
     rig.gyro_bias = np.array(bias)
     rig.add_static('gnss', mount)
     if late_pose:                                     # /initialpose and the IMU before the first fix
@@ -506,6 +563,7 @@ def gnss_bias_run(rig, results, mount, yaw_rate, bias, what, checkpoints, reseed
     marks = [time.monotonic()]                        # starts of the filter's covariance: the first fix, each reseed
     worst = {'z': 0.0, 'tilt': 0.0, 'yaw_excess': -1e9, 'xy_over_sigma': 0.0, 'xy': 0.0, 'yaw': 0.0}
     n = 0
+    early_warn = []                                   # checkpoints up to 20 s at which "heading not observed" was already reported
     t_nominal = 0.0                                   # seconds streamed since the first fix
     for cp in checkpoints:
         while t_nominal < cp - 1e-6:                  # 5 s cycles: 4 s turning, 1 s still
@@ -518,6 +576,9 @@ def gnss_bias_run(rig, results, mount, yaw_rate, bias, what, checkpoints, reseed
             t_nominal += 5.0
         e = rig.pose_error(1.0)
         trace = rig.values().get('covariance_trace_position', 'n/a')
+        st_cp = rig.last_status()
+        if t_nominal <= 20.0 and st_cp is not None and 'heading not observed' in st_cp.message:
+            early_warn.append(t_nominal)
         if e is None or trace == 'n/a':
             continue
         n += 1
@@ -536,17 +597,25 @@ def gnss_bias_run(rig, results, mount, yaw_rate, bias, what, checkpoints, reseed
     # Roll/pitch variance of the published pose 0.25 to 0.6 s after each start: with an antenna off the origin it
     # starts at the accelerometer's accuracy (about 1e-4 rad^2), not at the 0.5 rad^2 of the heading.
     win = [m for t, m in rig.poses if any(mk + 0.25 <= t <= mk + 0.6 for mk in marks)]
-    cov = [max(m.pose.covariance[21], m.pose.covariance[28]) for m in win]
+    cov = [att_vars(m)[0] for m in win]
     results.append((bool(cov) and max(cov) <= 2e-3,
                     f'{what}: largest roll/pitch variance 0.25 to 0.6 s after a start: '
                     f'{max(cov) if cov else float("nan"):.2e} rad^2 over {len(cov)} poses (need <= 2e-3)'))
+    tl = []
+    for m in win:
+        o = m.pose.pose.orientation
+        r_, p_, _ = rpy_quat(o.x, o.y, o.z, o.w)
+        tl.append(math.hypot(r_ - rig.tilt[0], p_ - rig.tilt[1]))
+    results.append((bool(tl) and max(tl) <= 0.03,
+                    f'{what}: largest tilt error 0.25 to 0.6 s after a start: {max(tl) if tl else float("nan"):.4f} rad over {len(tl)} poses '
+                    f'(need <= 0.03; the body is tilted by roll {rig.tilt[0]:+.2f} pitch {rig.tilt[1]:+.2f} rad)'))
     if cloud is None:   # nothing but the IMU and the antenna: the heading is not observed and keeps its 0.5 rad^2
-        yv = [m.pose.covariance[35] for m in win]
-        results.append((bool(yv) and 0.3 <= min(yv) and max(yv) <= 0.7,
+        yv = [att_vars(m)[1] for m in win]
+        results.append((bool(yv) and 0.1 <= min(yv) and max(yv) <= 0.7,
                         f'{what}: heading variance 0.25 to 0.6 s after a start: '
-                        f'{min(yv) if yv else float("nan"):.3f} to {max(yv) if yv else float("nan"):.3f} rad^2 (need 0.3 to 0.7)'))
+                        f'{min(yv) if yv else float("nan"):.3f} to {max(yv) if yv else float("nan"):.3f} rad^2 (need 0.1 to 0.7: the bound 0.35 squared is 0.12)'))
     else:               # with the lidar the heading is observed: its variance must not go back to the 0.5 rad^2 of a start
-        yv = [m.pose.covariance[35] for m in win]
+        yv = [att_vars(m)[1] for m in win]
         results.append((bool(yv) and max(yv) <= 0.05,
                         f'{what}: heading variance 0.25 to 0.6 s after a start: '
                         f'{max(yv) if yv else float("nan"):.4f} rad^2 (need <= 0.05)'))
@@ -569,6 +638,152 @@ def gnss_bias_run(rig, results, mount, yaw_rate, bias, what, checkpoints, reseed
                         f'{what}: largest position covariance trace {worst.get("trace", float("nan")):.4f} m^2 (need <= {max_trace})'))
     v = rig.values()
     results.append((v.get('gnss_mount', '').startswith('base_link -> gnss xyz'), f'{what}: gnss_mount "{v.get("gnss_mount")}"'))
+    # the heading keys of /diagnostics: where the heading came from last, and how uncertain it is
+    expect = 'lidar' if cloud is not None else ('initialpose' if (reseed_at is not None or late_pose or prelude in (prelude_two_poses, prelude_pose_first)) else 'none')
+    sig = v.get('heading_sigma_rad', 'n/a')
+    lo, limit = (0.0, 0.3) if cloud is not None else (0.3, 0.4)     # without the lidar the heading sigma sits at the bound, 0.35
+    capped = 'false' if cloud is not None else 'true'                 # the bound is what holds the heading without the lidar
+    results.append((v.get('heading_source') == expect and sig != 'n/a' and lo <= float(sig) <= limit and v.get('heading_capped') == capped,
+                    f'{what}: /diagnostics heading_source "{v.get("heading_source")}" (need {expect}), heading_sigma_rad "{sig}" '
+                    f'(need {lo} to {limit}), heading_capped "{v.get("heading_capped")}" (need {capped}), lever_release "{v.get("lever_release")}", '
+                    f'gnss_only_s "{v.get("gnss_only_s")}"'))
+    results.append((not early_warn, f'{what}: no WARN "heading not observed" up to 20 s (30 s are needed); reported at {early_warn}'))
+    # The WARN "heading not observed" (GNSS and IMU only, the heading bound active and no heading source for 30 s): present
+    # after 40 s of standing or turning on the spot from the first fix, absent whenever the lidar corrects the filter.
+    st = rig.last_status()
+    warn = st is not None and level_of(st) == WARN and 'heading not observed' in st.message
+    must_warn = cloud is None and reseed_at is None and not late_pose and prelude is None and checkpoints[-1] >= 40
+    if must_warn or cloud is not None:
+        results.append((warn == must_warn,
+                        f'{what}: status {"WARN with" if warn else "without"} "heading not observed" after {checkpoints[-1]} s '
+                        f'(need {"WARN with" if must_warn else "without"}; "{st.message if st else ""}")'))
+
+
+def gnss_stand_long(rig, results, mount=ANTENNA_A, seconds=600):
+    """The failure of the third review round: GNSS and IMU alone, standing, for minutes. Tilt and height must stay put,
+    the heading is not estimated (it follows the vertical gyro bias), and /diagnostics says so."""
+    rig.noise = NOISE
+    rig.gyro_bias = np.array(GYRO_BIAS)
+    rig.add_static('gnss', mount)
+    lever_xy = math.hypot(mount[0][0], mount[0][1])
+    what = f'antenna {mount[0]}, standing, gyro bias, {seconds} s'
+    worst = {'z': 0.0, 'tilt': 0.0, 'yaw_excess': -1e9, 'beyond': -1e9}
+    sigmas = []
+    n_cp, n_diag_ok, n_warn_ok, last, t = 0, 0, 0, {}, 0.0
+    for cp in range(20, seconds + 1, 20):
+        rig.stream(cp - t - 1.0, gnss=('gnss', mount))
+        rig.stream(1.0, gnss=('gnss', mount))
+        t = float(cp)
+        e = rig.pose_error(1.0)
+        v, st = rig.values(), rig.last_status()
+        if e is None or st is None:
+            continue
+        n_cp += 1
+        worst['z'] = max(worst['z'], abs(e[2]))
+        worst['tilt'] = max(worst['tilt'], math.hypot(e[3], e[4]))
+        worst['yaw_excess'] = max(worst['yaw_excess'], abs(e[5]) - (0.05 + abs(GYRO_BIAS[2]) * t))
+        worst['beyond'] = max(worst['beyond'], math.hypot(e[0], e[1]) - (2.0 * lever_xy * math.sin(0.5 * min(abs(e[5]), math.pi)) + 0.6))
+        warn = level_of(st) == WARN and 'heading not observed' in st.message
+        if t >= 60.0:
+            sigmas.append(float(v.get('heading_sigma_rad', 'nan')))
+            n_diag_ok += (v.get('heading_source') == 'none' and v.get('heading_capped') == 'true' and v.get('lever_release') == 'closed')
+            n_warn_ok += warn
+        elif t == 20.0:
+            results.append((clean(st) and not warn and v.get('heading_capped') == 'true',
+                            f'{what}: at 20 s the status is OK ("{st.message}") and heading_capped is {v.get("heading_capped")}'))
+        last = v
+    n_late = len(range(60, seconds + 1, 20))
+    results.append((n_cp == seconds // 20, f'{what}: checkpoints with a pose: {n_cp} (need {seconds // 20})'))
+    results.append((worst['z'] <= LONG_HEIGHT_TOL, f'{what}: largest height error {worst["z"]:.3f} m (need <= {LONG_HEIGHT_TOL})'))
+    results.append((worst['tilt'] <= 0.03, f'{what}: largest tilt error {worst["tilt"]:.4f} rad (need <= 0.03)'))
+    results.append((worst['yaw_excess'] <= 0.0, f'{what}: heading error at most {worst["yaw_excess"]:+.4f} rad over 0.05 rad + {abs(GYRO_BIAS[2]):.3f} rad/s x t (need <= 0)'))
+    results.append((worst['beyond'] <= 0.0, f'{what}: horizontal error at most {worst["beyond"]:+.3f} m beyond the circle of the heading error around the antenna plus 0.6 m (need <= 0)'))
+    sig_ok = len(sigmas) == n_late and all(0.30 <= x <= 0.40 for x in sigmas)      # false for a missing key (NaN) too
+    results.append((sig_ok, f'{what}: heading_sigma_rad from 60 s on: {min(sigmas, default=float("nan")):.3f} to {max(sigmas, default=float("nan")):.3f} '
+                            f'at {len(sigmas)} of {n_late} checkpoints (need 0.30 to 0.40, the bound 0.35)'))
+    results.append((n_diag_ok == n_late, f'{what}: heading_source none, heading_capped true, lever_release closed at {n_diag_ok} of {n_late} checkpoints from 60 s on'))
+    results.append((n_warn_ok == n_late, f'{what}: WARN "heading not observed" at {n_warn_ok} of {n_late} checkpoints from 60 s on; last gnss_only_s "{last.get("gnss_only_s")}"'))
+
+
+def start_stop_path(t):
+    """(distance, speed, acceleration) of a start and a stop along the heading: 1 m/s^2 for 2 s, 5 s at 2 m/s, -1 m/s^2 for 2 s, then still."""
+    if t < 0.0:
+        return 0.0, 0.0, 0.0
+    if t < 2.0:
+        return 0.5 * t * t, t, 1.0
+    if t < 7.0:
+        return 2.0 + 2.0 * (t - 2.0), 2.0, 0.0
+    if t < 9.0:
+        u = t - 7.0
+        return 12.0 + 2.0 * u - 0.5 * u * u, 2.0 - u, -1.0
+    return 14.0, 0.0, 0.0
+
+
+def scenario_start_stop(rig, results):
+    """GNSS and IMU only, antenna A, standing 8 s, a start and a stop (the only moments at which one antenna and an IMU
+    observe the heading), standing 5 s. The filter starts with the heading 0.3 rad off (initial_yaw). The release of the heading
+    must open during the start and during the stop and be closed again after 4 s of constant speed, the maneuver must pull the
+    heading error to at most 0.15 rad, and tilt and height must stay within 0.03 rad and 0.15 m throughout. The status is not
+    WARN "heading not observed" afterwards (the bound is not active once the heading is estimated)."""
+    rig.noise = NOISE
+    rig.add_static('gnss', ANTENNA_A)
+    what = 'antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop'
+    rig.stream(8.0, gnss=('gnss', ANTENNA_A))
+    before = rig.values()
+    rig.path, rig.path_t0 = start_stop_path, time.monotonic()
+    seen, worst = {}, {'z': 0.0, 'tilt': 0.0}
+    t_run = 0.0
+    for t_next in [x * 0.5 for x in range(1, 25)]:                        # 12 s from the start of the path, sampled every 0.5 s
+        rig.stream(t_next - t_run, gnss=('gnss', ANTENNA_A))
+        t_run = t_next
+        seen[t_next] = rig.values().get('lever_release')
+        e = rig.pose_error(0.5)
+        if e is not None:
+            worst['z'], worst['tilt'] = max(worst['z'], abs(e[2])), max(worst['tilt'], math.hypot(e[3], e[4]))
+    rig.stream(5.0, gnss=('gnss', ANTENNA_A))
+    e = rig.pose_error(1.0)
+    v, st = rig.values(), rig.last_status()
+    results.append((before.get('lever_release') == 'closed' and before.get('heading_capped') == 'true',
+                    f'{what}: standing: lever_release {before.get("lever_release")}, heading_capped {before.get("heading_capped")} (need closed, true)'))
+    results.append((any(seen[t] == 'open' for t in (2.0, 2.5, 3.0)),
+                    f'{what}: lever_release during the start (2.0 to 3.0 s): {[seen[t] for t in (2.0, 2.5, 3.0)]} (need open at least once)'))
+    results.append((any(seen[t] == 'closed' for t in (6.5, 7.0, 7.5)),
+                    f'{what}: lever_release after 4 to 5 s of constant speed (6.5 to 7.5 s): {[seen[t] for t in (6.5, 7.0, 7.5)]} (need closed at least once)'))
+    results.append((any(seen[t] == 'open' for t in (9.0, 9.5, 10.0)),
+                    f'{what}: lever_release during the stop (9.0 to 10.0 s): {[seen[t] for t in (9.0, 9.5, 10.0)]} (need open at least once)'))
+    results.append((e is not None and abs(e[5]) <= 0.15, f'{what}: heading error after the stop {e[5] if e else float("nan"):+.3f} rad (need within 0.15 from 0.3)'))
+    results.append((worst['z'] <= 0.15 and worst['tilt'] <= 0.03, f'{what}: largest height error {worst["z"]:.3f} m (need <= 0.15), tilt error {worst["tilt"]:.4f} rad (need <= 0.03)'))
+    results.append((e is not None and math.hypot(e[0], e[1]) <= 0.3, f'{what}: horizontal error after the stop {math.hypot(e[0], e[1]) if e else float("nan"):.3f} m (need <= 0.3)'))
+    warn = st is not None and level_of(st) == WARN and 'heading not observed' in st.message
+    results.append((not warn and float(v.get('heading_sigma_rad', 'nan')) < 0.33 and v.get('heading_capped') == 'false',
+                    f'{what}: after the stop heading_sigma_rad {v.get("heading_sigma_rad")} (need < 0.33, under the bound 0.35), heading_capped {v.get("heading_capped")} (need false), '
+                    f'status {"WARN with" if warn else "without"} "heading not observed"'))
+
+
+def scenario_gnss_gap(rig, results):
+    """GNSS and IMU only, antenna A, standing. After 35 s without a heading source the WARN "heading not observed" is on; when the
+    fixes stop for 5 s the node no longer says that the heading is held at the bound (heading_capped false, no WARN); when they resume
+    the 30 s start again: no WARN 3 s after, WARN again 34 s after."""
+    rig.noise = NOISE
+    rig.gyro_bias = np.array(GYRO_BIAS)
+    rig.add_static('gnss', ANTENNA_A)
+    what = 'antenna A, standing, gyro bias, fixes stop for 5 s after 35 s'
+    rig.stream(35.0, gnss=('gnss', ANTENNA_A))
+    st = rig.last_status()
+    on = st is not None and level_of(st) == WARN and 'heading not observed' in st.message
+    results.append((on and rig.values().get('heading_capped') == 'true', f'{what}: at 35 s WARN with "heading not observed": {on}, heading_capped {rig.values().get("heading_capped")}'))
+    rig.stream(5.0)
+    st, v = rig.last_status(), rig.values()
+    results.append((st is not None and 'heading not observed' not in st.message and v.get('heading_capped') == 'false',
+                    f'{what}: after 5 s without fixes: heading_capped {v.get("heading_capped")} (need false), status "{st.message if st else ""}" (need no "heading not observed")'))
+    rig.stream(3.0, gnss=('gnss', ANTENNA_A))
+    st = rig.last_status()
+    results.append((st is not None and 'heading not observed' not in st.message,
+                    f'{what}: 3 s after the fixes resume: status "{st.message if st else ""}" (need no "heading not observed": the 30 s start again)'))
+    rig.stream(31.0, gnss=('gnss', ANTENNA_A))
+    st = rig.last_status()
+    results.append((st is not None and level_of(st) == WARN and 'heading not observed' in st.message,
+                    f'{what}: 34 s after the fixes resume: status "{st.message if st else ""}" (need WARN with "heading not observed")'))
 
 
 def scenario_slash(rig, results):
@@ -640,6 +855,10 @@ def scenario_override(rig, results):
                     and v.get('seconds_since_gnss_correction', 'never') != 'never',
                     f'*_frame:=base_link: points_mount, imu_mount, gnss_mount {mounts}, ndt_rejected_total '
                     f'{v.get("ndt_rejected_total")}, seconds_since_gnss_correction {v.get("seconds_since_gnss_correction")}'))
+    # no lever arm: the heading keys exist, nothing is bounded or released
+    results.append((v.get('heading_capped') == 'false' and v.get('lever_release') == 'n/a' and v.get('heading_source') == 'lidar',
+                    f'*_frame:=base_link: heading_capped "{v.get("heading_capped")}" (need false), lever_release "{v.get("lever_release")}" (need n/a), '
+                    f'heading_source "{v.get("heading_source")}" (need lidar), heading_sigma_rad "{v.get("heading_sigma_rad")}"'))
 
 
 def v_mount(rig):
@@ -759,7 +978,20 @@ SCENARIOS = {'lidar': scenario_lidar, 'imu': scenario_imu, 'gnss': scenario_gnss
              'gnss_pose_first': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample', [15, 30, 45], prelude=prelude_pose_first),
              'gnss_pose_first_wait': scenario_pose_first_wait,
              'gnss_pose_first_base': scenario_pose_first_base,
-             'gnss_late_pose': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, /initialpose before the first fix', [15, 30, 45], late_pose=True)}
+             'gnss_late_pose': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, standing, gyro bias, /initialpose before the first fix', [15, 30, 45], late_pose=True),
+             'gnss_reseed_slope_a': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s', [30, 45], reseed_at=15.0, tilt=SLOPE_A),
+             'gnss_reseed_slope_b': lambda r, res: gnss_bias_run(r, res, ANTENNA_B, 0.0, GYRO_BIAS, 'antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s', [30, 45], reseed_at=15.0, tilt=SLOPE_B),
+             'gnss_late_pose_slope': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, on a slope, /initialpose with a level attitude before the first fix', [15, 30, 45], late_pose=True, tilt=SLOPE_A),
+             'gnss_pose_first_slope': lambda r, res: gnss_bias_run(r, res, ANTENNA_A, 0.0, GYRO_BIAS, 'antenna A, on a slope, /initialpose and fixes before the first IMU sample', [15, 30, 45], prelude=prelude_pose_first, tilt=SLOPE_A),
+             'gnss_start_stop': scenario_start_stop,
+             'gnss_gap': scenario_gnss_gap,
+             'gnss_stand_long': gnss_stand_long}
+# The height bound of gnss_stand_long. It was written as 0.15 m like the others; the first run measured 0.174 m, a second 0.141 m, and the
+# same scenario with the antenna at the origin of base_link (no lever arm, the plain update) 0.167 m: with the fix's z variance floored at
+# 1 m^2 the height estimate has a noise of about 0.1 m, and the largest of 30 samples over 600 s reaches 0.15 to 0.17 m. 0.25 m is above
+# that and far below the failure the scenario is for (metres, from about 190 s on).
+LONG_HEIGHT_TOL = 0.25
+LONG_SCENARIOS = ('gnss_stand_long',)             # 10 minutes: only with --long or --scenario
 SCENARIO_ARGS = {'imu': [f'initial_yaw:={BASE_YAW}'], 'gnss': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_stand_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_b': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_turn_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_turn_b': [f'initial_yaw:={BASE_YAW}'],
@@ -769,6 +1001,9 @@ SCENARIO_ARGS = {'imu': [f'initial_yaw:={BASE_YAW}'], 'gnss': [f'initial_yaw:={B
                  'gnss_pose_first': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_pose_first_wait': [f'initial_yaw:={BASE_YAW}'], 'gnss_pose_first_base': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_after_ndt': [f'initial_yaw:={BASE_YAW}'], 'gnss_reseed_before_fix': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_reseed_slope_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_reseed_slope_b': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_late_pose_slope': [f'initial_yaw:={BASE_YAW}'], 'gnss_pose_first_slope': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_stand_long': [f'initial_yaw:={BASE_YAW}'], 'gnss_start_stop': [f'initial_yaw:={BASE_YAW + 0.3}'], 'gnss_gap': [f'initial_yaw:={BASE_YAW}'],
                  'override': ['points_frame:=base_link', 'imu_frame:=base_link', 'gnss_frame:=base_link'],
                  'imu_missing': ['startup_timeout_s:=10.0']}
 
@@ -811,6 +1046,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('params', help='prism_loc_fusion_ros/params/fusion3d.yaml')
     ap.add_argument('--scenario', choices=['all'] + list(SCENARIOS), default='all')
+    ap.add_argument('--long', action='store_true', help='also run ' + ', '.join(LONG_SCENARIOS) + ' (10 minutes)')
     ap.add_argument('--tolerate-imu-gaps', action='store_true',
                     help='where the status must be OK, also accept a WARN about IMU gaps only')
     args = ap.parse_args()
@@ -819,7 +1055,7 @@ def main():
     pcd = os.path.abspath('fusion_extrinsic_map.pcd')
     write_pcd(pcd, surfaces(np.random.default_rng(1), MAP_POINTS))
     failed = False
-    for name in (list(SCENARIOS) if args.scenario == 'all' else [args.scenario]):
+    for name in ([n for n in SCENARIOS if args.long or n not in LONG_SCENARIOS] if args.scenario == 'all' else [args.scenario]):
         results = run_scenario(name, os.path.abspath(args.params), pcd)
         print(f'[{name}]')
         for ok, text in results:
