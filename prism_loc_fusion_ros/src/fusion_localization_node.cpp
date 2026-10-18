@@ -307,11 +307,16 @@ void FusionLocalizationNode::onDiagnostics() {
                   gnss_mount_.ext().T.translation().head<2>().norm(), eskf_params_.lever_align_dv);
     warnings.emplace_back(buf);
   }
-  // The kinematic alignment measures the fixes over seconds and needs a fix period of at most lever_align_period_max (about 0.8 Hz). Slower
-  // fixes cannot find the heading from a start or a stop, and the start was not marked as unknown: say so (round 7, finding 1).
+  // The kinematic alignment measures the fixes over seconds. It is supported up to a fix period of lever_align_period_ok (1 Hz and a margin for
+  // the jitter of the stamps), runs but finds the heading less often up to lever_align_period_max (0.8 Hz), and does nothing beyond; in the last
+  // case the start is not marked as unknown.
   if (filter_init_ && lever_arm && eskf_->leverUnsupportedRate()) {
-    std::snprintf(buf, sizeof(buf), "GNSS fixes come every %.1f s (slower than %.2f Hz): a start or a stop cannot find the heading and the heading is a guess "
-                  "until the lidar or /initialpose gives it; use GNSS fixes at 1 Hz or faster", eskf_->fixPeriod(), 1.0 / eskf_params_.lever_align_period_max);
+    std::snprintf(buf, sizeof(buf), "GNSS fixes come every %.2f s (slower than 0.8 Hz): a start or a stop cannot find the heading and the heading is a guess "
+                  "until the lidar or /initialpose gives it; use GNSS fixes at 1 Hz or faster", eskf_->fixPeriod());
+    warnings.emplace_back(buf);
+  } else if (filter_init_ && lever_arm && eskf_->leverDegradedRate()) {
+    std::snprintf(buf, sizeof(buf), "GNSS fixes come every %.2f s (slower than 1 Hz): a start or a stop finds the heading less often; "
+                  "use GNSS fixes at 1 Hz or faster", eskf_->fixPeriod());
     warnings.emplace_back(buf);
   }
   if (imu_gaps_ > imu_gaps_reported_) {
@@ -358,8 +363,9 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("seconds_since_ndt_correction", any_ndt_ ? num(secs(last_ndt_wall_), "%.2f") : "never");
   kv("seconds_since_gnss_correction", any_gnss_fix_ ? num(secs(last_gnss_wall_), "%.2f") : "never");
   kv("ndt_rejected_total", std::to_string(ndt_rejected_));
+  // The covariance of the published pose: with a lever arm it includes the heading spread that the bound holds back (covarianceHonest).
   kv("covariance_trace_position",
-     filter_init_ ? num(eskf_->covariance().block<3, 3>(0, 0).trace(), "%.6f") : "n/a");
+     filter_init_ ? num((gnss_mount_.resolved() ? eskf_->covarianceHonest(gnss_mount_.ext().T.translation()) : eskf_->covariance()).block<3, 3>(0, 0).trace(), "%.6f") : "n/a");
   kv("tf_child_frame", tf_child_);
   kv("map_to_base_fallback_active", fallback_active ? "true" : "false");
   kv("use_sim_time", sim_time ? "true" : "false");
@@ -375,7 +381,7 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("lever_blind", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverBlind() ? "true" : "false");
   kv("gnss_only_s", !filter_init_ ? "n/a" : num(since_heading, "%.1f"));
   kv("gnss_fix_period_s", !filter_init_ || !lever_arm || !(eskf_->fixPeriod() > 0.0) ? "n/a" : num(eskf_->fixPeriod(), "%.2f"));   // the median interval of the last lever-arm fixes
-  kv("heading_align_rate", !filter_init_ || !lever_arm || !(eskf_->fixPeriod() > 0.0) ? "n/a" : eskf_->leverUnsupportedRate() ? "unsupported" : "supported");
+  kv("heading_align_rate", !filter_init_ || !lever_arm || !(eskf_->fixPeriod() > 0.0) ? "n/a" : eskf_->leverUnsupportedRate() ? "unsupported" : eskf_->leverDegradedRate() ? "degraded" : "supported");
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
   arr.status.push_back(st);

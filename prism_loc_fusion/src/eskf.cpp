@@ -11,6 +11,7 @@ void Eskf::initialize(const NominalState& x0, const Mat15& P0) {
   fixes_.clear();
   unknown_pending_ = false;
   rate_unsupported_ = false;
+  rate_degraded_ = false;
 }
 
 void Eskf::predict(const Eigen::Vector3d& accel, const Eigen::Vector3d& gyro, double dt) {
@@ -59,7 +60,7 @@ void Eskf::predict(const Eigen::Vector3d& accel, const Eigen::Vector3d& gyro, do
   if (dt > 0.0 && params_.lever_release_tau > 0.0) {
     const double a_h = std::hypot(a_w.x(), a_w.y());
     if (std::isfinite(a_h)) dv_acc_ = dv_acc_ * std::exp(-dt / params_.lever_release_tau) + a_h * dt;
-    if (params_.lever_restore && std::isfinite(a_h)) {   // the kinematic alignment's clock and sum (alignHeading)
+    if (std::isfinite(a_h)) {   // the kinematic alignment's clock and sums (alignHeading, spreadAfterOutage)
       clock_ += dt;
       cum_a_ += a_w.head<2>() * dt;
       cum_p_ += cum_a_ * dt;
@@ -127,7 +128,7 @@ void Eskf::syncShadow(const Eigen::Vector3d& up) {
 }
 
 bool Eskf::markHeadingUnknown() {
-  if (!params_.lever_restore || !(params_.lever_start_sigma > 0.0) || !(params_.lever_align_sigma > 0.0) ||
+  if (!(params_.lever_start_sigma > 0.0) || !(params_.lever_align_sigma > 0.0) ||
       !(params_.lever_start_sigma > params_.lever_align_sigma))
     return false;
   const Eigen::Vector3d up = x_.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
@@ -165,39 +166,56 @@ void Eskf::setHeadingVariance(const Eigen::Vector3d& up, double var) {
   shadow_held_ = false;
 }
 
+// Lengths of the alignment (seconds), from the measured fix period T: the span of one velocity, the window between the two
+// velocities, the longest interval that is not a gap, and the history that is checked for gaps and fast turns.
+Eskf::Span Eskf::alignSpans(double T) const {
+  Span r;
+  r.span = std::max(params_.lever_align_span, 2.0 * T);
+  r.window = std::max(params_.lever_align_window, 1.5 * r.span);
+  r.gap = std::max(params_.lever_align_gap, 2.5 * T);
+  r.history = r.window + std::max(1.0, r.span + std::max(0.2, 0.5 * T));
+  return r;
+}
+
+// Drop the fixes that no alignment can read any more. The alignment looks back at most the history plus the span of the older
+// velocity from the newest fix. The buffer keeps the last kMinFixes fixes (what the versions before kept: up to 22 Hz that covers
+// twice the history, and an outage of the fixes leaves the fixes from before it in place) and, above that, the fixes of twice that
+// time: at 100 Hz a count of 256 is 2.6 s, shorter than the 4 s window of the alignment. kMaxFixes bounds the memory of a
+// receiver that sends faster than 400 Hz.
+void Eskf::trimFixes() {
+  constexpr size_t kMinFixes = 256, kMaxFixes = 8192;
+  const double T = fixPeriod();
+  if (T > 0.0) {
+    const Span sp = alignSpans(T);
+    const double keep = 2.0 * (sp.history + 2.0 * sp.span + 2.0 * T);
+    while (fixes_.size() > kMinFixes && fixes_.back().t - fixes_.front().t > keep) fixes_.pop_front();
+  } else {
+    while (fixes_.size() > kMinFixes) fixes_.pop_front();
+  }
+  while (fixes_.size() > kMaxFixes) fixes_.pop_front();
+}
+
 // Kinematic alignment. The antenna fixes give the velocity of the antenna without the filter, and
 // so without its heading: for a robot that translates, the antenna moves as the body does. Over
 // the last lever_align_window seconds, the change of that velocity is compared with the change of
-// velocity the IMU gave when resolved with the filter's heading (the sum of the world-frame horizontal
-// acceleration that predict() kept, cum_a_). If the heading is wrong by e, the two differ by a
-// rotation about the vertical of e, whatever e is. The heading is rotated by that angle, about the
-// antenna so that the antenna position does not move, and gets the variance
-// lever_heading_sigma_max^2 (the start value of an aligned filter). Both changes of velocity must be
-// over lever_align_dv, and of about the same norm (lever_align_norm: a rotation keeps the norm), or nothing is done
-// and false is returned.
-// The spans are in seconds, not in fixes (lever_align_span, round 7): the velocity is taken over max(span, 2 fixes), the window,
-// the gap limit and the history scale with the measured fix period, so that the alignment works from about 1 Hz (and under it, up
-// to lever_align_period_max) to the rate of any receiver.
+// velocity that the IMU gave when resolved with the filter's heading (cum_a_, the sum of the
+// world-frame horizontal acceleration that predict() kept). If the heading is wrong by e, the two
+// differ by a rotation about the vertical of e, whatever e is. The heading is rotated by that
+// angle, about the antenna so that the antenna position does not move, and gets the variance
+// lever_heading_sigma_max^2. Both changes of velocity must be over lever_align_dv, or nothing is
+// done and false is returned.
+// The spans are seconds (lever_align_span): the velocity is taken over max(span, 2 T), and the
+// window, the gap limit and the history scale with the measured fix period T.
 bool Eskf::alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up) {
   const size_t n = fixes_.size();
   if (n < 6) return false;
   const double T = fixPeriod();
   if (!(T > 0.0)) return false;
   if (params_.lever_align_period_max > 0.0 && T > params_.lever_align_period_max) return false;
-  const bool by_time = params_.lever_align_span > 0.0;
-  // Length of the span of one velocity, the window between the two velocities, the longest interval that is not a gap, the slack of the
-  // window. by_time off: the span of 4 fixes and the limits of the earlier rounds (0.8 s at 5 Hz).
-  const double span = by_time ? std::max(params_.lever_align_span, 2.0 * T) : 0.0;
-  const double window = by_time ? std::max(params_.lever_align_window, 1.5 * span) : params_.lever_align_window;
-  const double gap = by_time ? std::max(params_.lever_align_gap, 2.5 * T) : params_.lever_align_gap;
-  const double slack = by_time ? std::max(1.0, T) : 1.0;
-  // The history that is checked for gaps and fast turns: window + 1 s as in the earlier rounds (a span of 0.8 s and 0.2 s of slack at 5 Hz, written so that the sum is the
-  // same double), longer when the span is.
-  const double history = window + (by_time ? std::max(1.0, span + std::max(0.2, 0.5 * T)) : 1.0);
-  constexpr size_t kSpan = 4;   // fixes in the span of one velocity when by_time is off
+  const Span sp = alignSpans(T);
+  const double span = sp.span, window = sp.window, gap = sp.gap, slack = std::max(1.0, T), history = sp.history;
   // Index of the first fix of the span that ends at fix k; fixes_.size() if the history is too short.
   auto span_begin = [&](size_t k) -> size_t {
-    if (!by_time) return k >= kSpan ? k - kSpan : fixes_.size();
     for (size_t j = k; j-- > 0;)
       if (k - j >= 2 && fixes_[k].t - fixes_[j].t >= span - 0.5 * T) return j;
     return fixes_.size();
@@ -220,7 +238,7 @@ bool Eskf::alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up)
     const Fix& e = fixes_[k]; const Fix& b = fixes_[j];
     r.t = 0.5 * (e.t + b.t);
     const double dt = e.t - b.t;
-    if (by_time ? (dt > 0.5 * span && dt < std::max(2.0, 2.5 * span)) : (dt > 0.4 && dt < 2.0)) {
+    if (dt > 0.5 * span && dt < std::max(2.0, 2.5 * span)) {
       r.v = (e.p - b.p) / dt; r.s = sum_at(r.t); r.ok = true;
     }
     return r;
@@ -237,22 +255,18 @@ bool Eskf::alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up)
   const Vel now = vel_at(n - 1);
   size_t i0 = n - 1;   // the span that ends the window earlier
   while (i0 > 0 && fixes_[n - 1].t - fixes_[i0].t < window) --i0;
-  if (span_begin(i0) >= fixes_.size() || span_begin(i0) == 0) return false;   // the span of the older velocity must start after the first fix (as in the rounds before)
+  if (span_begin(i0) >= fixes_.size() || span_begin(i0) == 0) return false;   // the span of the older velocity must start after the first fix
   // The span that ends the window earlier must be as free of gaps and fast turns as the window, and
-  // the two spans must lie within the window: after an outage the walk back above stops at the last fix before
-  // it, and the change of velocity would then be taken over the whole outage (the IMU sum of the outage against
-  // the velocity from before it).
-  if (params_.lever_align_span_guard) {
-    if (fixes_[n - 1].t - fixes_[i0].t > window + slack) return false;
-    for (size_t i = i0; i > span_begin(i0); --i)
-      if (fixes_[i].t - fixes_[i - 1].t > gap ||
-          fixes_[i].rate_max * t_xy > 0.5 * params_.lever_align_dv) return false;
-  }
+  // the two spans must lie within the window: after an outage the walk back above stops at the last
+  // fix before it, and the change of velocity would then be taken over the whole outage.
+  if (fixes_[n - 1].t - fixes_[i0].t > window + slack) return false;
+  for (size_t i = i0; i > span_begin(i0); --i)
+    if (fixes_[i].t - fixes_[i - 1].t > gap ||
+        fixes_[i].rate_max * t_xy > 0.5 * params_.lever_align_dv) return false;
   const Vel before = vel_at(i0);
   if (!now.ok || !before.ok) return false;
   const Eigen::Vector2d a = now.s - before.s, v = now.v - before.v;
   if (!(a.norm() > params_.lever_align_dv && v.norm() > params_.lever_align_dv)) return false;
-  if (params_.lever_align_norm > 0.0 && std::fabs(a.norm() - v.norm()) > params_.lever_align_norm * std::max(a.norm(), v.norm())) return false;
   const double delta = std::atan2(a.x() * v.y() - a.y() * v.x(), a.dot(v));
   if (!std::isfinite(delta)) return false;
   const Eigen::Matrix3d Rz = Eigen::AngleAxisd(delta, Eigen::Vector3d::UnitZ()).toRotationMatrix();
@@ -283,12 +297,14 @@ bool Eskf::alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up)
   return true;
 }
 
-// The first lever update after an outage of the fixes, with the heading unknown (EskfParams::lever_outage_spread). predict() dead-reckoned the
-// acceleration in the filter's heading; if that is off by e, the velocity it gained over the outage is dS rotated by e (dS: the IMU sum, cum_a_),
-// and the position it gained from the acceleration is D rotated by e (D: the integral of dS over the outage, cum_p_). So the velocity and position
-// are uncertain by e |dS| and e |D|, fully correlated, whatever P said with the heading held at its bound. The horizontal position and velocity block of
-// P gets min(heading spread^2, 2) / 2 times [[|D|^2, D.dS], [D.dS, |dS|^2]] on each axis (2 rad^2: a heading uniform on the circle). The block is positive
-// semidefinite (Cauchy-Schwarz); the fixes that follow correct the velocity quickly, instead of explaining its error as a tilt or an accelerometer bias.
+// The first lever update after an outage of the fixes, with the heading unknown (EskfParams::lever_outage_spread). predict()
+// dead-reckoned the acceleration in the filter's heading. If that is off by e, the velocity gained over the outage is dS rotated
+// by e (dS: the IMU sum, cum_a_), and the position gained from the acceleration is D rotated by e (D: the integral of dS over the
+// outage, cum_p_). So the velocity and position are uncertain by e |dS| and e |D|, fully correlated, whatever P said with the
+// heading held at its bound. The horizontal position and velocity block of P gets min(heading spread^2, 2) / 2 times
+// [[|D|^2, D.dS], [D.dS, |dS|^2]] on each axis (2 rad^2: a heading uniform on the circle). The block is positive semidefinite
+// (Cauchy-Schwarz); the fixes that follow correct the velocity quickly, instead of explaining its error as a tilt or an
+// accelerometer bias.
 void Eskf::spreadAfterOutage() {
   const size_t n = fixes_.size();
   if (n < 2) return;
@@ -319,7 +335,7 @@ double Eskf::headingSigmaHonest() const {
 
 Eskf::Mat15 Eskf::covarianceHonest(const Eigen::Vector3d& lever) const {
   Mat15 P = P_;
-  if (!params_.lever_restore || !shadow_valid_ || !shadow_held_) return P;
+  if (!shadow_valid_ || !shadow_held_) return P;
   const Eigen::Vector3d up = x_.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
   const double var = up.dot(P_.block<3, 3>(6, 6) * up);
   if (!(s_hh_ > var)) return P;
@@ -342,25 +358,13 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
     updatePosition(p_meas, R);
     return;
   }
-  if (params_.lever_restore) {   // the antenna fix and the IMU sum at its time, for alignHeading()
-    fixes_.push_back({clock_, cum_a_, p_meas.head<2>(), rate_max_, cum_p_});
-    rate_max_ = 0.0;
-    while (fixes_.size() > 256) fixes_.pop_front();
-  }
+  // The antenna fix and the IMU sums at its time, for alignHeading() and spreadAfterOutage().
+  fixes_.push_back({clock_, cum_a_, p_meas.head<2>(), rate_max_, cum_p_});
+  rate_max_ = 0.0;
+  trimFixes();
   unsigned consider = params_.lever_consider;
-  if (params_.lever_motion_speed > 0.0 || params_.lever_motion_rate > 0.0) {
-    // The speed counts only when it is clear of its own uncertainty: right after a start the
-    // velocity estimate is far off and a standing robot would read as moving.
-    const double sigma_v = std::sqrt(P_.block<3, 3>(3, 3).trace() / 3.0);
-    const double speed = x_.v.norm();
-    const bool moving = (params_.lever_motion_speed > 0.0 && speed > params_.lever_motion_speed && speed > 3.0 * sigma_v) ||
-                        (params_.lever_motion_rate > 0.0 && rate_ > params_.lever_motion_rate);
-    if (moving) consider = params_.lever_consider_moving;
-  }
-  const int iterations = std::max(1, params_.lever_iterations);
   const Eigen::Vector3d up = x_.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
   const Eigen::Matrix3d along = up * up.transpose();
-  const Eigen::Matrix3d across = Eigen::Matrix3d::Identity() - along;
   // Release: while the IMU measures horizontal acceleration the heading is observable.
   bool open = leverReleaseOpen();
   bool blind = false;   // the heading is unknown: the antenna says where the circle of the lever is, nothing about roll and pitch
@@ -368,44 +372,44 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
   lever_restored_ = false;
   lever_aligned_ = false;
   lever_blind_ = false;
-  if (params_.lever_restore) {
-    if (!shadow_valid_) syncShadow(up);
-    if (fixes_.size() >= 6) {   // enough intervals to know the fix rate
-      rate_unsupported_ = params_.lever_align_period_max > 0.0 && fixPeriod() > params_.lever_align_period_max;
-      if (unknown_pending_) {
-        unknown_pending_ = false;
-        if (rate_unsupported_) {   // the alignment cannot run at this rate: the start is not marked unknown
-          shadow_held_ = false;
-          syncShadow(up);
-        }
+  if (!shadow_valid_) syncShadow(up);
+  if (fixes_.size() >= 6) {   // enough intervals to know the fix rate
+    const double period = fixPeriod();
+    rate_unsupported_ = params_.lever_align_period_max > 0.0 && period > params_.lever_align_period_max;
+    rate_degraded_ = !rate_unsupported_ && params_.lever_align_period_ok > 0.0 && period > params_.lever_align_period_ok;
+    if (unknown_pending_) {
+      unknown_pending_ = false;
+      if (rate_unsupported_) {   // the alignment cannot run at this rate: the start is not marked unknown
+        shadow_held_ = false;
+        syncShadow(up);
       }
-    }
-    // The bound kept the heading variance below the honest one (held_back), and the honest spread is over
-    // the range of the lever term (wide): re-acquire the heading from the motion (kinematic alignment) as
-    // soon as the robot has changed its velocity enough, and not with the linearised update.
-    bool held_back = shadow_held_;   // the bound has cut the heading variance since the shadow was set from P
-    const bool wide = params_.lever_align_sigma > 0.0 && std::sqrt(s_hh_) > params_.lever_align_sigma;
-    if (held_back && wide) {
-      if (alignHeading(lever, up)) held_back = false;
-      else {   // the motion does not give the heading (yet): stay closed, and do not let the lever term tell roll and pitch what a heading error is
-        if (params_.lever_outage_spread > 0.0) spreadAfterOutage();   // after an outage the dead-reckoned velocity and position are as uncertain as the heading
-        blind = params_.lever_blind;
-        if (open) {
-          open = false;
-          consider = params_.lever_consider;
-        }
-      }
-    }
-    if (open && held_back) {   // put the honest variance back
-      setHeadingVariance(up, s_hh_);
-      lever_restored_ = true;
     }
   }
+  // The bound kept the heading variance below the honest one (held_back), and the honest spread is over
+  // the range of the lever term (wide): re-acquire the heading from the motion (kinematic alignment) as
+  // soon as the robot has changed its velocity enough, and not with the linearised update.
+  bool held_back = shadow_held_;   // the bound has cut the heading variance since the shadow was set from P
+  const bool wide = params_.lever_align_sigma > 0.0 && std::sqrt(s_hh_) > params_.lever_align_sigma;
+  if (held_back && wide) {
+    if (alignHeading(lever, up)) held_back = false;
+    else {   // the motion does not give the heading (yet): stay closed, and do not let the lever term tell roll and pitch what a heading error is
+      if (params_.lever_outage_spread > 0.0) spreadAfterOutage();   // after an outage the dead-reckoned velocity and position are as uncertain as the heading
+      blind = true;
+      if (open) {
+        open = false;
+        consider = params_.lever_consider;
+      }
+    }
+  }
+  if (open && held_back) {   // put the honest variance back
+    setHeadingVariance(up, s_hh_);
+    lever_restored_ = true;
+  }
   // Keep the heading uncertainty this update sees inside the range where -R[t]x is a fair
-  // linear model of the lever term (lever_heading_sigma_max). With lever_restore the bound is
-  // not applied while the release is open: the heading is then estimated with its honest variance.
+  // linear model of the lever term (lever_heading_sigma_max). The bound is not applied while the
+  // release is open: the heading is then estimated with its honest variance.
   lever_capped_ = false;
-  if (params_.lever_heading_sigma_max > 0.0 && !(params_.lever_restore && open)) {
+  if (params_.lever_heading_sigma_max > 0.0 && !open) {
     const double var_h = up.dot(P_.block<3, 3>(6, 6) * up);
     const double cap2 = params_.lever_heading_sigma_max * params_.lever_heading_sigma_max;
     if (var_h > cap2) {
@@ -414,51 +418,32 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
       D.block<3, 3>(6, 6) += (c - 1.0) * along;
       P_ = D * P_ * D.transpose();
       lever_capped_ = true;
-      if (params_.lever_restore) shadow_held_ = true;
+      shadow_held_ = true;
     }
   }
   // Remove from the gain the parts that are not to be corrected.
   auto limit = [&](Eigen::Matrix<double, 15, 3>& K) {
-    if (consider == kConsiderAttitudeAndGyroBias) {
-      K.block<3, 3>(6, 0).setZero();
-      K.block<3, 3>(12, 0).setZero();
-      return;
-    }
     if (consider & kConsiderHeading) K.block<3, 3>(6, 0) -= along * K.block<3, 3>(6, 0);
-    if (consider & kConsiderTilt) K.block<3, 3>(6, 0) -= across * K.block<3, 3>(6, 0);
     if (consider & kConsiderGyroBiasVertical) K.block<3, 3>(12, 0) -= along * K.block<3, 3>(12, 0);
-    if (consider & kConsiderGyroBiasHorizontal) K.block<3, 3>(12, 0) -= across * K.block<3, 3>(12, 0);
   };
   lever_blind_ = blind;
-  Vec15 dx = Vec15::Zero();
   Eigen::Matrix3d R_eff = R;
   if (blind) {
     R_eff(0, 0) += lever.head<2>().squaredNorm();
     R_eff(1, 1) += lever.head<2>().squaredNorm();
   }
-  Eigen::Matrix<double, 3, 15> H;
-  Eigen::Matrix<double, 15, 3> K;
-  for (int it = 0; it < iterations; ++it) {
-    // Linearise at the state the previous pass arrived at (the first pass: at the estimate).
-    NominalState xi = x_;
-    if (it > 0) {
-      xi.p += dx.segment<3>(0);
-      xi.q = x_.q * so3Exp(dx.segment<3>(6));
-    }
-    H = leverArmJacobian(xi.q, lever);
-    Eigen::Vector3d y = p_meas - leverArmPosition(xi, lever);
-    if (it > 0) y += H * dx;
-    if (blind) H.block<3, 3>(0, 6).setZero();
-    const Eigen::Matrix3d S = H * P_ * H.transpose() + R_eff;
-    K = P_ * H.transpose() * S.inverse();
-    limit(K);
-    dx = K * y;
-  }
+  Eigen::Matrix<double, 3, 15> H = leverArmJacobian(x_.q, lever);
+  const Eigen::Vector3d y = p_meas - leverArmPosition(x_, lever);
+  if (blind) H.block<3, 3>(0, 6).setZero();
+  const Eigen::Matrix3d S = H * P_ * H.transpose() + R_eff;
+  Eigen::Matrix<double, 15, 3> K = P_ * H.transpose() * S.inverse();
+  limit(K);
+  const Vec15 dx = K * y;
   // Joseph form: valid for a gain that is not the optimal one.
   const Mat15 A = Mat15::Identity() - K * H;
   P_ = A * P_ * A.transpose() + K * R_eff * K.transpose();
   inject(dx);
-  if (params_.lever_restore && open) syncShadow(up);   // the heading was estimated: the filter's covariance is the honest one again
+  if (open) syncShadow(up);   // the heading was estimated: the filter's covariance is the honest one again
 }
 
 void Eskf::updatePose(const Eigen::Vector3d& p_meas, const Eigen::Quaterniond& q_meas,

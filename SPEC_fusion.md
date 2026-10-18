@@ -66,9 +66,7 @@ become `K_θ ← A K_θ` and `K_bg ← A K_bg`; roll and pitch (`δθ` across `u
 horizontal gyro bias components, `δp`, `δv` and `δb_a` are corrected. Joseph form,
 `P=(I−K H)P(I−K H)ᵀ+K R Kᵀ`; inject+reset. The states left out are `EskfParams::lever_consider`
 (a mask of `LeverConsider`; default heading and vertical gyro bias; the node does not
-set it); `lever_iterations` (default 1) relinearises `h` and `H` at the corrected state
-for more than one Gauss-Newton pass (Bell and Cathey 1993) and is used only by the experiment.
-A zero lever is `updatePosition`, bit for bit, whatever these are set to.
+set it). A zero lever is `updatePosition`, bit for bit, whatever these are set to.
 
 *Bound* (`lever_heading_sigma_max`, default 0.35 rad, 0 = off). With `u = Rᵀẑ` and
 `σ² = uᵀ P_θθ u`, before the gain is formed: if `σ² > σ_max²`, `c = σ_max/σ`,
@@ -83,24 +81,22 @@ is not above it.
 world frame, a step with `dt ≤ 0` or a non-finite value adds nothing). It reads the sensor and the
 estimated attitude and changes neither `x` nor `P`. While `dv > lever_release_dv` the update uses
 `lever_consider_moving` (default 0: the full update, heading and vertical gyro bias included). The
-bound applies in both cases unless `lever_restore` is on (below). The speed gate of the previous version (`lever_motion_speed`,
-`lever_motion_rate`, default 0 = off) is kept for the experiment; `lever_motion_*` and the release
-choose the same mask, the release is applied last.
+bound is not applied while the release is open (the honest heading below). The release reads the IMU, not the filter's speed estimate.
 
 *Why the bound.* The vertical gyro bias is not corrected while the robot stands, so the
-heading variance grows as `(σ_bgz·t)²` (in the traced run of the third review round the heading
-sigma was 0.71 rad after 10 s and 2.0 rad after 190 s, with the shipped 0.01 rad/s prior). The lever term `−R[t]×` is a good linear model of the antenna
+heading variance grows as `(σ_bgz·t)²` (the heading
+sigma is 0.71 rad after 10 s and 2.0 rad after 190 s, with the shipped 0.01 rad/s prior). The lever term `−R[t]×` is a good linear model of the antenna
 position only for a heading error of a fraction of a radian; at a heading sigma of 2 rad the
 update moves tilt and the vertical bias by a lot (a corrected tilt next to an unbounded heading in
 the same Jacobian), and after minutes the tilt and the height diverge. The bound keeps the
 variance the update is fed in range. What it costs: once the true heading error is over the
 bound, the published heading and horizontal covariance are optimistic by up to
-`|t_xy|·|heading error|`, at most `2|t_xy|` (README, "what is not observable").
+`|t_xy|·|heading error|`, at most `2|t_xy|` (README, "GNSS antenna off `base_frame`", limits).
 
-*Honest heading at the release* (`lever_restore`, default on; off = the version before, bit for bit). The bound hides the
+*Honest heading at the release.* The bound hides the
 true heading variance from the update, and the vertical gyro bias keeps turning the true heading while the robot stands
 (1.05 rad after 600 s at 0.1 deg/s; the filter's own spread is then 6 rad with the 0.01 rad/s prior). A full update at the
-release that trusts the bounded 0.35 rad turned the heading the wrong way and tilted the filter (fourth review round). So:
+release that trusts the bounded 0.35 rad turns the heading the wrong way and tilts the filter. So:
 1. *Shadow.* `predict` also carries the 2 x 2 covariance of (heading, vertical gyro bias) with the same prediction, never
    bounded; it is set from `P` at the first lever update after a reset and after every update that estimates the heading (the
    release open, the alignment). `headingSigmaHonest()` reads it; `covarianceHonest(lever)` is `P` with the heading variance
@@ -108,31 +104,31 @@ release that trusts the bounded 0.35 rad turned the heading the wrong way and ti
 2. *Kinematic alignment* (`lever_align_sigma` 1 rad, `lever_align_dv` 0.25 m/s, `lever_align_window` 3 s). When the bound has cut the
    variance (a lever update scaled it since the shadow was set) and the shadow sigma is over `lever_align_sigma`, each lever
    update tries `alignHeading`: from the antenna fixes of the last 3 s it forms the antenna's change of velocity (position
-   differences over spans of seconds, no filter state involved: `lever_align_span` 0.8 s and at least 2 fixes; sixth review) and compares it with the change of velocity the IMU gave in the filter's
+   differences over spans of seconds, no filter state involved: `lever_align_span` 0.8 s and at least 2 fixes) and compares it with the change of velocity the IMU gave in the filter's
    heading (the sum of the world-frame horizontal acceleration that `predict` kept). If both are over `lever_align_dv`, the heading
    is rotated by the angle between them (`atan2`, any error up to ±π), about the antenna so that the antenna does not move; the
    horizontal velocity is set to the antenna's, carried to now by the IMU sum (`lever_align_vel_std` 0.15 m/s); the heading
    variance is `lever_heading_sigma_max²`, independent of every other state (`P ← D P Dᵀ`, `D = I − uuᵀ` on the attitude block, so `P`
    stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`. It does nothing with a gap of more than `lever_align_gap` (1 s; 2.5 fix periods if that is more) between two fixes anywhere from the first fix of the older velocity to now,
-   a window of more than `lever_align_window` + 1 s between the two velocities (`lever_align_span_guard`, default on; the round before checked the gap only in the last 4 s, and after an outage across a start
-   compared the IMU sum of the whole outage with the velocity from before it), or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
+   a window of more than `lever_align_window` + 1 s between the two velocities (after an outage across a start the change of velocity would be taken over the whole outage), or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
 3. *Release.* If the release is open and the variance was held back but the shadow is under `lever_align_sigma`, the shadow is put
    back (`P ← D P Dᵀ` as above, then the shadow variance) and the bound is not applied while the release is open.
-4. *Blind* (`lever_blind`, default on). If the variance was held back, the shadow is over `lever_align_sigma` and the alignment finds nothing, the
+4. *Blind.* If the variance was held back, the shadow is over `lever_align_sigma` and the alignment finds nothing, the
    update leaves the attitude columns of `H` out (`H_θ = 0`, a filter without a lever arm) and adds `|t_xy|²` to `R_xx`, `R_yy`: the
    antenna says where the circle of the lever is and tells roll and pitch nothing. The release stays closed. Without it a turn on
-   the spot after a long stand tilted the filter (`S8a`: 22 of 384 runs; with it 0).
+   the spot after a long stand tilts the filter (without it 25 of 384 runs of suite hsg, with it 0).
 5. *Unknown start* (`lever_start_sigma` 1.81 rad = π/√3, 0 = off). With a lever arm and no heading source (no `/initialpose`, no lidar,
    `initial_yaw_known` false) the node calls `Eskf::markHeadingUnknown()` after `initialize()`: the shadow variance is set to `lever_start_sigma²`, held back, valid. `x` and `P` are not touched.
    The shadow is over `lever_align_sigma`, so the first start or stop aligns the heading (item 2) and an unalignable robot runs the blind update (item 4). A pose fix from the lidar invalidates the shadow as before.
-6. *Fix rate* (sixth review, finding 1). The alignment measures time, not fixes. `Eskf::fixPeriod()` is the median of the last 15 intervals between lever-arm
+6. *Fix rate.* The alignment measures time, not fixes. `Eskf::fixPeriod()` is the median of the last 15 intervals between lever-arm
    fixes, `T`. The velocity of the antenna is taken over `max(lever_align_span, 2 T)` seconds (at least 2 intervals), the window is `max(lever_align_window, 1.5 span)`, a gap is an
-   interval over `max(lever_align_gap, 2.5 T)`, and the history that is checked for gaps and fast turns is the window plus a span. At 5 Hz these are the 0.8 s, 3 s, 1 s of the rounds before;
-   at 1 Hz 2 s, 3 s, 2.5 s; at 10 and 20 Hz 0.8 s, 3 s, 1 s. (`lever_align_norm`, default 0 = off: the two changes of velocity could be required to have the same norm to this fraction, since a rotation keeps the norm; measured, not useful, README "Sixth pass".)
-   **Supported fix rate: 1 to 20 Hz** (measured: README "Sixth pass", suite `hrate`). If the median interval is over `lever_align_period_max` (1.25 s, a rate under 0.8 Hz), `alignHeading` does nothing,
-   `leverUnsupportedRate()` is true after the first 6 fixes, and a start marked by `markHeadingUnknown()` is taken back (the shadow is set from `P` again: the start of the rounds before 6, because an unknown start that
-   cannot be aligned would run blind for good). The node WARNs on `/diagnostics` (`GNSS fixes come every N s ...`, `heading_align_rate: unsupported`, `gnss_fix_period_s`).
-7. *Outage spread* (`lever_outage_spread`, default on; sixth review, finding 2). While the heading is unknown (the shadow over `lever_align_sigma`) and the fixes are out (an interval over the gap limit of item 6),
+   interval over `max(lever_align_gap, 2.5 T)`, and the history that is checked for gaps and fast turns is the window plus a span. At 5 Hz and above these are 0.8 s, 3 s, 1 s;
+   at 1 Hz 2 s, 3 s, 2.5 s. The fixes are kept for twice the history plus two spans (by time, not by count).
+   **Supported fix rate: 1 to 100 Hz** (measured: experiments/README.md, suites `hrate` and `hratex`). If the median interval is over `lever_align_period_ok` (1.05 s, a rate under 1 Hz) and not over `lever_align_period_max` (1.25 s, 0.8 Hz), the alignment runs and
+   finds the heading less often (`leverDegradedRate()`, `heading_align_rate: degraded`). If it is over `lever_align_period_max`, `alignHeading` does nothing,
+   `leverUnsupportedRate()` is true after the first 6 fixes, and a start marked by `markHeadingUnknown()` is taken back (the shadow is set from `P` again, because an unknown start that
+   cannot be aligned would run blind for good). The node WARNs on `/diagnostics` in both cases (`GNSS fixes come every N s ...`, `heading_align_rate`, `gnss_fix_period_s`).
+7. *Outage spread* (`lever_outage_spread`, 0 = off). While the heading is unknown (the shadow over `lever_align_sigma`) and the fixes are out (an interval over the gap limit of item 6),
    `predict` dead-reckons the acceleration in the filter's heading. If that is off by `e`, the velocity it gained over the outage is `dS` rotated by `e` (`dS`: the IMU sum `cum_a_` over the outage), and the position it gained
    from the acceleration is `D` rotated by `e` (`D`: the integral of `dS` over time, `cum_p_`); the error is `e |dS|` and `e |D|`, fully correlated. `P` does not say so: the bound holds the heading at 0.35 rad, so `P` is cut in
    exactly the part that the honest heading would feed into the velocity and the position. At the first lever update after such an outage, if the alignment finds nothing, `spreadAfterOutage()` adds to the horizontal position and
@@ -146,7 +142,7 @@ antenna and an IMU, as it does without a lever arm. A straight drive at constant
 (`dv` = 0), and a speed gate on the filter's own estimate opens on dead-reckoned speed;
 the integral reads the IMU. Spinning on the spot has `dv` = 0 and stays closed: the antenna
 sweep confounds the heading with the position of one fix, and the first pass of the study
-measured the full update over-confident there (the schemes with a rate gate, S6s and S6t, diverged in 28.8 % of the spin runs).
+measured the full update over-confident there (a release on the body rate diverged in 28.8 % of the spin runs of the study).
 
 *Why the heading and the vertical gyro bias.* A single antenna does not separate the
 heading from the position of the body: `p + R·t` stays put if the heading turns and the
