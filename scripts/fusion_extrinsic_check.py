@@ -96,7 +96,14 @@ so a mount that is ignored or applied the wrong way round fails.
                spread and the first start ran a full update with a heading 2 rad off (A: +8.6 m, 0.49 rad; B: +25.9 m, 0.87 rad, with heading_sigma_rad 0.005 to
                0.017 and no WARN). Before the start: heading_source none, heading_sigma_rad at least 1.5 (the unknown heading, 1.8); in the 80 s: height within
                1.0 m, tilt within 0.1 rad (the alignment leaves a transient: 6 runs of B gave 0.07 to 0.70 m and 0.006 to 0.047 rad), heading_source "motion" within 10 s,
-               heading error after the cycle within 0.5 rad (one run)
+               heading error after the cycle within 0.5 rad (one run); the height bound is 1.0 m (it was 0.5 m: antenna B ranged 0.066 to 0.696 m over 6 runs, the larger values under load)
+  gnss_boot_wrong_yaw_1hz, gnss_boot_wrong_yaw_10hz
+               The sixth review (finding 1): the same boot with the fixes every 100 or every 10 IMU ticks (1 Hz and 10 Hz). With the span of 4 fixes the alignment never worked at 1 Hz
+               (the node stayed blind for good: heading 2.2 rad off after the cycle, 1.6 m of height). Same checks as above; heading_align_rate "supported" and gnss_fix_period_s within 20 % of
+               the fix period; at 1 Hz heading_source "motion" within 14 s of the start (the span is 2 s)
+  gnss_slow_rate
+               The sixth review (finding 1): GNSS and IMU only, antenna A, a fix every 2.5 s (0.4 Hz), no /initialpose. After 40 s: WARN "GNSS fixes come every 2.5 s (slower than 0.80 Hz) ...",
+               heading_align_rate "unsupported", gnss_fix_period_s about 2.5, heading_sigma_rad under 1.0 (the start is not marked as unknown), heading_align_rate not "unsupported" before 6 fixes
   gnss_gap_across_start, gnss_gap_across_start_b (not in the default run: 8 minutes each, `--scenario` or `--long`)
                The fifth review: GNSS and IMU only, antenna A (B), standing 300 s with the 0.5 deg/s gyro bias, the fixes stop 10 s before the robot
                starts the start-stop cycle and come back 120 s after they stopped (the cycle runs all through the outage); then 60 s. The alignment compared
@@ -266,6 +273,7 @@ class Rig:
         self.turned = 0.0        # yaw the robot has turned so far (rad), as the gyro reported it
         self.noise = None        # NOISE to add white noise to the IMU and the fixes
         self.gyro_bias = np.zeros(3)   # constant gyro bias, in the IMU frame (rad/s)
+        self.gnss_every = 20     # a fix every this many 100 Hz IMU ticks (20 = 5 Hz; scenarios of other fix rates set it)
         self.tilt = (0.0, 0.0)   # roll, pitch of the body against the horizontal (a robot on a slope), rad
         self.path = None         # (distance, speed, acceleration) along the heading at t seconds after path_t0, or None (standing)
         self.path_t0 = 0.0
@@ -357,7 +365,7 @@ class Rig:
         self.gnss_pub.publish(m)
 
     def stream(self, seconds, imu=('base_link', None), cloud=None, gnss=None, yaw_rate=0.0):
-        """100 Hz IMU; every 20th tick (5 Hz) a fix and every 100th (1 Hz) a cloud, when given as
+        """100 Hz IMU; every gnss_every-th tick (default 20: 5 Hz) a fix and every 100th (1 Hz) a cloud, when given as
         (frame, mount)."""
         end = time.monotonic() + seconds
         k = 0
@@ -366,7 +374,7 @@ class Rig:
                 self.send_imu(*imu, yaw_rate=yaw_rate)
             if k % 100 == 0 and cloud is not None:
                 self.send_cloud(*cloud)
-            if k % 20 == 0 and gnss is not None:
+            if k % self.gnss_every == 0 and gnss is not None:
                 self.send_gnss(*gnss)
             k += 1
             tick = time.monotonic() + 0.01
@@ -832,20 +840,27 @@ def gnss_gap_across_start(rig, results, mount=ANTENNA_A, stand=300.0, gap=120.0,
                     f'{what}: largest height error {worst["z"]:.3f} m (need <= 0.5), tilt error {worst["tilt"]:.4f} rad (need <= 0.05) in the 60 s after the fixes return'))
 
 
-def gnss_boot_wrong_yaw(rig, results, mount=ANTENNA_A, stand=20.0, yaw_off=2.0):
+def gnss_boot_wrong_yaw(rig, results, mount=ANTENNA_A, stand=20.0, yaw_off=2.0, gnss_every=20):
     """The fifth review: the default boot. GNSS and IMU alone with a lever arm, no /initialpose, initial_yaw `yaw_off` rad off the true heading,
     a stand of `stand` s, then the start-stop cycle. The filter started with 0.71 rad of heading spread, so the first start ran a full update with a
     heading 2 rad off: antenna A +8.6 m high and 0.49 rad tilted, antenna B +25.9 m and 0.87 rad, with heading_sigma_rad 0.005 to 0.017 and no WARN.
     Now the heading starts as unknown (heading_source "none", heading_sigma_rad over 1 rad), the first start finds it (heading_source "motion"), and
-    height and tilt stay within the bound."""
+    height and tilt stay within the bound.
+    The sixth review (finding 1) ran it at other fix rates: with a span of 4 fixes the alignment never worked at 1 Hz (the robot stayed blind for good,
+    heading 2.2 rad off after the cycle) and gave false alignments at 10 Hz. `gnss_every` is the number of 100 Hz IMU ticks between two fixes
+    (20 = 5 Hz, 100 = 1 Hz, 10 = 10 Hz)."""
     rig.noise = NOISE
     rig.gyro_bias = np.array(GYRO_BIAS)
+    rig.gnss_every = gnss_every
     rig.add_static('gnss', mount)
-    what = f'antenna {mount[0]}, initial_yaw {yaw_off} rad off, no /initialpose, standing {stand:.0f} s, then the start-stop cycle'
+    what = f'antenna {mount[0]}, initial_yaw {yaw_off} rad off, no /initialpose, fixes at {100.0 / gnss_every:g} Hz, standing {stand:.0f} s, then the start-stop cycle'
     rig.stream(stand, gnss=('gnss', mount))
     v0 = rig.values()
     results.append((v0.get('heading_source') == 'none' and float(v0.get('heading_sigma_rad', 'nan')) >= 1.5,
                     f'{what}: before the start heading_source {v0.get("heading_source")} (need none), heading_sigma_rad {v0.get("heading_sigma_rad")} (need >= 1.5)'))
+    period = float(v0.get('gnss_fix_period_s', 'nan')) if v0.get('gnss_fix_period_s', 'n/a') != 'n/a' else float('nan')
+    results.append((v0.get('heading_align_rate') == 'supported' and abs(period - gnss_every / 100.0) <= 0.2 * gnss_every / 100.0,
+                    f'{what}: heading_align_rate {v0.get("heading_align_rate")} (need supported), gnss_fix_period_s {v0.get("gnss_fix_period_s")} (need {gnss_every / 100.0:g} +- 20 %)'))
     rig.path, rig.path_t0 = cycle_path, time.monotonic()
     worst = {'z': 0.0, 'tilt': 0.0}
     seen_motion = None
@@ -857,14 +872,38 @@ def gnss_boot_wrong_yaw(rig, results, mount=ANTENNA_A, stand=20.0, yaw_off=2.0):
         if seen_motion is None and v.get('heading_source') == 'motion':
             seen_motion = 2.0 * k
     e = rig.pose_error(1.0)
-    results.append((seen_motion is not None and seen_motion <= 10.0,
-                    f'{what}: heading_source "motion" first seen {seen_motion} s after the start (need within 10 s)'))
+    limit = 10.0 if gnss_every <= 20 else 14.0   # at 1 Hz the span is 2 s and the window 3 s: the alignment comes later than at 5 Hz (8.0 s)
+    results.append((seen_motion is not None and seen_motion <= limit,
+                    f'{what}: heading_source "motion" first seen {seen_motion} s after the start (need within {limit:g} s)'))
     # The alignment at the first start leaves a transient (the accelerometer-bias estimate jumps for some seconds): over 6 runs of antenna B the largest
     # height error was 0.066 to 0.696 m and the tilt 0.006 to 0.047 rad, the larger values under load. The failure this scenario is for is 8 to 26 m and 0.5 to 0.9 rad.
     results.append((worst['z'] <= 1.0 and worst['tilt'] <= 0.1,
                     f'{what}: largest height error {worst["z"]:.3f} m (need <= 1.0), tilt error {worst["tilt"]:.4f} rad (need <= 0.1) in the 80 s from the start'))
     results.append((e is not None and abs(e[5]) <= 0.5,
                     f'{what}: heading error after the cycle {e[5] if e else float("nan"):+.3f} rad (need within 0.5; one run)'))
+
+
+def gnss_slow_rate(rig, results, mount=ANTENNA_A, gnss_every=250):
+    """The sixth review (finding 1): GNSS and IMU only, a lever arm, fixes every 2.5 s (0.4 Hz), under the 0.8 Hz the heading alignment supports. The node must say so:
+    after 6 fixes (15 s) a WARN "GNSS fixes come every 2.5 s (slower than 0.80 Hz) ...", heading_align_rate "unsupported", gnss_fix_period_s about 2.5, and the start must not be
+    marked as unknown (heading_sigma_rad under 1.0: the filter's own start spread, not the 1.8 rad of an unknown heading, which an alignment that cannot run would hold for good)."""
+    rig.noise = NOISE
+    rig.gyro_bias = np.array(GYRO_BIAS)
+    rig.gnss_every = gnss_every
+    rig.add_static('gnss', mount)
+    what = f'antenna {mount[0]}, GNSS and IMU only, a fix every {gnss_every / 100.0:g} s, no /initialpose'
+    rig.stream(8.0, gnss=('gnss', mount))
+    early = rig.values()
+    rig.stream(32.0, gnss=('gnss', mount))
+    v, st = rig.values(), rig.last_status()
+    warn = st is not None and level_of(st) == WARN and 'GNSS fixes come every' in st.message and 'slower than' in st.message
+    period = float(v.get('gnss_fix_period_s', 'nan')) if v.get('gnss_fix_period_s', 'n/a') != 'n/a' else float('nan')
+    results.append((warn, f'{what}: after 40 s status {"WARN with" if warn else "without"} "GNSS fixes come every ... slower than" (need WARN with it)'))
+    results.append((v.get('heading_align_rate') == 'unsupported' and abs(period - gnss_every / 100.0) <= 0.5,
+                    f'{what}: heading_align_rate {v.get("heading_align_rate")} (need unsupported), gnss_fix_period_s {v.get("gnss_fix_period_s")} (need {gnss_every / 100.0:g} +- 0.5)'))
+    sig = float(v.get('heading_sigma_rad', 'nan')) if v.get('heading_sigma_rad', 'n/a') != 'n/a' else float('nan')
+    results.append((sig < 1.0, f'{what}: heading_sigma_rad {v.get("heading_sigma_rad")} (need under 1.0: the start is not marked as unknown)'))
+    results.append((early.get('heading_align_rate') in ('n/a', 'supported'), f'{what}: before 6 fixes heading_align_rate {early.get("heading_align_rate")} (need n/a or supported: the rate is not yet known)'))
 
 
 def start_stop_path(t):
@@ -1153,7 +1192,10 @@ SCENARIOS = {'lidar': scenario_lidar, 'imu': scenario_imu, 'gnss': scenario_gnss
              'gnss_gap_across_start': gnss_gap_across_start,
              'gnss_gap_across_start_b': lambda r, res: gnss_gap_across_start(r, res, ANTENNA_B),
              'gnss_boot_wrong_yaw': gnss_boot_wrong_yaw,
-             'gnss_boot_wrong_yaw_b': lambda r, res: gnss_boot_wrong_yaw(r, res, ANTENNA_B)}
+             'gnss_boot_wrong_yaw_b': lambda r, res: gnss_boot_wrong_yaw(r, res, ANTENNA_B),
+             'gnss_boot_wrong_yaw_1hz': lambda r, res: gnss_boot_wrong_yaw(r, res, ANTENNA_A, gnss_every=100),
+             'gnss_boot_wrong_yaw_10hz': lambda r, res: gnss_boot_wrong_yaw(r, res, ANTENNA_A, gnss_every=10),
+             'gnss_slow_rate': gnss_slow_rate}
 # The height bound of gnss_stand_long. It was written as 0.15 m like the others; the first run measured 0.174 m, a second 0.141 m, and the
 # same scenario with the antenna at the origin of base_link (no lever arm, the plain update) 0.167 m: with the fix's z variance floored at
 # 1 m^2 the height estimate has a noise of about 0.1 m, and the largest of 30 samples over 600 s reaches 0.15 to 0.17 m. 0.25 m is above
@@ -1174,6 +1216,8 @@ SCENARIO_ARGS = {'imu': [f'initial_yaw:={BASE_YAW}'], 'gnss': [f'initial_yaw:={B
                  'gnss_stand_long': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_go': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_go_b': [f'initial_yaw:={BASE_YAW}'], 'gnss_start_stop': [f'initial_yaw:={BASE_YAW + 0.3}'], 'gnss_gap': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_gap_across_start': [f'initial_yaw:={BASE_YAW}'], 'gnss_gap_across_start_b': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_boot_wrong_yaw': [f'initial_yaw:={BASE_YAW + 2.0}'], 'gnss_boot_wrong_yaw_b': [f'initial_yaw:={BASE_YAW + 2.0}'],
+                 'gnss_boot_wrong_yaw_1hz': [f'initial_yaw:={BASE_YAW + 2.0}'], 'gnss_boot_wrong_yaw_10hz': [f'initial_yaw:={BASE_YAW + 2.0}'],
+                 'gnss_slow_rate': [f'initial_yaw:={BASE_YAW + 2.0}'],
                  'override': ['points_frame:=base_link', 'imu_frame:=base_link', 'gnss_frame:=base_link'],
                  'imu_missing': ['startup_timeout_s:=10.0']}
 

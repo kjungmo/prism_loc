@@ -302,9 +302,16 @@ void FusionLocalizationNode::onDiagnostics() {
   const double since_heading = heading_source_ == HeadingSource::kNone ? secs(init_wall_) : secs(heading_source_wall_);
   if (capped_now && secs(capped_since_wall_) >= kHeadingWarnS && since_heading >= kHeadingWarnS) {
     std::snprintf(buf, sizeof(buf), "heading not observed: GNSS and IMU only for %.0f s, heading spread %.1f rad, base_link can be off by up to the lever arm "
-                  "(%.2f m) either way; a start or a stop of %.2f m/s or more finds the heading, a constant speed or a turn on the spot does not; "
+                  "(%.2f m) either way; a start or a stop of %.2f m/s or more finds the heading (GNSS fixes at 1 Hz or faster), a constant speed or a turn on the spot does not; "
                   "or use the lidar or /initialpose", since_heading, eskf_->headingSigmaHonest(),
                   gnss_mount_.ext().T.translation().head<2>().norm(), eskf_params_.lever_align_dv);
+    warnings.emplace_back(buf);
+  }
+  // The kinematic alignment measures the fixes over seconds and needs a fix period of at most lever_align_period_max (about 0.8 Hz). Slower
+  // fixes cannot find the heading from a start or a stop, and the start was not marked as unknown: say so (round 7, finding 1).
+  if (filter_init_ && lever_arm && eskf_->leverUnsupportedRate()) {
+    std::snprintf(buf, sizeof(buf), "GNSS fixes come every %.1f s (slower than %.2f Hz): a start or a stop cannot find the heading and the heading is a guess "
+                  "until the lidar or /initialpose gives it; use GNSS fixes at 1 Hz or faster", eskf_->fixPeriod(), 1.0 / eskf_params_.lever_align_period_max);
     warnings.emplace_back(buf);
   }
   if (imu_gaps_ > imu_gaps_reported_) {
@@ -367,6 +374,8 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("lever_release", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverReleaseOpen() ? "open" : "closed");
   kv("lever_blind", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverBlind() ? "true" : "false");
   kv("gnss_only_s", !filter_init_ ? "n/a" : num(since_heading, "%.1f"));
+  kv("gnss_fix_period_s", !filter_init_ || !lever_arm || !(eskf_->fixPeriod() > 0.0) ? "n/a" : num(eskf_->fixPeriod(), "%.2f"));   // the median interval of the last lever-arm fixes
+  kv("heading_align_rate", !filter_init_ || !lever_arm || !(eskf_->fixPeriod() > 0.0) ? "n/a" : eskf_->leverUnsupportedRate() ? "unsupported" : "supported");
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
   arr.status.push_back(st);

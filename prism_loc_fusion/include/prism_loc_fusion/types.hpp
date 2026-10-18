@@ -94,5 +94,33 @@ struct EskfParams {
   // and a robot that cannot be aligned runs the blind update, instead of a full update with a heading 1 to 3 rad off (README, study 6,
   // fifth pass). The default is the spread of a heading that is uniform on the circle, pi / sqrt(3). 0 = off (the version before).
   double lever_start_sigma{1.8137993642342178};
+  // The alignment measures time, not fixes (round 7, finding 1: with a span of 4 fixes it worked only at 5 to just under 10 Hz).
+  //  - lever_align_span: the antenna velocity is taken over at least this many seconds and at least 2 fixes (the span of 4 fixes at 5 Hz,
+  //    0.8 s, is what the earlier rounds had). The measured fix period T (the median of the last 15 intervals between fixes) scales the
+  //    rest: the span is max(lever_align_span, 2 T), the window max(lever_align_window, 1.5 span), a gap is an interval over
+  //    max(lever_align_gap, 2.5 T). 0 = the span of 4 fixes and the limits of the earlier rounds (the scheme S8k of experiments/eskf_lever.cpp).
+  //  - lever_align_norm: a rotation about the vertical keeps the norm, so the change of velocity from the IMU (a) and the one from the fixes (v)
+  //    could be required to have about the same norm: the alignment is refused if ||a| - |v|| > lever_align_norm max(|a|, |v|). OFF by default (0): the
+  //    sixth review proposed it with 0.3, and it was measured (experiments/eskf_lever.cpp, schemes S8n, S8v; README, "Sixth pass"): with the spans in seconds it
+  //    removes no alignment of the fix-rate suite that the spans do not, and it makes the node scenario gnss_gap_across_start fail more often (13 of 300 seeds of
+  //    experiments/eskf_gap_across_start.cpp with the outage spread at 1 against 4 without the test, 4 against 1 with the spread at 0.1, 2 against 0 with no spread):
+  //    a refused marginal alignment is followed by a later one on a window that the tilt and bias corrections after the outage have polluted. 0.3 gives the reviewer's test.
+  //  - lever_align_period_max: the slowest fix rate the alignment supports, as a fix period in s (1.25 s: 0.8 Hz). If the measured period is
+  //    longer, the alignment does nothing, and markHeadingUnknown() is taken back after the first fixes (the start spread is that of the
+  //    filter's own covariance, the version before round 6) and leverUnsupportedRate() is true. 0 = no limit.
+  double lever_align_span{0.8};
+  double lever_align_norm{0.0};
+  double lever_align_period_max{1.25};
+  // After an outage of the fixes (an interval over the gap limit) with the heading unknown (the shadow of the heading over lever_align_sigma and the alignment
+  // not possible), the velocity and position the filter dead-reckoned through the outage are as uncertain as the heading is: a velocity change dS (the IMU sum
+  // over the outage, in the filter's heading) turned by the heading error is off by up to 2 |dS|. P holds the heading bounded (lever_heading_sigma_max), so it
+  // said much less, and the first fixes after the outage corrected the velocity far too slowly (round 7, finding 2: a robot that starts during a short outage
+  // had a position error of 3 m for 20 s, and the mast diverged). With this on, the first lever update after such an outage adds to the horizontal position and
+  // velocity covariance s min(heading spread^2, 2) / 2 times [[|D|^2, D.dS], [D.dS, |dS|^2]] on each axis, with dS the velocity change the IMU summed over the outage, D
+  // the position it gave (Eskf::spreadAfterOutage), and s this factor. 0 = off, the version before (the scheme S8w of experiments/eskf_lever.cpp). The factor is a
+  // tenth, not 1: the full variance gave the same gain in the short outages (hgap) but made the mast worse in the long ones and the node scenario
+  // gnss_gap_across_start fail in 4 of 300 seeds of the core replica (1 of 300 at a tenth, 0 without the spread); 0.02 to 1 were measured (README, "Sixth pass") and a
+  // tenth is where the gain in the short outages is complete.
+  double lever_outage_spread{0.1};
 };
 }  // namespace prism_loc_fusion
