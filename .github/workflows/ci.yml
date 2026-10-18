@@ -99,10 +99,10 @@ jobs:
       # is missing is left out and /diagnostics says so; *_frame overrides the frame name;
       # GNSS and IMU alone with sensor noise stay consistent for 30 s, and with a constant
       # gyro bias for 45 s, across a reseed, on a slope, over a start and a stop, with a gap in
-      # the fixes, and from a start before the antenna mount is known (the whole script takes
-      # about 15 minutes on a desktop; 2700 s here). The 600 s standing scenario
-      # (gnss_stand_long, 10 more minutes) is not part of it: run it with --long or
-      # --scenario gnss_stand_long. The core test HeadingSigmaStaysAtTheBoundForFifteenMinutes
+      # the fixes, from a start before the antenna mount is known, and from a boot with initial_yaw 2 rad
+      # off (the whole script takes about 18 minutes on a desktop; 2700 s here). The 600 s standing scenario
+      # (gnss_stand_long, 10 more minutes) and the outage across a start (gnss_gap_across_start, 8 minutes)
+      # are not part of it: run them with --long or --scenario. The core test HeadingSigmaStaysAtTheBoundForFifteenMinutes
       # covers the same mechanism in CI.
       # The workspace above is built without optimization; one NDT registration then takes
       # over a second on the thread that also takes the IMU and /diagnostics reports

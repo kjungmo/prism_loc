@@ -25,6 +25,8 @@ REF = 'S6vb'   # the scheme the node uses (EskfParams defaults)
 SCHEMES = ['ignore', 'S0', 'S0s', 'S1', 'S1s', 'S2', 'S2s', 'S3s', 'S4s', 'S5s', 'S6s', 'S6t', 'S6v', 'S6va', 'S6vb']
 FIRST_SUITES = ('g60', 'g300')
 SG_SUITES = ('hsg', 'hsgv')    # third pass: standing, then moving (reported apart; not part of the second-pass pools)
+FIFTH_SUITES = ('hgap', 'hboot')    # fifth pass: an outage across the start, and the default boot with a guessed heading (reported apart)
+APART = FIRST_SUITES + SG_SUITES + FIFTH_SUITES
 
 
 def load(prefixes):
@@ -203,7 +205,7 @@ def first_pass(runs, agg):
 # ---------------------------------------------------------------------------------------------
 # Second pass: the observability grid (suites h*)
 # ---------------------------------------------------------------------------------------------
-HS = ['S0', 'S1s', 'S2s', 'S6vb', 'S7', 'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7n', 'S7a35r05', 'S7a35r20', 'S8']   # S8: added after the fourth review
+HS = ['S0', 'S1s', 'S2s', 'S6vb', 'S7', 'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7n', 'S7a35r05', 'S7a35r20', 'S8', 'S8u']   # S8: added after the fourth review, S8u after the fifth
 CAND = ['S7', 'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7a35r05', 'S7a35r20']
 RELEASES = {'S7a', 'S7a35', 'S7a50', 'S7r05', 'S7r20', 'S7n', 'S7a35r05', 'S7a35r20'}     # schemes with lever_release_dv > 0
 NPARAM = {'S7': 1, 'S7a': 2, 'S7a35': 2, 'S7a50': 2, 'S7r05': 2, 'S7r20': 2, 'S7a35r05': 2, 'S7a35r20': 2}
@@ -400,8 +402,8 @@ SHIPPED = "S7a35"
 
 
 def second_pass(runs, agg):
-    runs = [r for r in runs if r['suite'] not in FIRST_SUITES + SG_SUITES]
-    agg = [a for a in agg if a['suite'] not in FIRST_SUITES + SG_SUITES]
+    runs = [r for r in runs if r['suite'] not in APART]
+    agg = [a for a in agg if a['suite'] not in APART]
     if not runs:
         return None
     suites = sorted({r['suite'] for r in runs})
@@ -595,6 +597,13 @@ def quoted_second(runs, agg, best, prev='S6vb'):
     long_nodrop = [r for r in big if r['drop'] == '0' and int(r['dur']) >= 900]
     print(f'- {chosen}: {len(big)} runs with a horizontal error over 1 m; antenna A {sum(r["antenna"] == "A" for r in big)}, B {sum(r["antenna"] == "B" for r in big)}, M {sum(r["antenna"] == "M" for r in big)}; '
           f'{len(long_nodrop)} are runs of 900 s or 1,800 s without a dropout; {sum(r["drop"] == "1" for r in big)} have a GNSS dropout; the zero-lever row: {sum(xy1(r) for r in zr)} of {len(zr)}.')
+    prev_big = {(r['cfg'], r['seed']) for r in lev if r['scheme'] == prev and xy1(r)}
+    new_big = [r for r in big if (r['cfg'], r['seed']) not in prev_big]
+    print(f'- {chosen}: {len(new_big)} runs over 1 m that {prev} does not have (and {sum(1 for k in prev_big if k not in {(r["cfg"], r["seed"]) for r in big})} that only {prev} has); '
+          f'of the new ones {sum(r["antenna"] == "A" and r["gyro_bias_dps"] == "0.5" for r in new_big)} are antenna A at 0.5 deg/s, with the largest error {min((f(r, "max_xy") for r in new_big if r["antenna"] == "A" and r["gyro_bias_dps"] == "0.5"), default=float("nan")):.2f} to '
+          f'{max((f(r, "max_xy") for r in new_big if r["antenna"] == "A" and r["gyro_bias_dps"] == "0.5"), default=float("nan")):.2f} m (the same runs under {prev}: '
+          f'{min((f(r, "max_xy") for r in lev if r["scheme"] == prev and (r["cfg"], r["seed"]) in {(x["cfg"], x["seed"]) for x in new_big if x["antenna"] == "A" and x["gyro_bias_dps"] == "0.5"}), default=float("nan")):.2f} to '
+          f'{max((f(r, "max_xy") for r in lev if r["scheme"] == prev and (r["cfg"], r["seed"]) in {(x["cfg"], x["seed"]) for x in new_big if x["antenna"] == "A" and x["gyro_bias_dps"] == "0.5"}), default=float("nan")):.2f} m).')
     for sc in (prev, chosen):
         dr = [r for r in lev if r['scheme'] == sc and r['drop'] == '1']
         print(line(f'{sc}, runs with a GNSS dropout (30 s or 120 s)', dr))
@@ -653,7 +662,7 @@ def quoted_second(runs, agg, best, prev='S6vb'):
 
 
 SG_MOTIONS = ('sgstart', 'sgdrive', 'sgturn')
-SG_SCHEMES = ['S2s', 'S6vb', 'S7a35', 'S8r', 'S8a', 'S8']
+SG_SCHEMES = ['S2s', 'S6vb', 'S7a35', 'S8r', 'S8a', 'S8', 'S8u']
 
 
 def third_pass(sg_rows):
@@ -730,6 +739,99 @@ def third_pass(sg_rows):
         for r in zr:
             by[(r['cfg'], r['seed'])].add(tuple(r[c] for c in ('diverged', 'max_xy', 'max_z', 'max_tilt', 'max_head', 'end_xy', 'end_z', 'end_tilt', 'end_head', 'max_circ')))
         print(f'\nZero lever in {su}: {len(by)} runs, every scheme identical in {sum(1 for v in by.values() if len(v) == 1)}.')
+        print(f'\n### Numbers quoted in README.md and experiments/README.md: {su}\n')
+        print('The zero-lever filter has 384 runs per suite (128 per motion), the same for every scheme. The lever-arm rows are 1,152 (384 per motion); '
+              'each zero-lever run is the pair of three lever-arm runs (antennas A, B, M), so a column that sums the zero-lever run once per lever-arm run '
+              'counts it three times ("paired").\n')
+        zrows = [r for r in rows if r['antenna'] == 'Z' and r['scheme'] == (schemes[0])]
+        print(f'- Zero lever, unique runs ({schemes[0]} rows): {len(zrows)}; tz {sum(tz(r) for r in zrows)}; heading>0.5 at the end {sum(f(r, "end_head") > 0.5 for r in zrows)}; '
+              f'xy>1 {sum(xy1(r) for r in zrows)}; z>1 {sum(f(r, "max_z") > 1.0 for r in zrows)}; tilt>0.3 {sum(f(r, "max_tilt") > 0.3 for r in zrows)}.')
+        for m in SG_MOTIONS:
+            zm = [r for r in zrows if r['motion'] == m]
+            print(f'- Zero lever, {m}, unique runs: {len(zm)}; tz {sum(tz(r) for r in zm)}; heading>0.5 at the end {sum(f(r, "end_head") > 0.5 for r in zm)}; xy>1 {sum(xy1(r) for r in zm)}.')
+        for sc in schemes:
+            lr = [r for r in rows if r['scheme'] == sc and r['antenna'] != 'Z']
+            ptz = sum(tz(zref[(int(r['cfg'].split('-')[1]) // 4, r['seed'])]) for r in lr)
+            print(f'- {sc}: lever-arm runs {len(lr)}; tz {sum(tz(r) for r in lr)}; the paired zero-lever tz summed once per lever-arm run (paired) {ptz}, '
+                  f'which is {ptz // 3} unique zero-lever runs of {len(zrows)} counted three times.')
+            for m in SG_MOTIONS:
+                lm = [r for r in lr if r['motion'] == m]
+                print(f'  - {m}: {len(lm)} runs; heading>0.5 at the end {sum(f(r, "end_head") > 0.5 for r in lm)}; xy>1 {sum(xy1(r) for r in lm)}; '
+                      f'tz {sum(tz(r) for r in lm)}; excess {sum(tz(r) and not tz(zref[(int(r["cfg"].split("-")[1]) // 4, r["seed"])]) for r in lm)}.')
+            ex = [r for r in lr if tz(r) and not tz(zref[(int(r['cfg'].split('-')[1]) // 4, r['seed'])])]
+            print(f'  - excess {len(ex)}: antenna M {sum(r["antenna"] == "M" for r in ex)}, A {sum(r["antenna"] == "A" for r in ex)}, B {sum(r["antenna"] == "B" for r in ex)}; '
+                  f'z>1 {sum(f(r, "max_z") > 1.0 for r in lr)}, tilt>0.3 {sum(f(r, "max_tilt") > 0.3 for r in lr)}.')
+
+
+def fifth_pass(rows):
+    """Fifth review round: an outage across the start (hgap) and the default boot with a heading that is a guess (hboot)."""
+    print('\n\n# Lever-arm study, fifth pass: an outage across the start, and a boot with a guessed heading\n')
+    print('Schemes: S8o (S8 without the span guard of the alignment, the version before this round), S8 (with the guard), S8u (S8 + the heading of the '
+          'first start is held as unknown, pi / sqrt(3) rad: what the code ships). tz = tilt > 0.05 rad or abs z > 0.5 m at an epoch from 10 s on '
+          '(epochs from the start of an outage to 5 s after it are not tested); "excess" = the lever-arm run has tz and the zero-lever run of the same data has not; '
+          '"z>1" = abs z > 1 m; "tilt>0.3" = tilt > 0.3 rad. 4 seeds; GNSS and IMU only; antennas A, B, M (lever) and Z (zero lever, the same data).\n')
+    for su in FIFTH_SUITES:
+        rs_all = [r for r in rows if r['suite'] == su]
+        if not rs_all:
+            continue
+        zref = {}
+        for r in rs_all:
+            if r['antenna'] == 'Z':
+                zref[(r['scheme'], int(r['cfg'].split('-')[1]) // 4, r['seed'])] = r
+        schemes = [sc for sc in ('S8o', 'S8', 'S8u') if any(r['scheme'] == sc for r in rs_all)]
+        zp = lambda r: zref[(r['scheme'], int(r['cfg'].split('-')[1]) // 4, r['seed'])]
+        if su == 'hgap':
+            print('\n## Suite hgap: the fixes stop 10 s before the robot starts (the start-stop cycle, or the circle) and come back 30 s or 120 s later\n')
+            keyf = lambda r: ('stop %s s' % r['drop_s'])
+            keys = sorted({keyf(r) for r in rs_all}, key=lambda k: float(k.split()[1]))
+        else:
+            print('\n## Suite hboot: initial_yaw off by 0.5, 1, 2 and 3 rad, no /initialpose, a stand of 6 to 300 s, then the start (gyro bias 0.1 deg/s, accelerometer bias 0.1 m/s^2)\n')
+            keyf = lambda r: 'yaw %s rad, stand %d s' % (r['yaw0'], int(r['dur']) - 160)
+            keys = sorted({keyf(r) for r in rs_all}, key=lambda k: (float(k.split()[1]), int(k.split()[4])))
+
+        def row(label, sc, sel):
+            lr = [r for r in rs_all if r['scheme'] == sc and r['antenna'] != 'Z' and sel(r)]
+            if not lr:
+                return
+            zu = {(int(r['cfg'].split('-')[1]) // 4, r['seed']): zp(r) for r in lr}   # the zero-lever runs of these data, once each
+            ex = sum(tz(r) and not tz(zp(r)) for r in lr)
+            print(f'| {label} | {sc} | {len(lr)} | {sum(tz(r) for r in lr)} | {sum(tz(z) for z in zu.values())} of {len(zu)} | {ex} | '
+                  f'{sum(f(r, "max_z") > 1.0 for r in lr)} | {sum(f(r, "max_tilt") > 0.3 for r in lr)} | {sum(f(r, "end_head") > 0.5 for r in lr)} |')
+        hdr = ('| cell | scheme | lever-arm runs | tz | zero lever (unique runs): tz | excess | z>1 | tilt>0.3 | heading>0.5 at the end |\n'
+               '|---|---|---|---|---|---|---|---|---|')
+        print(hdr)
+        for sc in schemes:
+            row('all', sc, lambda r: True)
+        for k in keys:
+            for sc in schemes:
+                row(k, sc, lambda r, k=k: keyf(r) == k)
+        if su == 'hgap':
+            print('\n### By antenna, outage of 120 s\n')
+            print(hdr)
+            for ant in ('A', 'B', 'M'):
+                for sc in schemes:
+                    row('antenna ' + ant, sc, lambda r, ant=ant: r['antenna'] == ant and r['drop_s'] == '120')
+            print('\n### By standing time\n')
+            print(hdr)
+            for st in (300, 600):
+                for sc in schemes:
+                    row('stand %d s' % st, sc, lambda r, st=st: int(r['dur']) - 160 == st)
+        else:
+            print('\n### By start error\n')
+            print(hdr)
+            for y0 in ('0.5', '1', '2', '3'):
+                for sc in schemes:
+                    row('yaw ' + y0 + ' rad', sc, lambda r, y0=y0: r['yaw0'] == y0)
+            print('\n### By antenna\n')
+            print(hdr)
+            for ant in ('A', 'B', 'M'):
+                for sc in schemes:
+                    row('antenna ' + ant, sc, lambda r, ant=ant: r['antenna'] == ant)
+            print('\n### By motion\n')
+            print(hdr)
+            for m in ('sgstart', 'sgdrive'):
+                for sc in schemes:
+                    row(m, sc, lambda r, m=m: r['motion'] == m)
 
 
 def main():
@@ -743,15 +845,20 @@ def main():
         else:
             print('\n(The numbers quoted from the first pass need both g60 and g300; left out.)')
     best = second_pass(runs, agg)
-    second_r = [r for r in runs if r['suite'] not in FIRST_SUITES + SG_SUITES]
-    second_a = [a for a in agg if a['suite'] not in FIRST_SUITES + SG_SUITES]
+    second_r = [r for r in runs if r['suite'] not in APART]
+    second_a = [a for a in agg if a['suite'] not in APART]
     if best:
         quoted_second(second_r, second_a, best)
         if any(r['scheme'] == 'S8' for r in second_r):   # the shipped scheme of the fourth review round, on the same cells
             quoted_second(second_r, second_a, 'S8', prev='S7a35')
+        if any(r['scheme'] == 'S8u' for r in second_r):  # the shipped scheme of the fifth review round
+            quoted_second(second_r, second_a, 'S8u', prev='S8')
     sg_r = [r for r in runs if r['suite'] in SG_SUITES]
     if sg_r:
         third_pass(sg_r)
+    fifth_r = [r for r in runs if r['suite'] in FIFTH_SUITES]
+    if fifth_r:
+        fifth_pass(fifth_r)
 
 if __name__ == '__main__':
     main()

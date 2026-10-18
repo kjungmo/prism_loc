@@ -82,14 +82,14 @@ off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad,
 sensor noise, height, tilt and heading within 0.15 m, 0.03 rad and 0.05 rad and a
 horizontal error within twice the reported sigma; with a constant gyro bias (45 s), across a
 reseed (also with the body on a slope), from a start before the antenna mount is known, over a
-start and a stop and through a gap in the fixes, height and tilt within the same
+start and a stop, through a gap in the fixes, and from a boot with `initial_yaw` 2 rad off, height and tilt within the same
 bounds, heading within 0.05 rad plus the vertical bias times the time, and a horizontal error
 within 3 sigma, and the heading values and the WARN on `/diagnostics` (see
 [Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build
-of the two fusion packages; the whole script takes about 15 minutes. `--long` adds 600 s of
-standing (`gnss_stand_long`, 10 more minutes, not in CI).
-GoogleTest cases: 50 in `prism_loc_core`, 43 in `prism_loc_fusion`, 29 in
-`prism_loc`, 24 in `prism_loc_fusion_ros` (146 in total).
+of the two fusion packages; the whole script takes about 18 minutes. `--long` adds 600 s of
+standing (`gnss_stand_long`, 10 more minutes, not in CI), the same followed by a start and a stop (`gnss_stand_go`, `_b`) and the outage across a start (`gnss_gap_across_start`, `_b`, 8 minutes each).
+GoogleTest cases: 50 in `prism_loc_core`, 47 in `prism_loc_fusion`, 29 in
+`prism_loc`, 24 in `prism_loc_fusion_ros` (150 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -501,11 +501,15 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
      the IMU, resolved with the filter's heading, gives the same change rotated by the heading error. When both are over
      0.25 m/s, the filter rotates its heading by that angle (any error, up to ±π), about the antenna, sets the horizontal velocity to the antenna's,
      and gives the heading 0.35 rad of spread (`heading_source: motion`). A start or a stop does it; a constant speed, a creep and a turn on the spot do not.
-     A gap of more than 1 s in the fixes in the window, or a body rate over `0.125 m/s / |t_xy|` (a faster turn moves the antenna without the body), stops it.
+     A gap of more than 1 s in the fixes anywhere from the first fix of the older velocity to now, a window of more than 4 s between the two velocities, or a body rate over `0.125 m/s / |t_xy|` (a faster turn moves the antenna without the body), stops it.
+     (The round before looked for a gap only in the last 4 s. After an outage across a start it compared the IMU sum of the whole outage with the velocity from before the outage and set the heading from that.)
   7. **Blind.** While the heading is held back, over 1 rad of spread, and not alignable (standing, turning on the spot), the update
      leaves roll and pitch out of the lever term (a filter without a lever arm does the same) and counts the circle of the lever
      as noise on the two horizontal axes: `lever_blind: true`. The antenna then says where the circle is and tells roll and pitch nothing.
      The release stays closed.
+  8. **Start with a guessed heading.** With a lever arm and no heading source (no `/initialpose`, no lidar correction yet, `initial_yaw_known` false) the heading is the `initial_yaw` parameter, a guess. The filter then holds the spread of an unknown
+     heading, π/√3 = 1.81 rad (`EskfParams::lever_start_sigma`, `Eskf::markHeadingUnknown()`), in the shadow of point 5. That is over the 1 rad of point 6, so the first start or stop of 0.25 m/s or more finds the heading, and until then the update is blind (point 7).
+     The round before started with the 0.71 rad of the filter's own covariance: nothing aligned, and the first start ran a full update with a heading 1 to 3 rad off. `/initialpose`, the lidar and `initial_yaw_known: true` (a heading right to about 0.3 rad) start as the round before did.
 
   **What you see on `/diagnostics`** (new values; none changes an existing one):
 
@@ -513,7 +517,8 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   |---|---|---|---|---|---|
   | filter not initialized | `none` | `n/a` | `false` | `n/a` | as before |
   | antenna at `base_frame` (no lever arm) | the last source | the filter's | `false` | `n/a` | as before, never the heading WARN |
-  | lever arm, less than 30 s since the start or the last `/initialpose`, GNSS and IMU only | `none` or `initialpose` | 0.35 | `true` | `closed` | OK |
+  | lever arm, less than 30 s since the start, no `/initialpose`, `initial_yaw_known` false | `none` | 1.8 and growing; `heading_sigma_used_rad` 0.35 | `true` | `closed` | OK; `lever_blind` `true` |
+  | lever arm, less than 30 s since the last `/initialpose`, or `initial_yaw_known` true, GNSS and IMU only | `initialpose` or `none` | 0.71 and growing; `heading_sigma_used_rad` 0.35 | `true` | `closed` | OK |
   | lever arm, 30 s or more with the bound active and no heading source | `none`, `initialpose` or `lidar` (the last one) | grows (the spread held, 6 rad after 600 s); `heading_sigma_used_rad` 0.35 | `true` | `closed` | **WARN** `heading not observed: GNSS and IMU only for N s, heading spread X rad, ...` |
   | start or stop of 0.25 m/s or more (the alignment) | `motion` | falls to 0.35 and below | `false` | `closed` or `open` | no heading WARN |
   | turn at speed (release open) | unchanged | falls below 0.35 | `false` | `open` | no heading WARN |
@@ -535,9 +540,9 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   back from the lidar, from `/initialpose`, or from driving with a start or a stop that changes the speed by 0.25 m/s or more
   (point 6; a turn at speed also opens the release). **A constant speed does not do it, and neither does a turn on the spot.** After minutes of standing the heading
   may be off by 1 rad and more under a small reported sigma of the update; read `heading_sigma_rad`, not `heading_sigma_used_rad`.
-  Spinning for minutes on the spot with 0.5 deg/s and no heading source, a start heading off by
-  1 rad or more followed by a short stand and a start (the alignment begins at 1 rad of spread, the filter starts at 0.71 rad; see the third pass below), and 120 s without fixes on a biased IMU are outside what
-  was measured to work (see the counts below).
+  Spinning for minutes on the spot with 0.5 deg/s and no heading source, a start with `initial_yaw_known: true` (or from `/initialpose`) whose heading is 1 rad or more off, and 120 s without fixes on a biased IMU are outside what
+  was measured to work (see the counts below). With `initial_yaw_known: false`, the default, the first start finds a heading that is off by any angle (fifth pass below). That costs something when `initial_yaw` was right:
+  a start within seconds of boot is aligned from its first 0.25 m/s of velocity change instead of trusting the heading, and the alignment adds its own error (second and third pass, `S8u` against `S8`). A 1.5 m mast with no horizontal arm gains little: it fails like the zero-lever filter.
 
   Measured on the real filter core in a synthetic experiment (study 6 of
   [`experiments/README.md`](experiments/README.md), `experiments/eskf_lever.cpp`; two passes, every
@@ -609,25 +614,60 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   - No bound, no release (`S1s`, consider states only): tz in 2,767 of 4,200 runs; the previous version in 1,882.
 
   **Third pass: standing for minutes, then moving** (`experiments/README.md`, "Third pass"; suites `hsg`, and `hsgv`
-  on other data). 1,152 lever-arm runs and 384 zero-lever runs per scheme and suite: stand 300 to 1,800 s at a gyro bias of 0 to 0.2 deg/s, then a start and a
-  stop, a start and a circle, or a turn on the spot, for 160 s:
+  on other data). Per suite: 1,152 runs with a lever arm per scheme (antennas A, B, M; 384 per motion) and 384 zero-lever runs on the same data (128 per motion).
+  Each run stands 300 to 1,800 s at a gyro bias of 0 to 0.2 deg/s, then makes a start and a stop, a start and a circle, or a turn on the spot, for 160 s.
+  The last column counts each zero-lever run once. (An earlier version of this table counted it once per lever-arm antenna, three times, under the heading "zero lever": 324, 366, 171 / 195 / 0.
+  Paired with the lever-arm runs, as the bar compares them, the same runs are 324 and 366 of 1,152.)
 
-  | | the version before (`S7a35`) | this version (`S8`) | zero lever, same data |
+  | | the version before the fifth round (`S8`) | this version (`S8u`) | zero lever, same data, each run once |
   |---|---|---|---|
-  | hsg: runs with `tz` (tilt over 0.05 rad or height over 0.5 m) | 375 | **26** | 324 |
-  | hsg: height over 1 m / tilt over 0.3 rad | 271 / 161 | **1 / 0** | |
-  | hsgv (other data): runs with `tz` | 381 | **21** | 366 |
-  | hsgv: height over 1 m / tilt over 0.3 rad | 279 / 157 | **0 / 0** | |
-  | hsgv: start and stop, heading error over 0.5 rad at the end | 138 of 384 | **0 of 384** | |
-  | hsgv: `tz` in start-stop / circle / turn on the spot | 184 / 172 / 25 | **14 / 7 / 0** | 171 / 195 / 0 |
+  | hsg: runs with `tz` (tilt over 0.05 rad or height over 0.5 m) | 26 | **49** | 108 of 384 |
+  | hsg: height over 1 m / tilt over 0.3 rad | 1 / 0 | **3 / 0** | 35 / 1 |
+  | hsg: `tz` where the zero-lever run has none (of 1,152) | 12 | 24 | |
+  | hsgv (other data): runs with `tz` | 21 | **52** | 122 of 384 |
+  | hsgv: height over 1 m / tilt over 0.3 rad | 0 / 0 | **4 / 0** | 47 / 5 |
+  | hsgv: `tz` where the zero-lever run has none | 8 | 22 | |
+  | hsgv: start and stop, heading error over 0.5 rad at the end | 0 of 384 | **0 of 384** | 5 of 128 |
+  | hsgv: `tz` in start-stop / circle / turn on the spot | 14 / 7 / 0 | **27 / 25 / 0** | 57 / 65 / 0 |
 
-  What is left: runs with `tz` where the zero-lever run has none, 12 of 1,152 in hsg (11 with the 1.5 m mast, whose vertical arm amplifies a tilt of 0.05 rad), 8 in hsgv;
-  after a turn on the spot nothing tells the heading (the heading is over 0.5 rad off at the end in 267 of 384 runs, the zero-lever filter has the same); a start heading 1 or 2 rad off followed by a start
-  recovers in 14 and 8 of 24 runs (21 and 3 before). The second pass with `S8` added: the clean envelope has 0 runs with `tz` as before, 213 runs of 4,200 are over 1 m from the truth (156 before; 59 of the new ones are antenna A at 0.5 deg/s, where
-  the circle of the lever is 1.0 m). All counts: [`report.md`](experiments/results/eskf_lever/report.md).
-  On the real node (`scripts/fusion_extrinsic_check.py --scenario gnss_stand_go` and `gnss_stand_go_b`; 600 s of standing with the review's gyro bias, then a start and a stop):
-  largest height error 0.062 m and 0.091 m, tilt 0.004 and 0.007 rad, heading error after the stop +0.03 and −0.04 rad, `heading_source: motion` 2.0 s after the start; the version before had +1.32 m and 0.15 rad
-  (antenna A) and ±2.5 m and 0.2 rad (antenna B). The default run of the script (216 checks) and `gnss_stand_long` pass; the zero-lever poses are bit for bit those of `main`.
+  The two versions before (`S7a35`: 375 `tz` in hsg, 381 in hsgv, 271 and 279 runs with the height over 1 m) are in [`report.md`](experiments/results/eskf_lever/report.md) and `experiments/README.md`.
+  What `S8u` costs here: `tz` doubles (26 to 49, 21 to 52), and of the 24 runs with `tz` where the zero-lever run has none, 23 in hsg (22 of 22 in hsgv) are the 1.5 m mast M, whose vertical arm amplifies a tilt error of 0.05 rad.
+  The bar (no more `tz` than the zero-lever runs of the same data in each motion; no run with the height over 1 m or the tilt over 0.3 rad in the start and the circle with antennas A and B) still holds.
+  What is left: after a turn on the spot nothing tells the heading (it is over 0.5 rad off at the end in 266 of 384 runs of hsg, 258 of hsgv for `S8`, 269 and 268 for `S8u`; the zero-lever filter has 106 of 128 in hsg and 97 of 128 in hsgv)
+  and the position of `base_link` is over 1 m from the truth in 33 (hsg) and 35 (hsgv) of the 384 turn runs for `S8` (the circle of the lever).
+  All counts, per motion, stand and antenna: [`report.md`](experiments/results/eskf_lever/report.md), "Numbers quoted in README.md and experiments/README.md" under each suite.
+  The second pass with `S8` and `S8u` added (`LEVER_ONLY=S8,S8u`, `merge_rows.py`; the rows of `S8` are bit for bit the ones of the round before wherever the data has no gap in the fixes: 21 of 4,320 rows of h300 changed, all in dropout cells):
+  `S8` has 880 `tz` in 4,200 runs (`S7a35`: 880), 213 runs over 1 m (156); `S8u` has 962 `tz` and 249 runs over 1 m. The clean envelope has 0 `tz` for all three.
+  Of the 65 runs over 1 m that `S8` has and `S7a35` has not, 59 are antenna A at 0.5 deg/s (1.00 to 1.29 m against 0.65 to 1.00 m: the circle of the lever, 1.0 m, with the heading 2.7 rad off).
+  `S8u` has 37 runs over 1 m that `S8` has not (and 1 that only `S8` has; 10 of the 37 are antenna A at 0.5 deg/s, 1.00 to 1.90 m against 0.08 to 1.00 m under `S8`) and 82 more `tz`: 117 runs gain `tz` and 35 lose it. 104 of the 117 are drive and start-stop
+  runs that begin moving within 6 s of the start (a start whose `initial_yaw` was right, 0.1 rad off, is aligned from a change of velocity, and the alignment adds its own error); 83 of the 117 have an accelerometer bias of 0.3 m/s²
+  (the zero-lever run has `tz` in 24 of the 117).
+  A reseed on a slope: 7 and 4 runs with `tz` of 144 at 0.05 and 0.1 rad for `S8u` (2 and 1 for `S8`). With the lidar: 0 `tz` for both.
+  **`initial_yaw_known: true`, or a start from `/initialpose`, gives the `S8` numbers** for a robot whose heading at the start is right to about 0.3 rad.
+
+  **Fifth pass: an outage across the start, and a boot with a guessed heading** (`experiments/README.md`, "Fifth pass"; suites `hgap` and `hboot`, written after the fifth review's probes and run once as committed;
+  576 lever-arm runs and 192 zero-lever runs per scheme and suite; `S8o` is `S8` without the new check of the alignment, `S8` is the round before with it, `S8u` is this version):
+
+  | | `S8o` | `S8` | `S8u` | zero lever, same data |
+  |---|---|---|---|---|
+  | hgap, fixes out for 120 s from 10 s before the start: runs with `tz` (of 288) | 68 | **11** | 12 | 11 of 96 |
+  | hgap, 120 s: height over 1 m / tilt over 0.3 rad | 36 / 7 | **2 / 0** | 4 / 1 | |
+  | hgap, 120 s: antenna A / B / M with `tz` (of 96 each) | 26 / 24 / 18 | **3 / 0 / 8** | 4 / 0 / 8 | |
+  | hgap, 30 s: runs with `tz` (of 288) | 19 | **12** | 13 | 18 of 96 |
+  | hboot, `initial_yaw` 0.5 to 3 rad off, no `/initialpose`, stand 6 to 300 s: runs with `tz` (of 576) | 219 | 219 | **77** | 112 of 192 |
+  | hboot: height over 1 m / tilt over 0.3 rad | 160 / 104 | 160 / 104 | **3 / 0** | |
+  | hboot: heading error over 0.5 rad at the end | 162 | 162 | **11** | |
+  | hboot: antenna A / B / M with `tz` (of 192 each) | 58 / 72 / 89 | 58 / 72 / 89 | **1 / 0 / 76** | |
+  | hboot, `initial_yaw` 2 and 3 rad off, stand 6 to 60 s: runs with `tz` (of 144 lever-arm runs) | 144 | 144 | **34** | 45 of 48 |
+
+  The first failure: after an outage across a start the alignment compared the IMU sum of the whole outage with the velocity from before it; the new check refuses a gap between the two spans. The second: a robot on GNSS and IMU with a lever arm, no `/initialpose`
+  and an `initial_yaw` that is off by 1 rad or more, which starts within about 60 s, ran its first update with the heading it did not know; now the heading starts as unknown (point 8). What is left in hboot: the mast M (the lever has no horizontal part, so a wrong heading does not enter the lever term, and the mast
+  fails like the zero-lever filter: 76 of 192 against 112 of 192; the largest height error is 1.34 m, the largest tilt 0.13 rad), and 1 run of antenna A (tilt 0.051 rad). With `initial_yaw_known: true` and a wrong `initial_yaw`, the old failure is back (the `S8` column).
+  On the real node (`scripts/fusion_extrinsic_check.py --scenario gnss_gap_across_start` and `gnss_boot_wrong_yaw`, each for antenna A and B): the outage across a start ends with a height error of 0.024 m and 0.065 m (the reviewer's run before the fix: +6.0 m, tilt 0.20 rad, heading 1.72 rad off 2 s after the fixes returned); the boot with `initial_yaw` 2 rad off ends the 80 s cycle with a height error of 0.139 m and 0.163 m and a tilt of 0.010 and 0.012 rad
+  (before: +8.6 m and 0.49 rad, +25.9 m and 0.87 rad), `heading_source` `motion` 8.0 s after the start of the path (2 s after the first acceleration), heading error after the cycle −0.050 and −0.153 rad (one run each; the check allows 0.5 rad).
+
+  On the real node (`gnss_stand_go` and `gnss_stand_go_b`; 600 s of standing with the review's gyro bias, then a start and a stop; antenna A and B in two runs: largest height error 0.062 and 0.091 m, then 0.099 and 0.038 m; tilt 0.004 and 0.007 rad, then 0.004 and 0.008 rad; heading error after the stop +0.03 and −0.04 rad, then 0.000 and −0.067 rad; the reviewer's run gave +0.141 and +0.199 rad, so the heading after the stop varies by a few tenths of a radian from run to run and the check allows 0.25 rad; `heading_source: motion` 2.0 and 1.0 s after the start; the round before had +1.32 m and 0.15 rad (antenna A) and ±2.5 m and 0.2 rad (antenna B)).
+  The default run of the script (31 scenarios, 225 checks, 18 minutes) and `gnss_stand_long` pass; the zero-lever poses are bit for bit those of `main`. The raw output of the node runs is in [`experiments/results/eskf_lever/node_checks.txt`](experiments/results/eskf_lever/node_checks.txt).
 
   **First pass** (15,104 runs with a lever arm, 60 s and 300 s; unchanged from the previous
   round, rerun with the second pass):

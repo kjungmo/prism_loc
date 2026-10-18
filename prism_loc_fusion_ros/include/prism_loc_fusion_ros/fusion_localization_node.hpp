@@ -64,6 +64,7 @@ class FusionLocalizationNode : public rclcpp::Node {
   // since capped_since_wall_ was bounded.
   enum class HeadingSource { kNone, kInitialPose, kLidar, kMotion };
   HeadingSource heading_source_{HeadingSource::kNone};
+  bool initial_yaw_known_{false};
   bool capped_active_{false};
   long ndt_since_init_{0};           // NDT corrections since the filter started
   prism_loc_fusion::GeodeticConverter geo_;

@@ -7,7 +7,7 @@
 # Any subset of the suites works: the suite CSVs are written first, and eskf_lever_report.py leaves out the tables and the quoted numbers
 # of the suites that are not there. The report of a subset is not the committed report.
 #
-# SUITES default: g60 g300 h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv. Writes OUT_DIR/<suite>_{runs,agg}.csv
+# SUITES default: g60 g300 h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv hgap hboot. Writes OUT_DIR/<suite>_{runs,agg}.csv
 # and OUT_DIR/report.md. The committed copy is experiments/results/eskf_lever/ (the same files,
 # gzipped). Size of the suites (configurations x seeds x schemes):
 #   g60    1,920 configurations of 60 s, 10 seeds, 15 schemes   (first pass)
@@ -22,10 +22,13 @@
 #   hvib      40 configurations of 300 s, 4 seeds, 13 schemes
 #   hsg      384 configurations of 460 to 1,960 s (standing, then moving), 4 seeds, 6 schemes   (third pass)
 #   hsgv     the same on other data (the check of the schemes developed on hsg)
-# The second-pass suites run the 13 schemes of the second pass. The rows of S8 for them (the scheme of the third pass, which the code ships)
+#   hgap     192 configurations of 460 to 760 s (standing, then moving, the fixes out across the start), 4 seeds, 3 schemes   (fifth pass: S8o, S8, S8u)
+#   hboot    192 configurations of 166 to 460 s (a wrong initial_yaw, standing, then moving), 4 seeds, 3 schemes
+# The second-pass suites run the 13 schemes of the second pass. The rows of S8 and S8u for them (the schemes of the third and the fifth pass; S8u is what the code ships)
 # are not part of a default run; they are made with
-#   LEVER_ONLY=S8 "$OUT/eskf_lever" SUITE SHARD NSHARDS PREFIX    for each second-pass suite, then
-#   python3 experiments/merge_rows.py MAIN_DIR SUP_DIR OUT_DIR     (appends the rows to those of their configuration)
+#   LEVER_ONLY=S8,S8u "$OUT/eskf_lever" SUITE SHARD NSHARDS PREFIX    for each second-pass suite, then
+#   python3 experiments/merge_rows.py --replace S8,S8u MAIN_DIR SUP_DIR OUT_DIR     (appends the rows to those of their configuration; a scheme named in --replace
+#   takes the place of its old rows, and the script prints how many of the new rows equal the old ones)
 # About 2 CPU hours for the first pass and 2.5 CPU hours for the second (13 schemes); with 4 jobs the
 # committed results took 57 minutes for the 11 schemes of the first run and 13 more for the two added. Needs g++, Eigen 3 headers
 # and python3. The committed results are from the system g++ 9.4 (std::normal_distribution is
@@ -35,7 +38,7 @@ OUT=${1:?usage: run_eskf_lever.sh OUT_DIR [JOBS] [SUITES...]}
 JOBS=${2:-4}
 shift $(( $# < 2 ? $# : 2 ))
 SUITES=("$@")
-[ ${#SUITES[@]} -gt 0 ] || SUITES=(g60 g300 h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv)
+[ ${#SUITES[@]} -gt 0 ] || SUITES=(g60 g300 h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv hgap hboot)
 EIGEN=${EIGEN_INCLUDE:-/usr/include/eigen3}
 mkdir -p "$OUT"
 g++ -O2 -std=c++17 -I prism_loc_fusion/include -I "$EIGEN" \

@@ -45,6 +45,7 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   gnss_min_status_ = declare_parameter<int>("gnss_min_status", 0);
   gnss_max_pos_cov_ = declare_parameter<double>("gnss_max_pos_cov", 25.0);
   initial_yaw_ = declare_parameter<double>("initial_yaw", 0.0);
+  initial_yaw_known_ = declare_parameter<bool>("initial_yaw_known", false);
   // Sensor frames. Empty (default): use each message's header.frame_id. A frame other
   // than base_frame needs the transform base_frame -> frame on TF; set a parameter to
   // base_frame's value to declare that sensor's data as already expressed in base_frame.
@@ -410,6 +411,12 @@ bool FusionLocalizationNode::tryInitialize() {
     tilt_seed_pending_ = true;
   }
   eskf_->initialize(x0, P0);
+  // A lever arm and no heading source (no /initialpose: the heading is the initial_yaw parameter, a guess): the filter's start spread
+  // of 0.71 rad is far too narrow for it, and the first start would run a full update with a heading 1 to 3 rad off. Hold the
+  // spread of a heading that is not known; the first start or stop then finds it (Eskf::markHeadingUnknown). initial_yaw_known: the
+  // deployer says initial_yaw is the true heading to about 0.3 rad (a dock): the filter then starts as it did before.
+  if (heading_source_ == HeadingSource::kNone && !initial_yaw_known_ && gnss_mount_.resolved() && !gnss_mount_.ext().T.translation().isZero(0.0))
+    eskf_->markHeadingUnknown();
   ndt_since_init_ = 0;
   filter_init_ = true;
   attitude_from_pose_ = false;

@@ -113,14 +113,18 @@ release that trusts the bounded 0.35 rad turned the heading the wrong way and ti
    is rotated by the angle between them (`atan2`, any error up to ±π), about the antenna so that the antenna does not move; the
    horizontal velocity is set to the antenna's, carried to now by the IMU sum (`lever_align_vel_std` 0.15 m/s); the heading
    variance is `lever_heading_sigma_max²`, independent of every other state (`P ← D P Dᵀ`, `D = I − uuᵀ` on the attitude block, so `P`
-   stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`. It does nothing with a gap of more than `lever_align_gap` (1 s) between two fixes
-   or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
+   stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`. It does nothing with a gap of more than `lever_align_gap` (1 s) between two fixes anywhere from the first fix of the older velocity to now,
+   a window of more than `lever_align_window` + 1 s between the two velocities (`lever_align_span_guard`, default on; the round before checked the gap only in the last 4 s, and after an outage across a start
+   compared the IMU sum of the whole outage with the velocity from before it), or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
 3. *Release.* If the release is open and the variance was held back but the shadow is under `lever_align_sigma`, the shadow is put
    back (`P ← D P Dᵀ` as above, then the shadow variance) and the bound is not applied while the release is open.
 4. *Blind* (`lever_blind`, default on). If the variance was held back, the shadow is over `lever_align_sigma` and the alignment finds nothing, the
    update leaves the attitude columns of `H` out (`H_θ = 0`, a filter without a lever arm) and adds `|t_xy|²` to `R_xx`, `R_yy`: the
    antenna says where the circle of the lever is and tells roll and pitch nothing. The release stays closed. Without it a turn on
    the spot after a long stand tilted the filter (`S8a`: 22 of 384 runs; with it 0).
+5. *Unknown start* (`lever_start_sigma` 1.81 rad = π/√3, 0 = off). With a lever arm and no heading source (no `/initialpose`, no lidar,
+   `initial_yaw_known` false) the node calls `Eskf::markHeadingUnknown()` after `initialize()`: the shadow variance is set to `lever_start_sigma²`, held back, valid. `x` and `P` are not touched.
+   The shadow is over `lever_align_sigma`, so the first start or stop aligns the heading (item 2) and an unalignable robot runs the blind update (item 4). A pose fix from the lidar invalidates the shadow as before.
 
 *Why the release.* A horizontal specific force resolved with a wrong heading mispredicts the
 velocity (`F(δv, δθ) = −R[a]×`), so a start, a stop or a turn at speed shows the heading to one

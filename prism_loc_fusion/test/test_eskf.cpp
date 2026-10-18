@@ -940,6 +940,8 @@ TEST(EskfLever, DefaultsAreTheChosenScheme) {
   EXPECT_EQ(d.lever_consider, kConsiderHeading | kConsiderGyroBiasVertical);
   EXPECT_EQ(d.lever_consider_moving, 0u);
   EXPECT_EQ(d.lever_iterations, 1);
+  EXPECT_TRUE(d.lever_align_span_guard);                                  // fifth review: the alignment refuses a window with a gap
+  EXPECT_NEAR(d.lever_start_sigma, M_PI / std::sqrt(3.0), 1e-12);                 // a start with no heading source: the spread of an unknown heading
   Eskf f(d);
   f.initialize(NominalState(), initCov(0.01));
   int steps = 0;
@@ -1005,7 +1007,8 @@ struct GoRun {
 };
 // A robot that stands for `stand_s` on GNSS and IMU alone, its heading `yaw0` off from the start (the filter keeps 0.5 rad^2),
 // with a vertical gyro bias, then accelerates at 0.5 m/s^2 along x for 3 s and cruises for `cruise_s`. Antenna at `lever`.
-GoRun runStandGo(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, double cruise_s, double yaw0, double bias_dps, unsigned seed) {
+GoRun runStandGo(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, double cruise_s, double yaw0, double bias_dps, unsigned seed,
+                 bool unknown_start = false) {
   Rng rng(seed);
   ep.sigma_acc = 0.02;
   ep.sigma_gyro = 0.002;
@@ -1019,6 +1022,7 @@ GoRun runStandGo(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, do
   x0.q = so3Exp(Eigen::Vector3d(0, 0, yaw0));
   x0.p = lever + noise3(0.02) - x0.q * lever;
   f.initialize(x0, P0);
+  if (unknown_start) f.markHeadingUnknown();
   const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
   const Eigen::Vector3d bias(0.0, 0.0, bias_dps * M_PI / 180.0);
   const double dt = 0.01;
@@ -1129,4 +1133,127 @@ TEST(EskfLever, RestoreOffNeverAlignsOrGoesBlind) {
   EXPECT_EQ(r.aligned, 0);
   EXPECT_EQ(r.blind_updates, 0);
   EXPECT_DOUBLE_EQ(r.sigma_honest, r.sigma_capped);
+}
+
+// --- the fifth review: an outage across the start, and the default boot with a heading that is only a guess ---
+
+namespace {
+struct GapRun { int aligned_after{0}, aligned_total{0}; double heading_err_end{0.0}, tilt_max{0.0}, z_max{0.0}, sigma_end{0.0}; };
+// Stands `stand_s` on GNSS and IMU alone with a vertical gyro bias, the filter 0.1 rad off in heading; the fixes stop `gap_before` s
+// before the robot starts and come back `gap_s` s after they stopped. The robot runs the start-stop cycle (0.5 m/s^2 for 3 s, 20 s at
+// 1.5 m/s, 0.5 m/s^2 of braking for 3 s, still) all through the outage and for 60 s after the fixes return.
+GapRun runGap(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, double gap_before, double gap_s, double bias_dps, unsigned seed) {
+  Rng rng(seed);
+  ep.sigma_acc = 0.02;
+  ep.sigma_gyro = 0.002;
+  Eskf f(ep);
+  Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+  P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+  P0.block<3, 3>(9, 9) *= 1e-2;
+  P0.block<3, 3>(12, 12) *= 1e-4;
+  auto noise3 = [&rng](double s) { return Eigen::Vector3d(rng.gaussian(0, s), rng.gaussian(0, s), rng.gaussian(0, s)); };
+  NominalState x0;
+  x0.q = so3Exp(Eigen::Vector3d(0, 0, 0.1));
+  x0.p = lever + noise3(0.02) - x0.q * lever;
+  f.initialize(x0, P0);
+  const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
+  const Eigen::Vector3d bias(0.0, 0.0, bias_dps * M_PI / 180.0);
+  const double dt = 0.01;
+  GapRun out;
+  const double t_back = gap_s - gap_before;   // time since the start at which the fixes return
+  const int n_stand = static_cast<int>(stand_s / dt), n = n_stand + static_cast<int>((t_back + 60.0) / dt);
+  for (int k = 1; k <= n; ++k) {
+    const double t = k * dt - stand_s;
+    double a = 0.0, x = 0.0;
+    if (t > 0.0) {
+      const double cyc = std::floor(t / 40.0), r = t - 40.0 * cyc;
+      if (r < 6.0) { x = 0.0; }
+      else if (r < 9.0) { const double u = r - 6.0; x = 0.25 * u * u; a = 0.5; }
+      else if (r < 29.0) { x = 2.25 + 1.5 * (r - 9.0); }
+      else if (r < 32.0) { const double u = r - 29.0; x = 32.25 + 1.5 * u - 0.25 * u * u; a = -0.5; }
+      else { x = 34.5; }
+      x += 34.5 * cyc;
+    }
+    f.predict(Eigen::Vector3d(a, 0, 9.81) + noise3(0.02), bias + noise3(0.002), dt);
+    const bool in_gap = t >= -gap_before && t < t_back;
+    if (k % 20 == 0 && !in_gap) {
+      f.updatePositionLever(Eigen::Vector3d(x, 0, 0) + lever + noise3(0.02), lever, R);
+      if (f.leverAligned()) { ++out.aligned_total; if (t >= t_back) ++out.aligned_after; }
+    }
+    if (t >= t_back + 2.0) {   // after the first fixes
+      const Eigen::Vector3d att = so3Log(f.state().q);
+      out.tilt_max = std::max(out.tilt_max, att.head<2>().norm());
+      out.z_max = std::max(out.z_max, std::fabs(f.state().p.z()));
+    }
+  }
+  out.heading_err_end = std::fabs(so3Log(f.state().q).z());
+  out.sigma_end = f.headingSigmaHonest();
+  return out;
+}
+}  // namespace
+
+// The fifth review: the fixes stop 10 s before the start and come back 120 s later, while the robot runs the start-stop cycle (the
+// fixes return during a braking). The alignment used the last fix before the outage and the IMU sum over the whole outage, and set the
+// heading from them 0.8 s after the fixes returned (heading 0.3 rad off, locked at 0.35 rad of spread, tilt 0.7 rad, height -43 m in the
+// reviewer's simulation). Now a gap anywhere between the two spans refuses the alignment.
+TEST(EskfLever, OutageAcrossTheStartDoesNotAlignOnTheWholeOutage) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  for (unsigned seed : {3u, 4u, 5u}) {
+    const GapRun r = runGap(EskfParams(), lever, 300.0, 10.0, 120.0, 0.2, seed);
+    EXPECT_LT(r.tilt_max, 0.1) << "seed " << seed;
+    EXPECT_LT(r.z_max, 0.5) << "seed " << seed;
+  }
+}
+
+// A real alignment still works when the outage is short: the window and both spans are free of gaps once the fixes have been back
+// for the window and a span.
+TEST(EskfLever, AlignmentWorksAgainAfterAnOutage) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  const GapRun r = runGap(EskfParams(), lever, 300.0, 10.0, 12.0, 0.2, 3);   // the fixes return 2 s after the start
+  EXPECT_GE(r.aligned_total, 1);
+  EXPECT_LT(r.heading_err_end, 0.35);
+}
+
+// The default boot: GNSS and IMU, no /initialpose, initial_yaw 2 rad off, a stand of 20 s, then the start. The filter's own start
+// spread is 0.71 rad, so the first start used to run a full update with a heading 2 rad off. With markHeadingUnknown() (the node
+// calls it when there is no heading source) the first start finds the heading.
+TEST(EskfLever, StartWithAGuessedHeadingFindsItAtTheFirstStart) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  EskfParams ep;
+  const GoRun marked = runStandGo(ep, lever, 20.0, 10.0, 2.0, 0.1, 3, true);
+  EXPECT_GE(marked.aligned, 1);
+  EXPECT_LT(marked.heading_err_end, 0.35);
+  EXPECT_LT(marked.tilt_end, 0.03);
+  EXPECT_LT(marked.z_max, 0.3);
+  const GoRun plain = runStandGo(ep, lever, 20.0, 10.0, 2.0, 0.1, 3, false);
+  EXPECT_GT(plain.z_max + plain.tilt_end * 10.0 + plain.heading_err_end, marked.z_max + marked.tilt_end * 10.0 + marked.heading_err_end);
+}
+
+// markHeadingUnknown() touches neither x nor P; it holds the honest spread at lever_start_sigma, and does nothing when that is 0
+// or under lever_align_sigma, or when lever_restore is off.
+TEST(EskfLever, MarkHeadingUnknownOnlySetsTheShadow) {
+  EskfParams ep;
+  Eskf f(ep);
+  Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+  P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+  NominalState x0;
+  f.initialize(x0, P0);
+  const Eskf::Mat15 P_before = f.covariance();
+  const Eigen::Quaterniond q_before = f.state().q;
+  EXPECT_NEAR(f.headingSigmaHonest(), std::sqrt(0.5), 1e-9);
+  ASSERT_TRUE(f.markHeadingUnknown());
+  EXPECT_EQ((f.covariance() - P_before).norm(), 0.0);
+  EXPECT_EQ(f.state().q.coeffs(), q_before.coeffs());
+  EXPECT_NEAR(f.headingSigmaHonest(), ep.lever_start_sigma, 1e-9);
+  EXPECT_GT(f.headingSigmaHonest(), ep.lever_align_sigma);
+  for (int variant = 0; variant < 3; ++variant) {
+    EskfParams q;
+    if (variant == 0) q.lever_start_sigma = 0.0;
+    if (variant == 1) q.lever_start_sigma = 0.9 * q.lever_align_sigma;
+    if (variant == 2) q.lever_restore = false;
+    Eskf g(q);
+    g.initialize(x0, P0);
+    EXPECT_FALSE(g.markHeadingUnknown()) << variant;
+    EXPECT_NEAR(g.headingSigmaHonest(), std::sqrt(0.5), 1e-9) << variant;
+  }
 }

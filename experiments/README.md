@@ -303,28 +303,74 @@ What was found, in the order it was found (every step is a scheme in `eskf_lever
 
 Results (`report.md`, third pass; lever-arm runs, 1,152 per scheme and suite):
 
-| | `S7a35` (the version before) | `S8r` | `S8a` | `S8` (shipped) | zero lever, same data |
-|---|---|---|---|---|---|
-| hsg: `tz` | 375 | 428 | 78 | **26** | 324 |
-| hsg: |z| over 1 m / tilt over 0.3 rad | 271 / 161 | 292 / 182 | 15 / 5 | **1 / 0** | |
-| hsg: `tz` where the zero-lever run has none | 215 | 249 | 49 | 12 | |
-| hsgv (other data): `tz` | 381 | 431 | 83 | **21** | 366 |
-| hsgv: |z| over 1 m / tilt over 0.3 rad | 279 / 157 | 290 / 189 | 21 / 6 | **0 / 0** | |
-| hsgv: the bar (`sgstart`, `sgdrive`, `sgturn`) | no, no, no | no, no, no | yes, yes, no | **yes, yes, yes** | |
-| hsgv: heading error over 0.5 rad at the end, `sgstart` | 138 of 384 | 138 | 0 | **0** | |
+| | `S7a35` (the version before) | `S8r` | `S8a` | `S8` (shipped in round 5; the fifth round replaced it with `S8u`) | `S8u` (fifth round) | zero lever, same data (each run once) |
+|---|---|---|---|---|---|---|
+| hsg: `tz` | 375 | 428 | 81 | **26** | 49 | 108 of 384 |
+| hsg: |z| over 1 m / tilt over 0.3 rad | 271 / 161 | 292 / 182 | 18 / 6 | **1 / 0** | 3 / 0 | 35 / 1 |
+| hsg: `tz` where the zero-lever run has none | 215 | 249 | 52 | 12 | 24 | |
+| hsgv (other data): `tz` | 381 | 431 | 83 | **21** | 52 | 122 of 384 |
+| hsgv: |z| over 1 m / tilt over 0.3 rad | 279 / 157 | 290 / 189 | 21 / 6 | **0 / 0** | 4 / 0 | 47 / 5 |
+| hsgv: the bar (`sgstart`, `sgdrive`, `sgturn`) | no, no, no | no, no, no | yes, yes, no | **yes, yes, yes** | yes, yes, yes | |
+| hsgv: heading error over 0.5 rad at the end, `sgstart` | 138 of 384 | 138 | 0 | **0** | 0 | 5 of 128 |
 
 What is left, in hsg: 12 runs with `tz` where the zero-lever run has none (11 with the 1.5 m mast M, whose vertical arm amplifies a tilt error of 0.05 rad), one run with |z| over 1 m
-(mast, 0.2 deg/s, stand 900 s); `sgturn` ends with the heading over 0.5 rad in 267 of 384 runs (nothing in a turn on the spot tells the heading; the zero-lever filter has the same: 106 of 128 runs) and the position of `base_link` over 1 m from the truth in 35 (`xy`, the circle of the lever).
+(mast, 0.2 deg/s, stand 900 s); `sgturn` ends with the heading over 0.5 rad in 266 of 384 runs of hsg and 258 of hsgv for `S8` (nothing in a turn on the spot tells the heading; the zero-lever filter has the same: 106 of 128 runs in hsg, 97 of 128 in hsgv) and the position of `base_link` over 1 m from the truth in 33 (hsg) and 35 (hsgv) of the 384 (`xy`, the circle of the lever).
+The report prints these counts (section "Numbers quoted in README.md and experiments/README.md" under each suite). The zero-lever column counts each run once: 108 of 384 runs in hsg, 122 in hsgv. An earlier version of this table counted each zero-lever run once for every lever-arm antenna that shares its data, three times (324 and 366), and called it 'zero lever, same data'.
 
-The second pass, with the rows of `S8` added (`LEVER_ONLY=S8`, `merge_rows.py`): the clean envelope has 0 `tz` for both schemes; all cells 883 `tz` for `S8` against 880; 213 runs over 1 m against 156 (of the 78 runs that
-are over 1 m for `S8` and not for `S7a35`, 59 are antenna A at 0.5 deg/s, where the heading is 2.7 rad off and the circle of the lever is 1.0 m: 1.00 to 1.05 m against 0.96 to 0.99 m); spinning 300 s at 0.5 deg/s: `tz` 0 of 24 (2 for `S7a35`), `circ` 2 (0); with the lidar `tz` 0 for both;
+The second pass, with the rows of `S8` added (`LEVER_ONLY=S8`, `merge_rows.py`): the clean envelope has 0 `tz` for both schemes; all cells 880 `tz` for `S8` against 880 (the round before printed 883 for `S8`: the rows of h300 were rerun with the fifth round's alignment check, which changed 21 of 4,320 rows, all in dropout cells); 213 runs over 1 m against 156 (of the 65 runs that
+are over 1 m for `S8` and not for `S7a35`, 59 are antenna A at 0.5 deg/s, where the heading is 2.7 rad off and the circle of the lever is 1.0 m: 1.00 to 1.29 m against 0.65 to 1.00 m; 8 runs are over 1 m for `S7a35` only; the round before said 78 and 1.00 to 1.05 m, which no script printed); spinning 300 s at 0.5 deg/s: `tz` 0 of 24 (2 for `S7a35`), `circ` 2 (0); with the lidar `tz` 0 for both;
 reseed on a slope: `tz` 2, 2 and 1 of 144 for 0, 0.05 and 0.1 rad (0, 0, 0), tilt at the end over 0.02 rad in 0 (the ablation `S7n`: 41 and 60).
 **Worse than `S7a35`:** a start heading 1 rad or 2 rad off (suite `hyaw`, `startstop`, 24 runs each): recovered (heading error under 0.2 rad at the end) in 14 and 8 runs (21 and 3 for `S7a35`); `tz` 19 and 24 (16 and 24). The alignment starts at a spread of 1 rad, and the filter
 starts at 0.71 rad. A trial with the threshold at 0.6 rad (`S8s`, `LEVER_ONLY=S8s`, not part of the committed results) recovers all 24 runs at both errors (`tz` 1 and 1), but has `tz` 41 against 26 in hsg and 12 against 5 in the reseed-on-a-slope suite
-(an alignment on a normal start adds its own error). The shipped threshold is 1.0 rad; a start heading off by more than about 0.5 rad followed by a short stand stays outside what was measured to work.
+(an alignment on a normal start adds its own error). The shipped threshold is 1.0 rad. The fifth round replaced the trial with `S8u` (below): the heading of a start without a heading source is held as unknown, which lets the alignment act at the first start whatever the stand.
+
+### Fifth pass (round 6): an outage across the start, and a boot with a guessed heading
+
+The fifth review found two failures of `S8` that the first four passes did not have a motion for. `eskf_lever.cpp` has two new suites, `hgap` and `hboot` (the header of the file says how they were written), and two new schemes: `S8o`, `S8` without the new check of the alignment
+(`EskfParams::lever_align_span_guard = false`, the version of the round before), and `S8u`, `S8` + the heading of a start without a heading source held as unknown (`Eskf::markHeadingUnknown()`, `lever_start_sigma` = π/√3 rad).
+Both suites have 576 lever-arm runs and 192 zero-lever runs per scheme (4 seeds, antennas A, B, M, Z, GNSS and IMU only).
+
+1. **An outage across a start** (`hgap`: stand 300 or 600 s, the fixes stop 10 s before the robot starts the start-stop cycle or the circle and come back 30 s or 120 s later; gyro bias 0, 0.1, 0.2 deg/s; accelerometer bias 0, 0.1 m/s²).
+   The alignment looked for a gap in the fixes only in the last 4 s. The walk back to the fix 3 s earlier then stopped at the last fix before the outage, and the change of velocity was taken from the velocity before the outage and the IMU sum of the whole outage. A reviewer's trace (stand 600 s, 120 s outage, configuration 100, seed 1) aligned 0.8 s after
+   the fixes came back, with a heading error of 2.95 rad and a spread of 0.35 rad, locked it at 0.08 rad after the release, and ended at a tilt of 0.73 rad and a height of −43 m. The fix checks the gaps over the first fix of the older velocity to now and refuses a window longer than 4 s.
+2. **The default boot** (`hboot`: `initial_yaw` 0.5, 1, 2 and 3 rad off, no `/initialpose`, stand 6, 30, 60, 90, 120 or 300 s, then the start-stop cycle or the circle). The shadow of the heading starts at the 0.5 rad² of `P0`, 0.71 rad, which is under the 1 rad at which the alignment acts; the first start then
+   runs a full update with the heading 1 to 3 rad off. `S8` aligns only after about 70 s of standing, when the shadow has grown past 1 rad.
+
+**The design memo was not adequate for finding 2.** `PR7_OBSERVABILITY_DESIGN.md` (§4) started the heading at the filter's own covariance and held that a start is unchanged by the bound (σ_max = √0.5, "the start value"). That is right when `initial_yaw` is within about 0.5 rad, and wrong for the default boot of a robot without a heading source,
+where `initial_yaw` is a parameter that the deployer cannot set to the heading of a robot that boots facing a random way. The reviewer's prototype (`S8u`) and the data below are the evidence for the change.
+
+Results (`report.md`, fifth pass; counts of runs):
+
+| | `S8o` | `S8` | `S8u` | zero lever, same data (each run once) |
+|---|---|---|---|---|
+| hgap, 120 s: `tz` (of 288) | 68 | **11** | 12 | 11 of 96 |
+| hgap, 120 s: |z| over 1 m / tilt over 0.3 rad | 36 / 7 | **2 / 0** | 4 / 1 | |
+| hgap, 120 s: `tz` where the zero-lever run has none | 58 | 11 | 11 | |
+| hgap, 30 s: `tz` (of 288) | 19 | 12 | 13 | 18 of 96 |
+| hgap, both: |z| over 1 m / tilt over 0.3 rad (of 576) | 38 / 7 | 4 / 0 | 6 / 1 | |
+| hboot: `tz` (of 576) | 219 | 219 | **77** | 112 of 192 |
+| hboot: |z| over 1 m / tilt over 0.3 rad | 160 / 104 | 160 / 104 | **3 / 0** | |
+| hboot: heading error over 0.5 rad at the end | 162 | 162 | **11** | |
+| hboot: antenna A / B / M, `tz` (of 192 each) | 58 / 72 / 89 | 58 / 72 / 89 | **1 / 0 / 76** | |
+| hboot, `initial_yaw` 1 rad, stand 6 to 60 s: `tz` (of 72) | 54 | 54 | **0** | 8 of 24 |
+| hboot, `initial_yaw` 2 and 3 rad, stand 6 to 60 s: `tz` (of 144) | 144 | 144 | **34** | 45 of 48 |
+| hboot, `initial_yaw` 2 and 3 rad, stand 90 to 300 s: `tz` (of 144) | 13 | 13 | 41 | 43 of 48 |
+
+`S8` and `S8o` give the same rows in hboot (no gap in the fixes). The antennas A and B have 1 run of 384 with `tz` under `S8u` (tilt 0.051 rad). The mast M, whose lever has no horizontal part, fails like the zero-lever filter (76 of 192 against 112 of 192; largest height error 1.34 m, largest tilt 0.13 rad):
+a wrong heading does not enter its lever term, but after the alignment at the first start the horizontal accelerometer-bias estimate jumps to 0.4 to 0.7 m/s² for some seconds and the height drifts by up to 1 m (a trace of configuration 187, seed 0). A try to leave the blind update off for an antenna with a horizontal arm under 0.1 m (a mast) did not help (not kept).
+With a stand of 90 s or more at 2 or 3 rad, `S8` is better than `S8u` in the mast (13 against 41 `tz` of 144): by then `S8`'s shadow has grown past 1 rad, and it has had 90 s of updates with the full Jacobian before the first start; `S8u` is blind from the first update.
+
+What `S8u` costs on the earlier suites, with the same code and the 0.1 rad start error they use (`LEVER_ONLY=S8,S8u`; the rows of `S8` are bit for bit those of the round before wherever the data has no gap in the fixes, and 21 of the 4,320 `S8` rows of h300 changed, all in dropout cells):
+- second pass (4,200 runs): `tz` 962 against 880, runs over 1 m 249 against 213, the clean envelope 0 `tz` for both; 117 runs gain `tz` and 35 lose it, 104 of the 117 are drive and start-stop runs that begin moving within 6 s of the start, 83 of the 117 have an accelerometer bias of 0.3 m/s²; the zero-lever run has `tz` in 24 of the 117.
+- third pass: hsg 49 `tz` against 26, hsgv 52 against 21; the bar holds; of the 24 runs with `tz` where the zero-lever run has none in hsg 23 are the mast (22 of 22 in hsgv).
+- a reseed on a slope (`hslope`): 7 and 4 runs with `tz` of 144 at 0.05 and 0.1 rad, against 2 and 1; with the lidar (`hndt`): 0 for both.
+- a start 1 and 2 rad off (`hyaw`, start-stop): recovered in 24 and 23 of 24 runs (14 and 8 for `S8`), `tz` 0 and 4 of 24 (19 and 24). Drive from rest at t = 0 (the robot already moves at 1.7 m/s when the filter starts): `tz` 24 of 24 at 2 rad for every scheme, over 1 m in 18 runs (9 for `S8`).
+The costs are in the cells where the heading was right and the filter was told to doubt it. A robot whose heading at the start is right to about 0.3 rad has two ways to keep the numbers of `S8`: `/initialpose`, and `initial_yaw_known: true`.
+
+Not done in this pass: a start-up heading between 0 and 0.5 rad off with a stand of 90 s or more (the grid has 0.5 rad as its smallest); the alignment with a lever arm smaller than 0.1 m other than the 1.5 m mast; a real robot.
 
 ```sh
-experiments/run_eskf_lever.sh /tmp/lever 4   # builds, runs the twelve suites, writes report.md (first pass 2 CPU hours, second pass about 2.5 CPU hours;
+experiments/run_eskf_lever.sh /tmp/lever 4   # builds, runs the fourteen suites, writes report.md (first pass 2 CPU hours, second pass about 2.5 CPU hours;
                                              # the committed results took 57 minutes of wall time with 4 jobs for 11 schemes, 13 more for the two added ones;
                                              # hsg and hsgv: 6 schemes, about 25 minutes each with 11 jobs)
 LEVER_ONLY=S7a35r05,S7a35r20 ...            # run only these schemes (how the two added schemes were run; a full run gives the same rows)

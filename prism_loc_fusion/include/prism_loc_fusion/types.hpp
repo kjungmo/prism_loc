@@ -83,5 +83,16 @@ struct EskfParams {
   double lever_align_gap{1.0};
   bool lever_blind{true};
   double lever_align_vel_std{0.15};
+  // The alignment refuses a span of fixes with a gap (lever_align_gap) or a window longer than lever_align_window + 1 s anywhere between
+  // the first fix of the older velocity and now. false is the version before (fifth review, finding 1), kept for the scheme S8o of
+  // experiments/eskf_lever.cpp, which shows what it did: after an outage across a start the alignment compared the IMU sum of the outage with
+  // the velocity from before it.
+  bool lever_align_span_guard{true};
+  // A start with a lever arm whose heading has no source (initial_yaw only: no /initialpose, no lidar): the heading is a guess, and
+  // the filter's start value of 0.71 rad of spread is far too narrow for it. markHeadingUnknown() then sets the spread the shadow
+  // holds to this value (rad), over lever_align_sigma, so that the first start or stop finds the heading by the kinematic alignment
+  // and a robot that cannot be aligned runs the blind update, instead of a full update with a heading 1 to 3 rad off (README, study 6,
+  // fifth pass). The default is the spread of a heading that is uniform on the circle, pi / sqrt(3). 0 = off (the version before).
+  double lever_start_sigma{1.8137993642342178};
 };
 }  // namespace prism_loc_fusion
