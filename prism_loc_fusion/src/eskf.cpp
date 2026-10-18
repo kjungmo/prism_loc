@@ -122,6 +122,19 @@ void Eskf::syncShadow(const Eigen::Vector3d& up) {
   shadow_held_ = false;
 }
 
+bool Eskf::markHeadingUnknown() {
+  if (!params_.lever_restore || !(params_.lever_start_sigma > 0.0) || !(params_.lever_align_sigma > 0.0) ||
+      !(params_.lever_start_sigma > params_.lever_align_sigma))
+    return false;
+  const Eigen::Vector3d up = x_.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
+  s_hh_ = params_.lever_start_sigma * params_.lever_start_sigma;
+  s_hb_ = 0.0;
+  s_bb_ = up.dot(P_.block<3, 3>(12, 12) * up);
+  shadow_valid_ = true;
+  shadow_held_ = true;
+  return true;
+}
+
 // Give the heading the variance `var`, independent of every other state. The heading error variable
 // is projected out of P (P <- D P D^T, D = I - u u^T on the attitude block: the filter then has no
 // heading, and keeps P positive) and a new heading of variance `var` is added. What the bound
@@ -181,6 +194,16 @@ bool Eskf::alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up)
   size_t i0 = n - 1;   // the span that ends lever_align_window earlier
   while (i0 > kSpan && fixes_[n - 1].t - fixes_[i0].t < params_.lever_align_window) --i0;
   if (i0 <= kSpan) return false;
+  // The span that ends lever_align_window earlier must be as free of gaps and fast turns as the window, and
+  // the two spans must lie within the window: after an outage the walk back above stops at the last fix before
+  // it, and the change of velocity would then be taken over the whole outage (the IMU sum of the outage against
+  // the velocity from before it).
+  if (params_.lever_align_span_guard) {
+    if (fixes_[n - 1].t - fixes_[i0].t > params_.lever_align_window + 1.0) return false;
+    for (size_t i = i0; i > i0 - kSpan; --i)
+      if (fixes_[i].t - fixes_[i - 1].t > params_.lever_align_gap ||
+          fixes_[i].rate_max * t_xy > 0.5 * params_.lever_align_dv) return false;
+  }
   const Vel before = vel_at(i0);
   if (!now.ok || !before.ok) return false;
   const Eigen::Vector2d a = now.s - before.s, v = now.v - before.v;

@@ -47,8 +47,8 @@ so a mount that is ignored or applied the wrong way round fails.
                scenarios also assert, in the published pose covariance 0.25 to 0.6 s after the first fix and
                after each /initialpose: roll/pitch variance at most 2e-3 rad^2 (it starts at about 1e-4 from the
                accelerometer; the heading's 0.5 rad^2 would fail); without lidar clouds the heading variance
-               between 0.1 and 0.7 rad^2 (one antenna does not observe it: it starts at 0.5 and the first fix bounds it to
-               0.35^2 = 0.12); with clouds the heading variance at
+               of a start from /initialpose between 0.1 and 0.7 rad^2 (one antenna does not observe it: it starts at 0.5), and of a
+               start with no heading source 3.0 to 3.6 rad^2 (the unknown heading of pi^2/3 = 3.29, Eskf::markHeadingUnknown); with clouds the heading variance at
                most 0.05 rad^2 and the position covariance trace at most 0.06 m^2.
   gnss_reseed  antenna A, standing, the review's bias; /initialpose at t = 15 s (0.04 m,
                -0.03 m, 0.01 rad off); the checks above at t = 30, 45 s (heading within 0.06 rad
@@ -90,6 +90,18 @@ so a mount that is ignored or applied the wrong way round fails.
                and height within 0.15 m all along, and the status has no WARN "heading not observed"
   gnss_gap     GNSS and IMU only, antenna A, standing: WARN "heading not observed" after 35 s; 5 s without fixes: heading_capped
                false and no WARN; fixes again: no WARN 3 s after, WARN again 34 s after (the 30 s start again)
+  gnss_boot_wrong_yaw, gnss_boot_wrong_yaw_b
+               The fifth review: GNSS and IMU only, antenna A (B), no /initialpose, initial_yaw 2 rad off the true heading, standing 20 s with
+               the review's gyro bias, then 80 s of the start-stop cycle of experiments/eskf_lever.cpp (cycle_path). The filter started with 0.71 rad of heading
+               spread and the first start ran a full update with a heading 2 rad off (A: +8.6 m, 0.49 rad; B: +25.9 m, 0.87 rad, with heading_sigma_rad 0.005 to
+               0.017 and no WARN). Before the start: heading_source none, heading_sigma_rad at least 1.5 (the unknown heading, 1.8); in the 80 s: height within
+               1.0 m, tilt within 0.1 rad (the alignment leaves a transient: 6 runs of B gave 0.07 to 0.70 m and 0.006 to 0.047 rad), heading_source "motion" within 10 s,
+               heading error after the cycle within 0.5 rad (one run)
+  gnss_gap_across_start, gnss_gap_across_start_b (not in the default run: 8 minutes each, `--scenario` or `--long`)
+               The fifth review: GNSS and IMU only, antenna A (B), standing 300 s with the 0.5 deg/s gyro bias, the fixes stop 10 s before the robot
+               starts the start-stop cycle and come back 120 s after they stopped (the cycle runs all through the outage); then 60 s. The alignment compared
+               the IMU sum of the outage with the velocity from before it and set a heading 1.7 rad off 2 s after the fixes returned (A: +6.0 m, 0.20 rad,
+               heading_sigma_rad 0.011). heading_source must not be "motion" within 3.4 s after the fixes return, and height within 0.5 m, tilt within 0.05 rad
   gnss_stand_go, gnss_stand_go_b (not in the default run: 11 minutes each, `--scenario gnss_stand_go` or `--long`)
                GNSS and IMU only, antenna A (B), standing 600 s with the review's gyro bias (the heading follows it, 1.2 rad at the end), then
                start_stop_path (a start of 1 m/s^2 for 2 s, 5 s at 2 m/s, a stop). The failure of the fourth review round: the bound held the heading
@@ -617,11 +629,21 @@ def gnss_bias_run(rig, results, mount, yaw_rate, bias, what, checkpoints, reseed
     results.append((bool(tl) and max(tl) <= 0.03,
                     f'{what}: largest tilt error 0.25 to 0.6 s after a start: {max(tl) if tl else float("nan"):.4f} rad over {len(tl)} poses '
                     f'(need <= 0.03; the body is tilted by roll {rig.tilt[0]:+.2f} pitch {rig.tilt[1]:+.2f} rad)'))
-    if cloud is None:   # nothing but the IMU and the antenna: the heading is not observed and keeps its 0.5 rad^2
-        yv = [att_vars(m)[1] for m in win]
-        results.append((bool(yv) and 0.1 <= min(yv) and max(yv) <= 0.7,
-                        f'{what}: heading variance 0.25 to 0.6 s after a start: '
-                        f'{min(yv) if yv else float("nan"):.3f} to {max(yv) if yv else float("nan"):.3f} rad^2 (need 0.1 to 0.7: the bound 0.35 squared is 0.12)'))
+    if cloud is None:   # nothing but the IMU and the antenna: the heading is not observed
+        # A start without a heading source (no /initialpose before the first fix, no lidar) holds the variance of an unknown heading,
+        # pi^2 / 3 = 3.29 rad^2 (Eskf::markHeadingUnknown); a start from /initialpose keeps its own 0.5 rad^2.
+        first_unknown = not late_pose and prelude is None
+        near = lambda mk: [att_vars(m)[1] for t, m in rig.poses if mk + 0.25 <= t <= mk + 0.6]
+        y_first = near(marks[0])
+        y_seeded = [v for mk in marks[1:] for v in near(mk)] + ([] if first_unknown else y_first)
+        ok_first = (not first_unknown) or (bool(y_first) and 3.0 <= min(y_first) and max(y_first) <= 3.6)
+        ok_seeded = (not y_seeded) or (0.1 <= min(y_seeded) and max(y_seeded) <= 0.7)
+        yv = y_first if first_unknown else y_seeded
+        results.append((ok_first and ok_seeded and bool(y_first),
+                        f'{what}: heading variance 0.25 to 0.6 s after a start: first start '
+                        f'{min(y_first) if y_first else float("nan"):.3f} to {max(y_first) if y_first else float("nan"):.3f} rad^2 '
+                        f'(need {"3.0 to 3.6, the unknown heading of pi^2/3" if first_unknown else "0.1 to 0.7"})'
+                        + (f', after a reseed {min(y_seeded):.3f} to {max(y_seeded):.3f} (need 0.1 to 0.7)' if y_seeded and first_unknown else '')))
     else:               # with the lidar the heading is observed: its variance must not go back to the 0.5 rad^2 of a start
         yv = [att_vars(m)[1] for m in win]
         results.append((bool(yv) and max(yv) <= 0.05,
@@ -762,6 +784,87 @@ def gnss_stand_go(rig, results, mount=ANTENNA_A, seconds=600):
     results.append((not warn and float(v.get('heading_sigma_rad', 'nan')) <= 0.4 and v.get('heading_capped') == 'false',
                     f'{what}: after the stop heading_sigma_rad {v.get("heading_sigma_rad")} (need <= 0.4), heading_capped {v.get("heading_capped")} (need false), '
                     f'status {"WARN with" if warn else "without"} "heading not observed"'))
+
+
+def cycle_path(t):
+    """(distance, speed, acceleration) of the start-stop cycle of experiments/eskf_lever.cpp (40 s: still 6 s, 0.5 m/s^2 for 3 s, 20 s at
+    1.5 m/s, braking 0.5 m/s^2 for 3 s, still 8 s), along the heading; still before t = 0."""
+    if t < 0.0:
+        return 0.0, 0.0, 0.0
+    c = math.floor(t / 40.0)
+    r = t - 40.0 * c
+    if r < 6.0: x, v, a = 0.0, 0.0, 0.0
+    elif r < 9.0: u = r - 6.0; x, v, a = 0.25 * u * u, 0.5 * u, 0.5
+    elif r < 29.0: x, v, a = 2.25 + 1.5 * (r - 9.0), 1.5, 0.0
+    elif r < 32.0: u = r - 29.0; x, v, a = 32.25 + 1.5 * u - 0.25 * u * u, 1.5 - 0.5 * u, -0.5
+    else: x, v, a = 34.5, 0.0, 0.0
+    return 34.5 * c + x, v, a
+
+
+def gnss_gap_across_start(rig, results, mount=ANTENNA_A, stand=300.0, gap=120.0, gap_before=10.0):
+    """The fifth review: GNSS and IMU alone, standing `stand` s with the large gyro bias (0.5 deg/s per axis), the fixes stop `gap_before` s before the
+    robot starts the start-stop cycle and come back `gap` s after they stopped (the cycle runs all through the outage). The kinematic alignment used
+    the last fix before the outage and the IMU sum over the whole outage: the node found a heading 2 s after the fixes returned that was 1.7 rad off,
+    and ended 6 m high and 0.2 rad tilted with a published heading spread of 0.011 rad. Now a gap in the fixes anywhere in the two spans refuses the
+    alignment, so heading_source must not become "motion" in the first seconds after the outage, and height and tilt must stay within the bound."""
+    rig.noise = NOISE
+    rig.gyro_bias = np.array(GYRO_BIAS_BIG)
+    rig.add_static('gnss', mount)
+    what = f'antenna {mount[0]}, standing {stand:.0f} s with the 0.5 deg/s gyro bias, fixes out for {gap:.0f} s from {gap_before:.0f} s before the start'
+    t = 0.0
+    while t < stand - gap_before:
+        dt = min(20.0, stand - gap_before - t)
+        rig.stream(dt, gnss=('gnss', mount)); t += dt
+    rig.stream(gap_before, gnss=None)
+    rig.path, rig.path_t0 = cycle_path, time.monotonic()
+    rig.stream(gap - gap_before, gnss=None)
+    worst = {'z': 0.0, 'tilt': 0.0}
+    early_motion = None
+    for k in range(1, 31):                                   # 60 s after the fixes return, every 2 s
+        rig.stream(2.0, gnss=('gnss', mount))
+        e, v = rig.pose_error(0.5), rig.values()
+        if e is not None:
+            worst['z'], worst['tilt'] = max(worst['z'], abs(e[2])), max(worst['tilt'], math.hypot(e[3], e[4]))
+        if early_motion is None and v.get('heading_source') == 'motion' and 2.0 * k <= 3.4:
+            early_motion = 2.0 * k
+    results.append((early_motion is None, f'{what}: heading_source "motion" within 3.4 s after the fixes return: {early_motion} (need none)'))
+    results.append((worst['z'] <= 0.5 and worst['tilt'] <= 0.05,
+                    f'{what}: largest height error {worst["z"]:.3f} m (need <= 0.5), tilt error {worst["tilt"]:.4f} rad (need <= 0.05) in the 60 s after the fixes return'))
+
+
+def gnss_boot_wrong_yaw(rig, results, mount=ANTENNA_A, stand=20.0, yaw_off=2.0):
+    """The fifth review: the default boot. GNSS and IMU alone with a lever arm, no /initialpose, initial_yaw `yaw_off` rad off the true heading,
+    a stand of `stand` s, then the start-stop cycle. The filter started with 0.71 rad of heading spread, so the first start ran a full update with a
+    heading 2 rad off: antenna A +8.6 m high and 0.49 rad tilted, antenna B +25.9 m and 0.87 rad, with heading_sigma_rad 0.005 to 0.017 and no WARN.
+    Now the heading starts as unknown (heading_source "none", heading_sigma_rad over 1 rad), the first start finds it (heading_source "motion"), and
+    height and tilt stay within the bound."""
+    rig.noise = NOISE
+    rig.gyro_bias = np.array(GYRO_BIAS)
+    rig.add_static('gnss', mount)
+    what = f'antenna {mount[0]}, initial_yaw {yaw_off} rad off, no /initialpose, standing {stand:.0f} s, then the start-stop cycle'
+    rig.stream(stand, gnss=('gnss', mount))
+    v0 = rig.values()
+    results.append((v0.get('heading_source') == 'none' and float(v0.get('heading_sigma_rad', 'nan')) >= 1.5,
+                    f'{what}: before the start heading_source {v0.get("heading_source")} (need none), heading_sigma_rad {v0.get("heading_sigma_rad")} (need >= 1.5)'))
+    rig.path, rig.path_t0 = cycle_path, time.monotonic()
+    worst = {'z': 0.0, 'tilt': 0.0}
+    seen_motion = None
+    for k in range(1, 41):                                   # 80 s, every 2 s
+        rig.stream(2.0, gnss=('gnss', mount))
+        e, v = rig.pose_error(0.5), rig.values()
+        if e is not None:
+            worst['z'], worst['tilt'] = max(worst['z'], abs(e[2])), max(worst['tilt'], math.hypot(e[3], e[4]))
+        if seen_motion is None and v.get('heading_source') == 'motion':
+            seen_motion = 2.0 * k
+    e = rig.pose_error(1.0)
+    results.append((seen_motion is not None and seen_motion <= 10.0,
+                    f'{what}: heading_source "motion" first seen {seen_motion} s after the start (need within 10 s)'))
+    # The alignment at the first start leaves a transient (the accelerometer-bias estimate jumps for some seconds): over 6 runs of antenna B the largest
+    # height error was 0.066 to 0.696 m and the tilt 0.006 to 0.047 rad, the larger values under load. The failure this scenario is for is 8 to 26 m and 0.5 to 0.9 rad.
+    results.append((worst['z'] <= 1.0 and worst['tilt'] <= 0.1,
+                    f'{what}: largest height error {worst["z"]:.3f} m (need <= 1.0), tilt error {worst["tilt"]:.4f} rad (need <= 0.1) in the 80 s from the start'))
+    results.append((e is not None and abs(e[5]) <= 0.5,
+                    f'{what}: heading error after the cycle {e[5] if e else float("nan"):+.3f} rad (need within 0.5; one run)'))
 
 
 def start_stop_path(t):
@@ -1046,13 +1149,17 @@ SCENARIOS = {'lidar': scenario_lidar, 'imu': scenario_imu, 'gnss': scenario_gnss
              'gnss_gap': scenario_gnss_gap,
              'gnss_stand_long': gnss_stand_long,
              'gnss_stand_go': gnss_stand_go,
-             'gnss_stand_go_b': lambda r, res: gnss_stand_go(r, res, ANTENNA_B, 600)}
+             'gnss_stand_go_b': lambda r, res: gnss_stand_go(r, res, ANTENNA_B, 600),
+             'gnss_gap_across_start': gnss_gap_across_start,
+             'gnss_gap_across_start_b': lambda r, res: gnss_gap_across_start(r, res, ANTENNA_B),
+             'gnss_boot_wrong_yaw': gnss_boot_wrong_yaw,
+             'gnss_boot_wrong_yaw_b': lambda r, res: gnss_boot_wrong_yaw(r, res, ANTENNA_B)}
 # The height bound of gnss_stand_long. It was written as 0.15 m like the others; the first run measured 0.174 m, a second 0.141 m, and the
 # same scenario with the antenna at the origin of base_link (no lever arm, the plain update) 0.167 m: with the fix's z variance floored at
 # 1 m^2 the height estimate has a noise of about 0.1 m, and the largest of 30 samples over 600 s reaches 0.15 to 0.17 m. 0.25 m is above
 # that and far below the failure the scenario is for (metres, from about 190 s on).
 LONG_HEIGHT_TOL = 0.25
-LONG_SCENARIOS = ('gnss_stand_long', 'gnss_stand_go', 'gnss_stand_go_b')   # 10 minutes and more: only with --long or --scenario
+LONG_SCENARIOS = ('gnss_stand_long', 'gnss_stand_go', 'gnss_stand_go_b', 'gnss_gap_across_start', 'gnss_gap_across_start_b')   # 10 minutes and more: only with --long or --scenario
 SCENARIO_ARGS = {'imu': [f'initial_yaw:={BASE_YAW}'], 'gnss': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_stand_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_b': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_turn_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_turn_b': [f'initial_yaw:={BASE_YAW}'],
@@ -1065,6 +1172,8 @@ SCENARIO_ARGS = {'imu': [f'initial_yaw:={BASE_YAW}'], 'gnss': [f'initial_yaw:={B
                  'gnss_reseed_slope_a': [f'initial_yaw:={BASE_YAW}'], 'gnss_reseed_slope_b': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_late_pose_slope': [f'initial_yaw:={BASE_YAW}'], 'gnss_pose_first_slope': [f'initial_yaw:={BASE_YAW}'],
                  'gnss_stand_long': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_go': [f'initial_yaw:={BASE_YAW}'], 'gnss_stand_go_b': [f'initial_yaw:={BASE_YAW}'], 'gnss_start_stop': [f'initial_yaw:={BASE_YAW + 0.3}'], 'gnss_gap': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_gap_across_start': [f'initial_yaw:={BASE_YAW}'], 'gnss_gap_across_start_b': [f'initial_yaw:={BASE_YAW}'],
+                 'gnss_boot_wrong_yaw': [f'initial_yaw:={BASE_YAW + 2.0}'], 'gnss_boot_wrong_yaw_b': [f'initial_yaw:={BASE_YAW + 2.0}'],
                  'override': ['points_frame:=base_link', 'imu_frame:=base_link', 'gnss_frame:=base_link'],
                  'imu_missing': ['startup_timeout_s:=10.0']}
 

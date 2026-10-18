@@ -46,6 +46,8 @@ class Eskf {
   //    the robot stands. The filter keeps it (headingSigmaHonest(), covarianceHonest()), re-finds the heading from the first change
   //    of velocity after a stand (alignHeading()) instead of releasing at the bounded sigma, and while it cannot, leaves roll and
   //    pitch out of the lever term (leverBlind()). The bound is not applied while the release is open.
+  //  - Unknown start (markHeadingUnknown(), EskfParams::lever_start_sigma): a start whose heading is only a guess holds the spread of an
+  //    unknown heading in the shadow, so that the first start aligns it instead of running a full update on a heading 1 to 3 rad off.
   // A lever of exactly zero is updatePosition(), with identical arithmetic.
   void updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vector3d& lever,
                            const Eigen::Matrix3d& R);
@@ -77,6 +79,11 @@ class Eskf {
   // covariance holds, which the bound (lever_heading_sigma_max) keeps small while the robot
   // stands; see headingSigmaHonest().
   double headingSigma() const;
+  // The heading of the state just given to initialize() is a guess (no /initialpose, no lidar): hold its spread at
+  // EskfParams::lever_start_sigma in the shadow, so that the first lever updates align the heading from the motion or run blind and do
+  // not trust the start covariance. Does nothing if lever_start_sigma, lever_restore or lever_align_sigma is 0. Touches neither x nor P.
+  // Returns true if it marked the shadow.
+  bool markHeadingUnknown();
   // Heading standard deviation (rad) without the bound: the larger of headingSigma() and the
   // shadow of the heading variance that predict() carries while the bound holds the heading back
   // (lever_restore). The same as headingSigma() when nothing is held back.
