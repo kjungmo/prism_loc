@@ -327,6 +327,8 @@ starts at 0.71 rad. A trial with the threshold at 0.6 rad (`S8s`, `LEVER_ONLY=S8
 
 ### Fifth pass (round 6): an outage across the start, and a boot with a guessed heading
 
+(Round 7 renamed the scheme `S8u` of this pass to `S8k`; its rows are bit for bit the same, and the name `S8u` now stands for the code of round 7, sixth pass below. Everything in this section that says `S8u` is `S8k`.)
+
 The fifth review found two failures of `S8` that the first four passes did not have a motion for. `eskf_lever.cpp` has two new suites, `hgap` and `hboot` (the header of the file says how they were written), and two new schemes: `S8o`, `S8` without the new check of the alignment
 (`EskfParams::lever_align_span_guard = false`, the version of the round before), and `S8u`, `S8` + the heading of a start without a heading source held as unknown (`Eskf::markHeadingUnknown()`, `lever_start_sigma` = π/√3 rad).
 Both suites have 576 lever-arm runs and 192 zero-lever runs per scheme (4 seeds, antennas A, B, M, Z, GNSS and IMU only).
@@ -342,7 +344,7 @@ where `initial_yaw` is a parameter that the deployer cannot set to the heading o
 
 Results (`report.md`, fifth pass; counts of runs):
 
-| | `S8o` | `S8` | `S8u` | zero lever, same data (each run once) |
+| | `S8o` | `S8` | `S8u` (now `S8k`) | zero lever, same data (each run once) |
 |---|---|---|---|---|
 | hgap, 120 s: `tz` (of 288) | 68 | **11** | 12 | 11 of 96 |
 | hgap, 120 s: |z| over 1 m / tilt over 0.3 rad | 36 / 7 | **2 / 0** | 4 / 1 | |
@@ -370,11 +372,63 @@ The costs are in the cells where the heading was right and the filter was told t
 
 Not done in this pass: a start-up heading between 0 and 0.5 rad off with a stand of 90 s or more (the grid has 0.5 rad as its smallest); the alignment with a lever arm smaller than 0.1 m other than the 1.5 m mast; a real robot.
 
+### Sixth pass (round 7): the fix rate, and a short outage at the first start
+
+The sixth review found two defects of `S8u` that the first five passes had no cell for. `eskf_lever.cpp` has a new suite, `hrate`, and new cells in `hgap` (the header of the file says how they were written). In this round the scheme `S8u` of the fifth pass was renamed `S8k` (its rows are bit for bit the same:
+the harness reproduces all 1,536 `S8u` rows of `hsg` and `hsgv` and the 768 of `hboot` as `S8k`), and the name `S8u` went to the code of this round. Schemes added: `S8t` (the spans in seconds only), `S8n` (the test of the norms only), `S8w` (`S8t` + the limit of the fix period), `S8v` (`S8w` + the spread after an outage + the test of the norms),
+`S8u` (`S8v` without the test of the norms: what the code ships), `S8x` (`S8u` with `lever_outage_spread` and `lever_align_norm` from the environment, `LEVER_SPREAD` and `LEVER_NORM`, for the sweep). The harness has a fix period per configuration (`Config::gper`; the IMU stays at 100 Hz) and an outage start per configuration (`Config::drop_off`).
+`merge_round7.py` keeps the committed `S8u` rows as `S8k` and adds the new rows; the rows of `S8` that were run again (`hslope`, `hsg`, `hsgv`) are identical to the committed ones (printed). The first pass and the other rows of the second pass do not use the alignment and are not run again.
+
+1. **The fix rate** (`hrate`: the boot cells and the stand-then-go cells at fix periods of 2, 1, 0.5, 0.2, 0.1 and 0.05 s; the IMU data of a cell is the same at every rate; 136 configurations per rate, 4 seeds, antennas A, B, M, Z).
+   The alignment took each of its two velocities over 4 fixes: 4 s at 1 Hz, so the span never passed its own check (`dt < 2 s`) and a robot that booted with an unknown heading ran blind for good; 0.4 s at 10 Hz, where the check `dt > 0.4 s` was decided by the rounding of the clock, and a span that passed had the fix noise of 0.07 m/s per velocity,
+   which gave alignments at constant speed. A trace of the round before at 10 Hz (reviewer's configuration 16): the first start was not aligned, and an alignment came 7 s after it at constant speed, with the heading 0.9 rad off and a spread of 0.09 rad.
+   Fix: the spans are seconds (`lever_align_span` 0.8 s and at least 2 fixes), and the window, the gap limit and the history scale with the measured fix period (the median of the last 15 intervals); under about 0.8 Hz the alignment does nothing, the start is not marked as unknown, and `/diagnostics` WARNs.
+   Results (antennas A and B, runs with `tz` / heading over 0.5 rad at the end; boot 144 runs and stand-then-go 128 runs per rate):
+
+   | fix rate | boot `S8k` | boot `S8u` | stand-then-go `S8k` | stand-then-go `S8u` |
+   |---|---|---|---|---|
+   | 0.5 Hz | 48 / 89 | 54 / 83 | 53 / 64 | 51 / 64 |
+   | 1 Hz | 36 / 89 | **0 / 0** | 41 / 64 | **0 / 0** |
+   | 2 Hz | 5 / 5 | **0 / 0** | 1 / 0 | 1 / 0 |
+   | 5 Hz | 0 / 1 | 0 / 1 | 0 / 0 | 0 / 0 |
+   | 10 Hz | 31 / 62 | **0 / 0** | 39 / 64 | **0 / 0** |
+   | 20 Hz | 38 / 89 | **0 / 0** | 40 / 64 | **0 / 0** |
+
+   `S8t` (the spans only) has the counts of `S8u` within 1 run at 1 to 20 Hz; at 0.5 Hz it has 32 and 17 runs with `tz` (against 54 and 51) and 38 and 28 with the heading over 0.5 rad: better, not reliable, and the limit stays at 0.8 Hz.
+   **The test of the norms of the two changes of velocity** (the review's proposal, `lever_align_norm` 0.3; `S8n` alone, `S8v` with the rest): it changes 1 to 9 of the 544 rows of a rate from 1 to 20 Hz and no count of the table; `S8n` (the test without the spans) differs from `S8k` in 0 to 33 of the 544 rows of a rate and has the counts of `S8k` within 3 runs (10 Hz, boot: `tz` 32 against 31), so the test alone does not repair the rates either. With the spans in seconds there is no alignment to remove. In the outage cells it makes things worse:
+   the node scenario `gnss_gap_across_start` on the core (`eskf_gap_across_start.cpp`, 300 seeds) fails in 2 runs with the test alone (0 without), in 4 with the test and the spread at a tenth (1 without the test), in 13 with the test and the whole spread (4 without). A refused marginal alignment is followed by one on a window that the corrections after the outage have polluted.
+   **The design memo had no fix-rate axis** (`PR7_OBSERVABILITY_DESIGN.md`, §6 runs the grid at the 5 Hz of `kGnssPeriod`, and its node checks send 5 Hz); the release by acceleration (§4b) reads the IMU and does not depend on the rate, but the alignment of the rounds 4 to 6 is not in the memo and measures the fixes. The memo needs the axis, and `hrate` is it.
+2. **A short outage at the first start** (`hgap`, 640 new configurations: the fixes stop 1 s before or in the middle of the first acceleration after a stand of 300 or 900 s, for 1.5, 3, 5 or 12 s; gyro bias 0 or 0.2 deg/s; sgstart at 5 and 7.5 s, sgdrive at −1, 1.5 and 5 s). The reviewer's probe (`rgap`) had these cells for sgstart and sgdrive at 5 s.
+   The failure: antenna A kept a horizontal error of 3 m for about 20 s (configuration 756, seed 0 of `hgap`: at the return of the fixes the velocity was off by 1.9 m/s, the alignment came 22 s later), antenna B 2.6 m, and the mast, which has no horizontal arm to absorb the error, diverged to a tilt of 3 rad and a height of 1,600 m (configuration 675, seed 0: 2,278 m; 16 of 640 mast runs).
+   The cause: with the heading unknown and held at its bound in `P`, `predict` dead-reckoned the acceleration of the outage in a heading that was off by up to 3 rad; the velocity and the position it gained are the true ones rotated by that error, and `P` said they were good. The first fixes explained the difference as a tilt and an accelerometer bias.
+   **The design memo was not adequate here either.** §4a shrinks the heading error variable (`P ← D P Dᵀ`) so that the lever term stays in its linear range, and §7 says what the filter then reports; neither says what the shrink does to the velocity and position that depend on the heading during dead reckoning. The honest heading spread (the shadow of rounds 5 and 6) is reported but never reaches `P`.
+   The change: at the first lever update after an outage, with the heading unknown and no alignment possible, `Eskf::spreadAfterOutage()` adds to the horizontal position and velocity block of `P` the matrix `s · min(σ², 2)/2 · [[|D|², D·dS], [D·dS, |dS|²]]` on each axis (`dS`: the velocity the IMU summed over the outage, `D`: its integral; `s` = `lever_outage_spread`). Evidence for `s` (hgap, `S8x`, no test of the norms; short outages, antennas A and B / mast; old cells = the 30 s and 120 s outages of the fifth pass):
+
+   | `lever_outage_spread` | short, A and B: `tz` / over 1.5 m | short, mast: `tz` / height over 1 m / diverged | long, A and B: `tz` (30 s, 120 s of 192) | long, mast: `tz` (of 96, 96) | `gnss_gap_across_start` replica: failing seeds of 300 |
+   |---|---|---|---|---|---|
+   | 0 (`S8k`) | 83 / 76 | 154 / 59 / 16 | 6, 4 | 7, 8 | 0 |
+   | 0.02 | 43 / 59 | 138 / 22 / 1 | 6, 3 | 10, 8 | 1 |
+   | 0.05 | 38 / 39 | 134 / 18 / 0 | 5, 3 | 10, 9 | 1 |
+   | **0.1 (`S8u`)** | **32 / 34** | **132 / 16 / 0** | **4, 2** | **8, 9** | **1** |
+   | 0.25 | 35 / 36 | 134 / 14 / 0 | 5, 2 | 8, 12 | 2 |
+   | 0.5 | 34 / 41 | 133 / 15 / 0 | 5, 2 | 9, 17 | 3 |
+   | 1 | 36 / 41 | 132 / 14 / 0 | 5, 1 | 9, 21 | 4 |
+
+   A tenth gives the whole gain of the short outages and the smallest cost in the long ones (the mast at 120 s: 9 of 96 against 8 without the spread and 21 with the whole of it). The final runs of `S8u` (`hgap`, 1,280 runs of A and B, 640 of M, 640 zero-lever): A and B `tz` 32, over 1.5 m 34, height over 1 m 8; mast `tz` 132, height over 1 m 16, diverged 0, largest height error 2.7 m (`S8k`: 2,310 m); zero lever `tz` 226, height over 1 m 84.
+3. **What is left** (all listed in the README under "Sixth pass"): the mast has `tz` in 132 of 640 runs of the short outages (the zero lever 226); antenna A on a circle that starts during the outage never finds its heading, because a body rate of 0.25 rad/s with an arm of 0.5 m is the limit of the alignment's rate rule (`0.125 m/s / |t_xy|`; 32 of 128 runs over 1.5 m; antenna B 0 of 128);
+   an alignment from a weak change of velocity right after an outage can be wrong by a radian under a spread of 0.35 rad (the IMU sum is polluted by the tilt and bias corrections that follow the outage), and the next release can turn the heading the wrong way (4 of 300 seeds of the replica with the whole spread). An honest spread after such an alignment was not tried.
+
+On the earlier suites `S8u` equals `S8k` where the data has no outage: all 1,536 rows of `hsg` and of `hsgv`, `hndt`, `hvib`, `h900`, `h1800`; `hboot` has the same counts (`tz` 77); the second pass has 962 `tz` in 4,200 runs for both and 248 and 249 runs over 1 m; the changes are in the dropout cells (`h300`, `h600`, `hslope`, `hyaw`). Counts: `report.md`, sixth pass.
+
 ```sh
-experiments/run_eskf_lever.sh /tmp/lever 4   # builds, runs the fourteen suites, writes report.md (first pass 2 CPU hours, second pass about 2.5 CPU hours;
+experiments/run_eskf_lever.sh /tmp/lever 4   # builds, runs the fifteen suites, writes report.md (first pass 2 CPU hours, second pass about 2.5 CPU hours;
                                              # the committed results took 57 minutes of wall time with 4 jobs for 11 schemes, 13 more for the two added ones;
                                              # hsg and hsgv: 6 schemes, about 25 minutes each with 11 jobs)
 LEVER_ONLY=S7a35r05,S7a35r20 ...            # run only these schemes (how the two added schemes were run; a full run gives the same rows)
+LEVER_ONLY=S8x LEVER_SPREAD=0.1 LEVER_NORM=0 eskf_lever hgap 0 4 /tmp/sweep   # the sweep of the sixth pass: lever_outage_spread and lever_align_norm from the environment
+python3 experiments/merge_round7.py MAIN_DIR SUP_DIR OUT_DIR                  # round 7: the committed S8u rows become S8k, the re-run S8u and S8v rows are added
+g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 prism_loc_fusion/src/*.cpp experiments/eskf_gap_across_start.cpp -o /tmp/gap && NSEED=300 /tmp/gap   # gnss_gap_across_start on the core
+# round 7 on 4 jobs: hrate about 12 minutes, hgap about 14, hsg and hsgv about 3 each (S8, S8u, S8v), the second-pass suites S8u and S8v together about 6
 ```
 
 Not done in this pass: a real robot; slopes under motion (the tilt is constant); a bound below 0.35 rad (the smallest tested);

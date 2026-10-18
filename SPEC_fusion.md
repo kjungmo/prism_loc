@@ -40,7 +40,7 @@ prior maps.
 |---|---|---|---|
 | IMU | `sensor_msgs/Imu` (`/imu`) | 100–400 Hz | **predict**: nominal integration + `P = F P Fᵀ + Q` |
 | 3D LiDAR | `sensor_msgs/PointCloud2` (`/points`) | ~10 Hz | **updatePose**: PCL NDT registers live cloud → PCD map (init = current ESKF pose) → 6-DoF pose measurement |
-| RTK-GNSS | `sensor_msgs/NavSatFix` (`/gnss`) | 1–10 Hz | **updatePosition** (**updatePositionLever** when the antenna is off `base_frame`, §8.1): lat/lon/alt → ENU (datum) → 3-DoF position, gated by fix status/covariance |
+| RTK-GNSS | `sensor_msgs/NavSatFix` (`/gnss`) | 1–10 Hz (the lever-arm alignment, §8.1, is supported at 1–20 Hz) | **updatePosition** (**updatePositionLever** when the antenna is off `base_frame`, §8.1): lat/lon/alt → ENU (datum) → 3-DoF position, gated by fix status/covariance |
 | `/initialpose` | `PoseWithCovarianceStamped` | — | optional manual seed (else auto-init, §6) |
 
 ## 4. ESKF math
@@ -108,12 +108,12 @@ release that trusts the bounded 0.35 rad turned the heading the wrong way and ti
 2. *Kinematic alignment* (`lever_align_sigma` 1 rad, `lever_align_dv` 0.25 m/s, `lever_align_window` 3 s). When the bound has cut the
    variance (a lever update scaled it since the shadow was set) and the shadow sigma is over `lever_align_sigma`, each lever
    update tries `alignHeading`: from the antenna fixes of the last 3 s it forms the antenna's change of velocity (position
-   differences over 0.8 s spans, no filter state involved) and compares it with the change of velocity the IMU gave in the filter's
+   differences over spans of seconds, no filter state involved: `lever_align_span` 0.8 s and at least 2 fixes; sixth review) and compares it with the change of velocity the IMU gave in the filter's
    heading (the sum of the world-frame horizontal acceleration that `predict` kept). If both are over `lever_align_dv`, the heading
    is rotated by the angle between them (`atan2`, any error up to ±π), about the antenna so that the antenna does not move; the
    horizontal velocity is set to the antenna's, carried to now by the IMU sum (`lever_align_vel_std` 0.15 m/s); the heading
    variance is `lever_heading_sigma_max²`, independent of every other state (`P ← D P Dᵀ`, `D = I − uuᵀ` on the attitude block, so `P`
-   stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`. It does nothing with a gap of more than `lever_align_gap` (1 s) between two fixes anywhere from the first fix of the older velocity to now,
+   stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`. It does nothing with a gap of more than `lever_align_gap` (1 s; 2.5 fix periods if that is more) between two fixes anywhere from the first fix of the older velocity to now,
    a window of more than `lever_align_window` + 1 s between the two velocities (`lever_align_span_guard`, default on; the round before checked the gap only in the last 4 s, and after an outage across a start
    compared the IMU sum of the whole outage with the velocity from before it), or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
 3. *Release.* If the release is open and the variance was held back but the shadow is under `lever_align_sigma`, the shadow is put
@@ -125,6 +125,20 @@ release that trusts the bounded 0.35 rad turned the heading the wrong way and ti
 5. *Unknown start* (`lever_start_sigma` 1.81 rad = π/√3, 0 = off). With a lever arm and no heading source (no `/initialpose`, no lidar,
    `initial_yaw_known` false) the node calls `Eskf::markHeadingUnknown()` after `initialize()`: the shadow variance is set to `lever_start_sigma²`, held back, valid. `x` and `P` are not touched.
    The shadow is over `lever_align_sigma`, so the first start or stop aligns the heading (item 2) and an unalignable robot runs the blind update (item 4). A pose fix from the lidar invalidates the shadow as before.
+6. *Fix rate* (sixth review, finding 1). The alignment measures time, not fixes. `Eskf::fixPeriod()` is the median of the last 15 intervals between lever-arm
+   fixes, `T`. The velocity of the antenna is taken over `max(lever_align_span, 2 T)` seconds (at least 2 intervals), the window is `max(lever_align_window, 1.5 span)`, a gap is an
+   interval over `max(lever_align_gap, 2.5 T)`, and the history that is checked for gaps and fast turns is the window plus a span. At 5 Hz these are the 0.8 s, 3 s, 1 s of the rounds before;
+   at 1 Hz 2 s, 3 s, 2.5 s; at 10 and 20 Hz 0.8 s, 3 s, 1 s. (`lever_align_norm`, default 0 = off: the two changes of velocity could be required to have the same norm to this fraction, since a rotation keeps the norm; measured, not useful, README "Sixth pass".)
+   **Supported fix rate: 1 to 20 Hz** (measured: README "Sixth pass", suite `hrate`). If the median interval is over `lever_align_period_max` (1.25 s, a rate under 0.8 Hz), `alignHeading` does nothing,
+   `leverUnsupportedRate()` is true after the first 6 fixes, and a start marked by `markHeadingUnknown()` is taken back (the shadow is set from `P` again: the start of the rounds before 6, because an unknown start that
+   cannot be aligned would run blind for good). The node WARNs on `/diagnostics` (`GNSS fixes come every N s ...`, `heading_align_rate: unsupported`, `gnss_fix_period_s`).
+7. *Outage spread* (`lever_outage_spread`, default on; sixth review, finding 2). While the heading is unknown (the shadow over `lever_align_sigma`) and the fixes are out (an interval over the gap limit of item 6),
+   `predict` dead-reckons the acceleration in the filter's heading. If that is off by `e`, the velocity it gained over the outage is `dS` rotated by `e` (`dS`: the IMU sum `cum_a_` over the outage), and the position it gained
+   from the acceleration is `D` rotated by `e` (`D`: the integral of `dS` over time, `cum_p_`); the error is `e |dS|` and `e |D|`, fully correlated. `P` does not say so: the bound holds the heading at 0.35 rad, so `P` is cut in
+   exactly the part that the honest heading would feed into the velocity and the position. At the first lever update after such an outage, if the alignment finds nothing, `spreadAfterOutage()` adds to the horizontal position and
+   velocity block of `P` (`k` = `lever_outage_spread` (0.1) · min(shadow variance, 2 rad²) / 2) the matrix `k [[|D|², D·dS], [D·dS, |dS|²]]` on each axis (positive semidefinite, Cauchy-Schwarz). The fixes that follow then correct the velocity within a few
+   updates, instead of explaining its error as a tilt and an accelerometer bias (a mast, with no horizontal arm to absorb it, diverged to a tilt of 3 rad and a height of 1,600 m in 16 of 640 runs). Touches nothing when
+   the heading is known, when no outage has happened, or when the alignment succeeded at that update.
 
 *Why the release.* A horizontal specific force resolved with a wrong heading mispredicts the
 velocity (`F(δv, δθ) = −R[a]×`), so a start, a stop or a turn at speed shows the heading to one

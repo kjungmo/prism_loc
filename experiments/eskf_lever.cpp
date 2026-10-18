@@ -161,11 +161,29 @@
 //   Like the suites hsg and hsgv they were written after the probes had shown the failures and run once as committed. No bar was declared before the probes: the reviewer's prototype of S8u
 //   came first. S8u was chosen because it removes the failure on hboot, and then run on every earlier suite (LEVER_ONLY=S8,S8u) to see what it costs; the costs are counts in
 //   README.md ("Fifth pass") and report.md, not a criterion that decided. The mast M (no horizontal arm) is the cell where S8u does not help.
+// Sixth pass (suite hrate, and short outages added to hgap; the sixth review round). Two findings of the reviewer's probes (copies of this file with a
+// configurable fix period and an outage that begins at the first start):
+//   hrate  the same boot and stand-then-go cells at fix periods of 2, 1, 0.5, 0.2, 0.1 and 0.05 s (0.5, 1, 2, 5, 10, 20 Hz; the IMU stays at 100 Hz). Every cell of a
+//          rate has the IMU data of the same cell at the other rates (the data of the first rate), so the rates are paired. Boot: no /initialpose, initial_yaw
+//          0.1, 0.3 or 2.0 rad off, a stand of 6, 30 or 300 s, then the start-stop cycle or the circle, gyro bias 0.1 deg/s, accelerometer bias 0.1 m/s^2.
+//          Stand-then-go: stand 300 or 900 s, gyro bias 0 or 0.2 deg/s, accelerometer bias 0 or 0.1 m/s^2, yaw0 0.1. 4 seeds, antennas A, B, M, Z. The finding: the
+//          alignment took its velocities over 4 fixes, so a span of 4 s at 1 Hz and of 0.4 s at 10 Hz (a check 0.4 s < span that the rounding of the clock decides).
+//          Schemes: S8k (S8u of the fifth and sixth review rounds, bit for bit), S8t (the spans in seconds only), S8n (the test of the norms only, the review's proposal), S8v (S8u + the test of the
+//          norms), S8u (the spans, the limit of the fix period and the spread after an outage: what the code ships), S8 (no unknown start), S2s and S6vb. The rate is in the column noise
+//          ("fix0.5s": a fix every 0.5 s; "matched" is the 5 Hz of every earlier suite).
+//   hgap   (added to the cells of the fifth pass; the suite keeps its first 192 configurations) outages of 1.5, 3, 5 and 12 s that begin just before or in the
+//          middle of the first acceleration after a stand: sgstart accelerates from 6 s on (the outage begins at 5 s or 7.5 s of the motion), sgdrive from 0 s (at -1, 1.5 or
+//          5 s). Stand 300 or 900 s, gyro bias 0 or 0.2 deg/s, accelerometer bias 0 or 0.1 m/s^2, 4 seeds, antennas A, B, M, Z. The column noise holds the start of the outage
+//          ("off5": 5 s after the stand). S8k, the S8u before this round, S8w (S8u without the spread of the covariance after an outage) and S8v are run beside S8u in hgap (S8k and S8v also in hboot).
+//          S8x is S8u with lever_outage_spread and lever_align_norm from the environment (LEVER_SPREAD, LEVER_NORM): the sweep, only with LEVER_ONLY=S8x. experiments/eskf_gap_across_start.cpp is
+//          the node scenario gnss_gap_across_start on the core, for many seeds.
+//   Like the fifth-pass suites they were written after the probes had shown the failures and run once as committed; the design memo (PR7_OBSERVABILITY_DESIGN.md)
+//   had no fix-rate axis in its grid (section 6) and no outage near the first start; the alignment of rounds 4 to 6 is not in the memo.
 // Build and run from the repository root (see experiments/README.md, study 6):
 //   g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3
 //       prism_loc_fusion/src/*.cpp experiments/eskf_lever.cpp -o /tmp/exp_lever
 //   /tmp/exp_lever g60 0 1 out/lever_g60      # suite, shard, number of shards, output prefix
-// (suites: g60 g300 smoke h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv hgap hboot hsmoke)
+// (suites: g60 g300 smoke h300 h600 h900 h1800 hndt hslope hyaw hvib hsg hsgv hgap hboot hrate hsmoke)
 // Writes <prefix>_runs.csv (one row per run and scheme) and <prefix>_agg.csv (one row per
 // configuration and scheme). Deterministic for one compiler and standard library
 // (std::normal_distribution is implementation defined).
@@ -191,7 +209,7 @@ namespace {
 
 // ---- pre-declared constants ----------------------------------------------------------
 constexpr double kDt = 0.01;                 // 100 Hz IMU
-constexpr double kGnssPeriod = 0.2;          // 5 Hz fix
+constexpr double kGnssPeriod = 0.2;          // 5 Hz fix (Config::gper overrides it, suite hrate)
 constexpr double kNdtPeriod = 0.2;           // 5 Hz pose fix, offset 0.1 s from the fix
 constexpr double kGnssStd = 0.02;            // simulated antenna noise, per axis
 constexpr double kSimAcc = 0.02, kSimGyro = 0.002;   // simulated IMU white noise
@@ -222,6 +240,11 @@ struct Variant {
   bool blind{false};                        // EskfParams::lever_blind
   double start_sigma{0.0};                  // EskfParams::lever_start_sigma, rad: the heading of the first start is a guess (0 = trusted, as before)
   bool span_guard{true};                    // EskfParams::lever_align_span_guard (false: S8o, the version before the fifth review)
+  // Round 7 (finding 1: the fix rate). 0 = the spans of 4 fixes and no test of the norms: every scheme before S8u of round 7, bit for bit.
+  double align_span{0.0};                   // EskfParams::lever_align_span, s
+  double align_norm{0.0};                   // EskfParams::lever_align_norm
+  double period_max{0.0};                   // EskfParams::lever_align_period_max, s
+  double outage_spread{0.0};                // EskfParams::lever_outage_spread (round 7, finding 2)
 };
 const Variant kVariants[] = {
     {"ignore", true, 0, 1, false},
@@ -271,8 +294,18 @@ const Variant kVariantsH[] = {
     // S8o: S8 with the span guard of the alignment off (EskfParams::lever_align_span_guard = false), the version of the fourth review round's fix before
     // the fifth review: what an outage across a start did to it (suite hgap).
     {"S8o", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 0.0, false},
-    {"S8u", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178},
     {"S8s", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 0.6, 0.25, true},
+    // Round 7 (suite hrate and every later run of S8u): S8k is S8u of the fifth and sixth rounds (the span of 4 fixes), S8t the spans in seconds only
+    // (lever_align_span), S8n the test of the norms only (lever_align_norm 0.3, the sixth review's proposal), S8w S8t + the limit of the fix period
+    // (lever_align_period_max), S8v S8w + the spread after an outage (lever_outage_spread 0.1) + the test of the norms, S8u the code that ships: S8v without the test of the norms.
+    {"S8k", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178},
+    {"S8t", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178, true, 0.8, 0.0, 0.0},
+    {"S8n", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178, true, 0.0, 0.3, 0.0},
+    {"S8w", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178, true, 0.8, 0.0, 1.25, 0.0},
+    {"S8v", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178, true, 0.8, 0.3, 1.25, 0.1},
+    {"S8u", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178, true, 0.8, 0.0, 1.25, 0.1},
+    // S8x: S8u whose lever_outage_spread and lever_align_norm come from the environment (LEVER_SPREAD, LEVER_NORM): the sweep of the sixth pass, only with LEVER_ONLY=S8x
+    {"S8x", false, kConsiderHeading | kConsiderGyroBiasVertical, 1, true, 0.0, 0.0, 0u, 0.35, 1.0, true, true, 1.0, 0.25, true, 1.8137993642342178, true, 0.8, 0.0, 1.25, 0.1},
 };
 constexpr int kNumH = sizeof(kVariantsH) / sizeof(kVariantsH[0]);
 
@@ -289,6 +322,8 @@ struct Config {
   double sim_acc{0.02};    // accelerometer white noise of the simulated IMU, m/s^2 per axis (kSimAcc); suite hvib: more
   bool hsuite{false};
   double stand_s{0.0};     // third pass (suite hsg, motions sgstart/sgturn/sgdrive): the robot stands for this long, then moves
+  double gper{0.2};        // round 7: period of the GNSS fixes, s (the IMU stays at 100 Hz); suite hrate. The default is the 5 Hz of every earlier suite.
+  double drop_off{-10.0};  // round 7: the outage of a run with a stand begins at stand_s + drop_off (the earlier suites: 10 s before the start of the motion cycle)
 };
 
 struct Truth { Vec3 p, v, a; double yaw, wz; };
@@ -412,7 +447,7 @@ Data makeData(const Config& c, std::uint64_t seed) {
       d.w[k] = Rt.transpose() * Vec3(0, 0, T.wz) + d.bg + gauss3(rng, kSimGyro);
     }
   }
-  const int ngnss = static_cast<int>(c.dur / kGnssPeriod) + 1;
+  const int ngnss = static_cast<int>(c.dur / c.gper) + 1;
   for (int i = 0; i < ngnss; ++i) {
     d.gnss_noise.push_back(gauss3(rng, kGnssStd));
     d.ndt_p.push_back(gauss3(rng, kNdtPos));
@@ -448,6 +483,14 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
   ep.lever_blind = v.blind;
   ep.lever_start_sigma = v.start_sigma;
   ep.lever_align_span_guard = v.span_guard;
+  ep.lever_align_span = v.align_span;
+  ep.lever_align_norm = v.align_norm;
+  ep.lever_align_period_max = v.period_max;
+  ep.lever_outage_spread = v.outage_spread;
+  if (std::string(v.name) == "S8x") {
+    if (const char* e = std::getenv("LEVER_SPREAD")) ep.lever_outage_spread = std::atof(e);
+    if (const char* e = std::getenv("LEVER_NORM")) ep.lever_align_norm = std::atof(e);
+  }
   Eskf f(ep);
   const Vec3 lever = kAntenna[c.ant];
   const bool lever_on = !v.ignore;
@@ -481,11 +524,11 @@ RunOut runScheme(const Config& c, const Variant& v, const Data& d) {
   RunOut out;
   const int reseed_k = c.reseed ? n / 2 : -1;
   // Suites with a stand (hsg, hgap): an outage begins 10 s before the robot starts.
-  const double drop0 = c.stand_s > 0.0 ? c.stand_s - 10.0 : (c.dur == 60 ? 30.0 : (c.dur <= 300 ? 120.0 : 0.4 * c.dur));
+  const double drop0 = c.stand_s > 0.0 ? c.stand_s + c.drop_off : (c.dur == 60 ? 30.0 : (c.dur <= 300 ? 120.0 : 0.4 * c.dur));
   const double drop1 = drop0 + (c.drop_s >= 0.0 ? c.drop_s : (c.dur == 60 ? 10.0 : 30.0));
   const double tsq = lever.head<2>().norm();       // horizontal lever arm, for the circle criterion
   long n_lever = 0, n_capped = 0, n_open = 0;
-  const int gnss_every = static_cast<int>(std::llround(kGnssPeriod / kDt));
+  const int gnss_every = static_cast<int>(std::llround(c.gper / kDt));
   Eigen::Matrix<double, 15, 1> e;
   for (int k = 1; k <= n; ++k) {
     const double t = k * kDt;
@@ -652,6 +695,19 @@ std::vector<Config> suite(const std::string& name) {
               addH(stand + 160, motion, gb, ab, false, drop_s, false, 0.0, 4);
               for (int i = first; i < id; ++i) cs[i].stand_s = stand;
             }
+    // Round 7 (finding 2): an outage of 1.5 to 12 s that begins just before or during the first acceleration after a long stand (the fifth round
+    // tested only 30 s and 120 s outages that begin 10 s before the start). The outage begins drop_off s after the start of the stand's end: sgstart
+    // accelerates from 6 s on (5 s: 1 s before, 7.5 s: in the middle of the acceleration), sgdrive from 0 s (-1 s, 1.5 s, and 5 s: on the circle).
+    for (int stand : {300, 900})
+      for (double gb : {0.0, 0.2})
+        for (double ab : {0.0, 0.1})
+          for (int motion : {6, 8})
+            for (double off : (motion == 6 ? std::vector<double>{5.0, 7.5} : std::vector<double>{-1.0, 1.5, 5.0}))
+              for (double drop_s : {1.5, 3.0, 5.0, 12.0}) {
+                const int first = id;
+                addH(stand + 160, motion, gb, ab, false, drop_s, false, 0.0, 4);
+                for (int i = first; i < id; ++i) { cs[i].stand_s = stand; cs[i].drop_off = off; }
+              }
   } else if (name == "hboot") {   // fifth pass: the default boot, a wrong initial_yaw (0.5 to 3 rad), no /initialpose, a short or long stand, then the start
     for (int stand : {6, 30, 60, 90, 120, 300})
       for (double yaw0 : {0.5, 1.0, 2.0, 3.0})
@@ -660,6 +716,22 @@ std::vector<Config> suite(const std::string& name) {
           addH(stand + 160, motion, 0.1, 0.1, false, 0.0, false, 0.0, 4, yaw0);
           for (int i = first; i < id; ++i) cs[i].stand_s = stand;
         }
+  } else if (name == "hrate") {   // round 7 (finding 1): the same boot and stand-then-go cells at fix rates of 0.5, 1, 2, 5, 10 and 20 Hz; the data (IMU) of a cell is the same at every rate
+    std::vector<int> cell_first;
+    int rate_i = 0;
+    for (double gper : {2.0, 1.0, 0.5, 0.2, 0.1, 0.05}) {
+      int cell = 0;
+      auto grp = [&](int stand, int motion, double gb, double ab, double yaw0) {
+        const int first = id;
+        addH(stand + 160, motion, gb, ab, false, 0.0, false, 0.0, 4, yaw0);
+        if (rate_i == 0) cell_first.push_back(first);
+        for (int i = first; i < id; ++i) { cs[i].stand_s = stand; cs[i].gper = gper; cs[i].data_id = cell_first[cell] + (i - first); }
+        ++cell;
+      };
+      for (int stand : {6, 30, 300}) for (double y : {0.1, 0.3, 2.0}) for (int m : {6, 8}) grp(stand, m, 0.1, 0.1, y);
+      for (int stand : {300, 900}) for (double gb : {0.0, 0.2}) for (double ab : {0.0, 0.1}) for (int m : {6, 8}) grp(stand, m, gb, ab, 0.1);
+      ++rate_i;
+    }
   } else if (name == "hsmoke") {
     addH(60, 0, 0.1, 0.0, false, 0.0, false, 0.0, 2);
     addH(60, 5, 0.5, 0.1, true, 10.0, true, 0.05, 2);
@@ -670,7 +742,7 @@ std::vector<Config> suite(const std::string& name) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc < 5) { std::fprintf(stderr, "usage: %s g60|g300|smoke|h300|h600|h900|h1800|hndt|hslope|hyaw|hvib|hsg|hsgv|hgap|hboot|hsmoke SHARD NSHARDS OUT_PREFIX\n", argv[0]); return 2; }
+  if (argc < 5) { std::fprintf(stderr, "usage: %s g60|g300|smoke|h300|h600|h900|h1800|hndt|hslope|hyaw|hvib|hsg|hsgv|hgap|hboot|hrate|hsmoke SHARD NSHARDS OUT_PREFIX\n", argv[0]); return 2; }
   const std::string sname = argv[1];
   const int shard = std::atoi(argv[2]), nshards = std::atoi(argv[3]);
   const std::string prefix = argv[4];
@@ -695,8 +767,12 @@ int main(int argc, char** argv) {
     char noise[32];
     if (c.sim_acc != kSimAcc) std::snprintf(noise, sizeof noise, "vib%g", c.sim_acc);   // accelerometer noise other than the default: told to the filter
     else std::snprintf(noise, sizeof noise, "%s", c.matched ? "matched" : "yaml");
+    char noise2[48];
+    if (c.gper != kGnssPeriod) std::snprintf(noise2, sizeof noise2, "fix%gs", c.gper);   // a fix rate other than 5 Hz (suite hrate)
+    else if (c.stand_s > 0.0 && c.drop && c.drop_off != -10.0) std::snprintf(noise2, sizeof noise2, "off%g", c.drop_off);   // an outage that begins other than 10 s before the start (suite hgap, round 7)
+    else std::snprintf(noise2, sizeof noise2, "%s", noise);
     std::snprintf(cfg, sizeof cfg, "%d,%d,%s,%s,%g,%g,%d,%d,%d,%s,%g,%g,%g", c.id, c.dur, kMotionName[c.motion], kAntennaName[c.ant],
-                  c.gbias_dps, c.abias, c.ndt, c.drop, c.reseed, noise, c.drop_s, c.slope, c.yaw0);
+                  c.gbias_dps, c.abias, c.ndt, c.drop, c.reseed, noise2, c.drop_s, c.slope, c.yaw0);
     const Variant* variants = c.hsuite ? kVariantsH : kVariants;
     const int nvar = c.hsuite ? kNumH : kNumFirstPass;
     for (int vi = 0; vi < nvar; ++vi) {
@@ -710,9 +786,16 @@ int main(int argc, char** argv) {
         const bool third = variants[vi].name[0] == 'S' && variants[vi].name[1] == '8';
         const std::string nm = variants[vi].name;
         if (nm == "S8s") continue;   // the trial of a lower alignment threshold (README, study 6): only with LEVER_ONLY=S8s
+        if (sname == "hrate") { if (nm != "S2s" && nm != "S6vb" && nm != "S8" && nm != "S8k" && nm != "S8t" && nm != "S8n" && nm != "S8v" && nm != "S8u") continue; }
+        else if (nm == "S8t" || nm == "S8n") continue;   // the ablations of round 7: suite hrate (and LEVER_ONLY)
+        else if (nm == "S8k" && sname != "hgap" && sname != "hboot") continue;
+        if (nm == "S8x") continue;                      // S8x: the sweep of the sixth pass, only with LEVER_ONLY=S8x
+        if (nm == "S8w" && sname != "hgap") continue;   // S8w: S8u without the spread after an outage (finding 2), for the suite hgap (and LEVER_ONLY)
+        if (nm == "S8v" && sname != "hrate" && sname != "hgap" && sname != "hboot") continue;   // S8v: S8u + the test of the norms (the sixth review's proposal): hrate, hgap, hboot (and LEVER_ONLY)
         const bool sg_set = third || nm == "S2s" || nm == "S6vb" || nm == "S7a35";
         if (nm == "S8o" && sname != "hgap" && sname != "hboot") continue;   // S8o is for the fifth-pass suites (and LEVER_ONLY=S8o)
-        if (sname == "hgap" || sname == "hboot") { if (nm != "S8o" && nm != "S8" && nm != "S8u") continue; }   // fifth pass: S8o, S8, S8u
+        if (sname == "hrate") {}
+        else if (sname == "hgap" || sname == "hboot") { if (nm != "S8o" && nm != "S8" && nm != "S8k" && nm != "S8w" && nm != "S8v" && nm != "S8u") continue; }   // fifth pass: S8o, S8, S8u; round 7: S8k, the S8u before
         else if (c.stand_s > 0.0 ? !sg_set : third) continue;
       }
       std::vector<RunOut> outs;
