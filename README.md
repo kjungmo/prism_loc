@@ -75,12 +75,15 @@ off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad,
 `/diagnostics` status when a mount is missing from TF, and, on GNSS and IMU alone with
 sensor noise, height, tilt and heading within 0.15 m, 0.03 rad and 0.05 rad and a
 horizontal error within twice the reported sigma; with a constant gyro bias (45 s), across a
-reseed and from a start before the antenna mount is known, height and tilt within the same
+reseed (also with the body on a slope), from a start before the antenna mount is known, over a
+start and a stop and through a gap in the fixes, height and tilt within the same
 bounds, heading within 0.05 rad plus the vertical bias times the time, and a horizontal error
-within 3 sigma (see [Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build
-of the two fusion packages; the whole script takes about 9 minutes.
-GoogleTest cases: 45 in `prism_loc_core`, 26 in `prism_loc_fusion`, 18 in
-`prism_loc`, 24 in `prism_loc_fusion_ros` (113 in total).
+within 3 sigma, and the heading values and the WARN on `/diagnostics` (see
+[Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build
+of the two fusion packages; the whole script takes about 15 minutes. `--long` adds 600 s of
+standing (`gnss_stand_long`, 10 more minutes, not in CI).
+GoogleTest cases: 45 in `prism_loc_core`, 38 in `prism_loc_fusion`, 18 in
+`prism_loc`, 24 in `prism_loc_fusion_ros` (125 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -360,54 +363,158 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   a lever arm `t`, an error `δ` in the registered attitude adds about `|t|·δ` of position
   error that the filter does not model.
 - **GNSS antenna off `base_frame`.** The fix is fused as the position of the antenna,
-  `p + R·t`, with the full Jacobian. It corrects position, velocity, accelerometer bias, roll,
-  pitch and the two horizontal gyro biases. It does **not** correct the heading and the
-  vertical gyro bias unless the robot travels faster than 0.6 m/s: while it stands, turns on
-  the spot or creeps, they are "consider" states (their uncertainty limits how far the fix is
-  trusted, through the lever arm). A single antenna does not separate the heading from the
-  position of `base_frame`, and a plain update there made heading and vertical gyro bias drift
-  with the covariance shrinking (over-confident). Above 0.6 m/s, clear of 3 times the filter's
-  own speed uncertainty, nothing is left out and the fix corrects the heading too. With a
-  lever arm the roll/pitch variance at start and at every reseed is the accelerometer's (about
-  1e-4 rad²), not the 0.5 rad² of the heading; with the antenna at `base_frame` the starting
-  covariance is what it always was.
-  **Without the lidar** (GNSS and IMU only) the heading is therefore not corrected while the
-  robot stands or turns: it drifts with the vertical gyro bias, about 0.1 rad per minute for
-  every 0.1 deg/s, and the position of `base_frame` is known to about the horizontal lever
-  arm times the heading error (the reported covariance says so). Use the lidar, or send
-  `/initialpose` again, when that matters.
+  `p + R·t`, with the full Jacobian. Position, velocity, accelerometer bias, roll, pitch and the
+  two horizontal gyro biases are always corrected. With a lever arm the roll/pitch variance at
+  start and at every reseed is the accelerometer's (about 1e-4 rad²), not the 0.5 rad² of the
+  heading, and a start from `/initialpose` takes roll and pitch from the accelerometer at the
+  heading of the message (RViz sends a level attitude; on a slope that is wrong by the slope).
+  With the antenna at `base_frame` nothing changes.
+
+  **What one antenna and an IMU can observe.** A zero lever arm needs no table: the position is
+  the position of `base_link`. With a lever arm `t` (‖t_xy‖ is the length of its horizontal part):
+
+  | The robot | position of `base_link` | roll, pitch | heading | vertical gyro bias |
+  |---|---|---|---|---|
+  | stands, creeps, or drives straight at constant speed | only to a circle of radius ‖t_xy‖ around the antenna; the point on it is the heading | yes | **no** | no |
+  | accelerates, brakes, or turns at speed | yes | yes | yes, through the IMU (a horizontal acceleration resolved with a wrong heading mispredicts the velocity) | with the heading |
+  | spins on the spot | yes, through the sweep of the antenna | yes | weakly | weakly |
+
+  The filter does what the table says:
+  1. **Consider states.** The heading and the vertical gyro bias are counted in the innovation
+     covariance but not corrected (a plain update there trades the heading for the position of
+     the body and its covariance shrinks along a direction that was never observed).
+  2. **Bound.** The heading standard deviation that an update sees is at most 0.35 rad
+     (`EskfParams::lever_heading_sigma_max`). Without it the vertical gyro bias is never
+     corrected while the robot stands, the heading variance grows as (bias sigma · t)² without
+     limit, the lever term `−R[t]×` leaves its linear range, and after minutes the tilt and the
+     height diverge (the previous round's `S6vb`: 192 of 192 runs of 900 s and 1,800 s standing).
+     The bound scales the heading error variable, `P ← D P Dᵀ` with `D = I + (c − 1) u uᵀ`
+     on the attitude block (`u` is the vertical in the body frame, `c` = bound / sigma): the heading
+     variance by `c²`, every heading cross-covariance by `c`, the tilt not at all, `P` stays positive.
+  3. **Release.** While the IMU has measured horizontal acceleration the update is the full one,
+     heading and vertical gyro bias included: the filter keeps a decaying integral of the
+     horizontal specific force in the world frame, `dv ← dv·e^(−dt/4 s) + |a_xy|·dt`, and
+     releases above `dv` = 1.0 m/s (`lever_release_dv`; a start at 1 m/s² passes it after 1.15 s).
+     A straight drive at constant speed or a spin has `dv` = 0 and stays closed; the speed estimate
+     is not used (the previous version's gate on 0.6 m/s is off, `lever_motion_speed` = 0).
+  4. **Reseed.** `/initialpose` with a lever arm: roll and pitch from the accelerometer at the
+     heading of the message (a message that comes before the first IMU sample waits for it).
+
+  **What you see on `/diagnostics`** (new values; none changes an existing one):
+
+  | State | `heading_source` | `heading_sigma_rad` | `heading_capped` | `lever_release` | Status |
+  |---|---|---|---|---|---|
+  | filter not initialized | `none` | `n/a` | `false` | `n/a` | as before |
+  | antenna at `base_frame` (no lever arm) | the last source | the filter's | `false` | `n/a` | as before, never the heading WARN |
+  | lever arm, less than 30 s since the start or the last `/initialpose`, GNSS and IMU only | `none` or `initialpose` | 0.35 | `true` | `closed` | OK |
+  | lever arm, 30 s or more with the bound active and no heading source | `none`, `initialpose` or `lidar` (the last one) | 0.35 | `true` | `closed` | **WARN** `heading not observed: GNSS and IMU only for N s, ...` |
+  | start, stop or a turn at speed (release open) | unchanged | falls below 0.35 | `false` | `open` | no heading WARN |
+  | lidar corrections accepted | `lidar` | about 0.03 | `false` | `closed`, `open` while accelerating | OK |
+  | fixes stop for more than 2 s | unchanged | unchanged | `false` | unchanged | the heading WARN clears; its 30 s start again with the first fix |
+
+  `heading_source` is the last of `lidar` (an accepted NDT correction) and `initialpose`, `none`
+  if neither has happened (the `initial_yaw` parameter and the IMU alone); `gnss_only_s` is the
+  seconds since that source (or since the start). `heading_capped` is true while every lever-arm
+  update of the last stretch had to scale the heading down. The WARN is the filter saying what the
+  table above says: the heading is not estimated. It does not say that the pose is wrong.
+
+  **What is not observable, in numbers.** With GNSS and IMU only, on a robot that stands, creeps or
+  drives straight at constant speed, the heading is not estimated. It drifts with the vertical
+  gyro bias (0.1 rad per minute for each 0.1 deg/s). The filter holds the heading uncertainty it
+  uses at 0.35 rad, so once the true error is over about 0.35 rad the published heading and horizontal
+  covariance are optimistic: the position of `base_link` can then be wrong by up to `2·|t_xy|`
+  (1.0 m for a 0.5 m horizontal arm) in either direction. Roll, pitch, height, velocity, the
+  accelerometer bias and the horizontal gyro biases stay estimated and bounded. The heading comes
+  back from the lidar, from `/initialpose`, or from driving with a start, a stop or a turn at speed.
+  Spinning for minutes on the spot with 0.5 deg/s and no heading source, a start heading off by
+  1 rad or more followed by driving, and 120 s without fixes on a biased IMU are outside what
+  was measured to work (see the counts below).
+
   Measured on the real filter core in a synthetic experiment (study 6 of
-  [`experiments/README.md`](experiments/README.md), `experiments/eskf_lever.cpp`, 15,104 runs with
-  a lever arm: 60 s and 300 s, gyro bias 0 to 0.5 deg/s per axis, accelerometer bias, standing,
-  turning, spinning and driving, two antenna mounts, GNSS dropouts, a reseed). A run "diverged"
-  if the tilt exceeded 0.05 rad, the height 0.5 m, the horizontal error 1 m or the heading error
-  0.5 rad at a 1 s epoch from 10 s on (a GNSS dropout and 5 s after it, and 5 s after a reseed,
-  are not tested):
+  [`experiments/README.md`](experiments/README.md), `experiments/eskf_lever.cpp`; two passes, every
+  run counted, diverged or not). A run **fails by kind** (counted apart): *tz*, the tilt exceeded
+  0.05 rad or the height 0.5 m at a 1 s epoch from 10 s on; *circ*, the horizontal error left
+  the circle of radius `|t_xy|` around the antenna by more than 0.3 m; *xy*, over 1 m;
+  *heading*, over 0.5 rad. (A GNSS dropout and 5 s after it, and 5 s after a reseed, are not
+  tested.) **Second pass**, GNSS and IMU only, antennas A (0.5, 0, 1.0), B (−0.3, 0.2, 1.0) and a
+  1.5 m mast M (0, 0, 1.5), 4,200 runs per scheme of 300 s to 1,800 s (standing, driving a straight
+  line, start and stop, turning with pauses, a planar lemniscate, spinning; gyro bias 0 to
+  0.5 deg/s and accelerometer bias 0 to 0.3 m/s² per axis; dropouts of 30 s and 120 s; a reseed),
+  and the zero-lever filter (1,400 runs of the same data) as the reference:
+
+  | | previous round (speed gate at 0.6 m/s, `S6vb`) | this version (`S7a35`) | zero lever, same data |
+  |---|---|---|---|
+  | tz, all cells | 1,882 of 4,200 (44.8 %) | 880 of 4,200 (21.0 %) | 321 of 1,400 (22.9 %) |
+  | of these, tz in the zero-lever run of the same data too | 857 | 782 | |
+  | tz only with the lever arm | 1,025 | 98 | |
+  | clean envelope: stand, line, start-stop, turn; gyro bias up to 0.2 deg/s; accelerometer bias up to 0.1 m/s²; no dropout (300 to 1,800 s): tz | 400 of 912 | **0 of 912** | 3 of 304 |
+  | standing 900 s and 1,800 s, no dropout, every bias of the grid: tz | 192 of 192 | **0 of 192** | |
+  | median of the largest horizontal error, clean envelope | 0.71 m | 0.14 m | 0.04 m |
+  | heading error over 0.5 rad, clean envelope | 666 of 912 | 375 of 912 | 261 of 304 |
+
+  Reading, with the counts above and in
+  [`report.md`](experiments/results/eskf_lever/report.md):
+  - The failure of the third review round (tilt, then height, diverge after minutes of standing)
+    is gone: 0 of 192 standing runs of 900 s and 1,800 s, where the previous round had 192 of 192.
+    The 880 runs that still have tz are in cells where the zero-lever filter fails too (an
+    accelerometer bias of 0.3 m/s²: 574 of them; a GNSS dropout: 684; three have neither: two spins
+    and one start-stop, all at 0.5 deg/s) and 782 of them fail in the zero-lever run of the
+    same data. Of the 98 that do not, 88 have a GNSS dropout, 7 an accelerometer bias of 0.3 m/s²
+    and 3 neither; all 98 are runs of 300 s.
+  - The heading is not estimated while the robot stands, and this was not fixed: in the clean envelope
+    the heading error is over 0.5 rad in 375 of 912 runs (zero lever: 261 of 304; the previous round:
+    666 of 912). The table above names it.
+  - Spinning on the spot at 0.5 deg/s for 300 s (no dropout, accelerometer bias up to 0.1 m/s²): tz in
+    2 of 24 runs (the previous round 15 of 24, zero lever 0 of 8).
+  - The position of `base_link` stays near the antenna: median largest error 0.14 m in all
+    cells (0.30 m before), 156 of 4,200 runs over 1 m (894 before). Of these 124 are on the 0.5 m
+    arm A and 48 are runs of 900 s or 1,800 s without a dropout, where a heading error of 1.5 rad
+    or more puts `base_link` 1 m from where it is; 86 have a GNSS dropout (the zero-lever filter:
+    7 of 1,400 runs over 1 m, 7 of its 816 with a dropout).
+  - With the lidar (NDT fixes, 288 runs per scheme, all motions, a reseed, a dropout) tz is 0 for
+    every scheme but the first version (9, 3.1 %).
+  - A reseed on a slope (body tilted 0.05 and 0.1 rad, 144 runs per tilt): the previous round left a tilt
+    error of more than 0.02 rad in 43 and 68 runs; this version in 0 and 0 (taking the level attitude of the
+    message, the ablation `S7n`, 41 and 60).
+  - Consistency (NEES at the last epoch, 95 % band): the position NEES of standing configurations is
+    inside its band in 112 of 366 configurations (59 before); the tilt NEES is above its band (over-confident)
+    in 684 of 1,740 configurations and below it in 303; the heading NEES above its band in 491.
+    The heading and the horizontal covariance are optimistic once the true error is over the
+    bound, by construction (above).
+  - Choice of the bound and the release (second pass; the criterion is written in `eskf_lever.cpp` before
+    the first run): bounds 0.35, 0.5 and 0.7 rad, release thresholds 0.5, 1.0 and 2.0 m/s. With a bound of
+    0.7 rad the horizontal error leaves the circle in 928 of the 4,200 runs (0.5 rad: 238; 0.35 rad: 147).
+    A threshold of 2.0 m/s opens too late for the simulated start-stop (a start at 0.5 m/s² for 3 s reaches 1.06 m/s)
+    and recovers a heading that starts 0.5 rad off in 3 of 24 runs of that motion (1.0 m/s: 24 of 24; 0.5 m/s: 24 of 24). The declared
+    order puts 0.5 m/s ahead of 1.0 m/s by 3 of 2,448 runs (451 against 454 runs with `tz` or `circ`), which two
+    seeds per configuration cannot tell apart; I kept 1.0 m/s because of the next point, a deviation from the order that the
+    report states. Nothing was tried below 0.35 rad.
+  - **The release has a noise floor.** The integral of `|a_xy|` of white accelerometer noise `σ` per axis settles at about
+    `1.25·σ·4 s` = 5σ. On a standing robot with `σ` = 0.05 m/s² the release stays closed at both thresholds; at 0.1 m/s² the
+    threshold of 0.5 m/s is open in 65 % of the updates and 1.0 m/s in 0 %; at 0.2 m/s² 1.0 m/s is open in 56 % and
+    at 0.4 m/s² in 99 % (suite `hvib`). An open release on a robot that does not accelerate did no harm in these runs
+    (`tz` 0, `circ` 0 at 1.0 m/s) because the bound stays on, but the heading is then corrected from data that does not
+    show it. A vibrating platform with more than about 0.15 m/s² of accelerometer noise per axis needs a larger
+    `lever_release_dv` (a compile-time default; not a node parameter).
+  - No bound, no release (`S1s`, consider states only): tz in 2,767 of 4,200 runs; the previous version in 1,882.
+
+  **First pass** (15,104 runs with a lever arm, 60 s and 300 s; unchanged from the previous
+  round, rerun with the second pass):
 
   | | all runs | with lidar fixes | GNSS and IMU only | 60 s | 300 s |
   |---|---|---|---|---|---|
-  | first version of the lever arm (attitude and gyro bias all consider states) | 2,813 of 15,104 (18.6 %) | 43 of 7,552 (0.6 %) | 2,770 of 7,552 (36.7 %) | 17.3 % | 26.2 % |
-  | this version | 760 of 15,104 (5.0 %) | 0 of 7,552 | 760 of 7,552 (10.1 %) | 2.3 % | 20.2 % |
+  | first version of the lever arm (attitude and gyro bias all consider states, `S0`) | 2,813 of 15,104 (18.6 %) | 43 of 7,552 (0.6 %) | 2,770 of 7,552 (36.7 %) | 17.3 % | 26.2 % |
+  | previous round (`S6vb`) | 760 of 15,104 (5.0 %) | 0 of 7,552 | 760 of 7,552 (10.1 %) | 2.3 % | 20.2 % |
 
-  All 760 runs that still diverge have no lidar fixes; 709 of them crossed the heading limit
-  (the heading drifts with the vertical gyro bias), 548 have a gyro bias of 0.5 deg/s per axis
-  (32.9 % of the runs with that bias). Driving above 0.6 m/s diverged in 1.9 % of the
-  GNSS-and-IMU-only runs, standing in 16.2 %, turning on the spot with pauses in 10.5 %, spinning in
-  11.6 %. With the offset ignored, as before the lever arm, every GNSS-and-IMU-only run diverged
-  (the antenna is 0.4 to 1.1 m from `base_frame`). One case is worse than in the first version:
-  standing for 300 s on GNSS and IMU alone with no gyro bias, 62 of 96 runs diverged (tilt, then
-  height: while the robot stands, a tilt error and a horizontal accelerometer bias cannot be told
-  apart), against 0 of 96 for the first version, which does not correct the tilt at all and
-  therefore fails with any gyro bias (170 of 1,280 runs at 0.05 deg/s, 1,664 of 1,664 at 0.5 deg/s).
-  With the antenna at `base_frame` nothing
+  With the offset ignored, as before the lever arm, every GNSS-and-IMU-only run diverged
+  (the antenna is 0.4 to 1.1 m from `base_frame`). With the antenna at `base_frame` nothing
   changed: 1,265 of 3,200 such GNSS-and-IMU-only runs diverge in the same grid, with the same
-  plain update as on `main`. Position NEES (3 degrees of freedom, mean over the seeds, 95 %
-  chi-square band): inside the band in 72 % of the 1,664 configurations, above it
-  (over-confident) in 14 %, below it in 14 %. The NEES of all 15 states is above its band in
-  51 % (71 % with the antenna at `base_frame`): some states are over-confident, as on `main`.
-  All tables: [`experiments/results/eskf_lever/report.md`](experiments/results/eskf_lever/report.md).
-  The node check `scripts/fusion_extrinsic_check.py` adds a constant gyro bias (0.003, -0.002,
-  0.002 rad/s, and 0.5 deg/s on each axis), a reseed, and a start before the antenna mount is known.
+  plain update as on `main`. All tables, every run, every scheme, and the numbers quoted here:
+  [`experiments/results/eskf_lever/report.md`](experiments/results/eskf_lever/report.md).
+  The node check `scripts/fusion_extrinsic_check.py` adds a constant gyro bias (0.003, −0.002,
+  0.002 rad/s, and 0.5 deg/s on each axis), a reseed, a start before the antenna mount is known,
+  a body on a slope, a start and a stop, a gap in the fixes, and (not in the default run: 10
+  minutes) 600 s of standing.
 - **Missing mount.** With an empty frame name or no transform, that input is not used
   (nothing is assumed): the log says so every 5 s and `/diagnostics` reports
   `point clouds not used: ...`, `GNSS not used: ...` (WARN) or `IMU not used: ...` (WARN

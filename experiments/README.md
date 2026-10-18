@@ -173,9 +173,10 @@ arm), `S1` (heading and vertical gyro bias), `S3` (heading), `S2` (none: the ful
 update while it moves, with a speed test, a rate test or both; `S6va`, `S6v`, `S6vb` are the
 speed test alone at 0.15, 0.3 and 0.6 m/s). A trailing `s` means that the roll/pitch variance
 at start and at every reseed comes from the accelerometer instead of the 0.5 rad² of the heading.
-**`S6vb` is what the node runs** (the defaults of `EskfParams`), chosen because it had the
-fewest diverged runs of the 2,304 configurations below; the speed threshold of 0.6 m/s is the
-best of the three tested, not an optimum (driving was simulated at 1.0 to 1.7 m/s only).
+`S6vb` is what the node ran in the round that this pass belongs to (round 3); it was chosen because
+it had the fewest diverged runs of the 2,304 configurations below, and the second pass below
+(round 4) replaces it: the node now runs `S7a35`. The speed threshold of 0.6 m/s was the best of the
+three tested, not an optimum (driving was simulated at 1.0 to 1.7 m/s only).
 
 The grid (`eskf_lever.cpp`, top comment): duration 60 s (1,920 configurations, 10 seeds) and
 300 s (384 configurations, 6 seeds); gyro bias 0, 0.05, 0.1, 0.2, 0.5 deg/s on each axis (300 s:
@@ -192,16 +193,93 @@ then a shorter list of schemes, the motion gates, the spin motion) are not part 
 libstdc++, and the 13 schemes that the last two passes had in common gave identical rows.
 
 ```sh
-experiments/run_eskf_lever.sh /tmp/lever 4      # about 2 CPU hours: builds, runs both suites, writes report.md
-python3 experiments/eskf_lever_report.py experiments/results/eskf_lever/g60 experiments/results/eskf_lever/g300
+experiments/run_eskf_lever.sh /tmp/lever 4      # builds, runs all ten suites (first pass about 2 CPU hours), writes report.md
+python3 experiments/eskf_lever_report.py experiments/results/eskf_lever/g60 experiments/results/eskf_lever/g300  # the first pass alone
 ```
 
-The committed results are `experiments/results/eskf_lever/` (`g60_runs.csv.gz`, `g60_agg.csv.gz`,
-`g300_*`: one row per run and scheme, and per configuration and scheme with the NEES bands) and
-`report.md`, the output of the second command. The tables in `README.md` come from there.
+The committed results are `experiments/results/eskf_lever/` (`<suite>_runs.csv.gz`, `<suite>_agg.csv.gz`
+for `g60`, `g300` and the second-pass suites: one row per run and scheme, and per configuration and scheme with the
+NEES bands) and `report.md`, the output of `eskf_lever_report.py` on all of them. The tables in `README.md` come from
+there, and its last section ("Numbers quoted in README.md and the PR text") prints every number that `README.md`,
+`SPEC_fusion.md` and the PR text quote and that no table prints as such. Every column of the files of the previous
+round has the same values in `g60` and `g300` here (the second pass added columns and suites; both were rerun with the final code
+and compared column by column).
 
 Not done: a real robot; slopes; GNSS multipath or jumps; driving slower than 1 m/s; an
 observability-constrained update or first-estimates Jacobians (Huang, Mourikis and Roumeliotis
 2010), the usual remedy for an update that gains information along an unobservable direction,
 which was not tried. The scheme that the grid supports is a gate on the speed with two fixed
 settings; it is a design choice that the data favour, not a proof.
+
+### Second pass (round 4): what one antenna and an IMU observe
+
+The first pass chose `S6vb`, a gate on the filter's speed. The third review round showed what that
+leaves open: a robot that stands for minutes on GNSS and IMU alone leans and its height runs
+(the reviewer's runs of 900 s standing: 32 of 32 failed; 192 of 192 in this grid). The second pass looks at that case, on a grid that is declared in
+the top comment of `eskf_lever.cpp`, with its failure criteria and its selection rule, before the
+first run of any `h` suite.
+
+Schemes (all with the roll/pitch variance from the accelerometer at start and reseed, `s`):
+`S0`, `S1s`, `S2s`, `S6vb` as in the first pass; `S7` = `S1s` + a bound on the heading standard
+deviation that the lever update sees (0.7 rad, `lever_heading_sigma_max`) and the attitude of a reseed from
+the accelerometer at the heading of the message; `S7a` = `S7` + the consider states released while
+the IMU measures horizontal acceleration (`lever_release_dv` 1.0 m/s over a 4 s decaying window);
+`S7a35`, `S7a50` = the bound at 0.35 and 0.5 rad; `S7r05`, `S7r20` = the release threshold at 0.5
+and 2.0 m/s; `S7n` = `S7a` with the level attitude of `/initialpose` (an ablation, for the slope);
+`S7a35r05`, `S7a35r20` = `S7a35` with the release threshold at 0.5 and 2.0 m/s (added after the
+first results, when the bound of 0.35 rad was ahead of 0.5 and 0.7: the thresholds had been swept at
+0.7 only). The grid: motions stand, line (1.5 m/s), start-stop (a 40 s cycle with 0.5 m/s² for 3 s),
+turn, drive, spin; 300 s (2 seeds, `h300`), 600 s standing (8 seeds, `h600`), 900 s and 1,800 s standing and line
+(8 seeds, `h900`, `h1800`); gyro bias 0, 0.05, 0.1, 0.2, 0.5 deg/s, accelerometer bias 0, 0.1, 0.3 m/s²,
+dropouts of 30 s and 120 s, a reseed at half time; antennas A, B, Z and a 1.5 m mast M (0, 0, 1.5); NDT on
+(`hndt`); a reseed at 30 s of 60 s on a body tilted by 0.05 and 0.1 rad (`hslope`); a start heading 0.5, 1
+and 2 rad off (`hyaw`); accelerometer white noise of 0.02 to 0.4 m/s² per axis (`hvib`). The four antennas of a configuration share one data set, so the zero-lever row
+is the paired reference of the lever-arm rows.
+
+Failures are counted by kind, apart: `tz` (tilt over 0.05 rad or height over 0.5 m), `circ` (the horizontal error
+outside the circle of radius `|t_xy|` around the antenna plus 0.3 m), `xy` (over 1 m), `heading` (over 0.5 rad).
+The selection rule is in the file: the candidates `S7`, `S7a`, `S7a35`, `S7a50`, `S7r05`, `S7r20`, `S7a35r05`, `S7a35r20`
+are ordered by E (runs with `tz` or `circ` in the cells of a standing, line, start-stop or turning robot at up to 0.2 deg/s),
+then by X (`tz` beyond the zero-lever row in the other cells), the NEES conditions, the heading failures against `S6vb` while driving,
+the median of the largest error, and the number of parameters. The first look at `h300` showed that the zero-lever filter
+fails too in some of the cells of E (an accelerometer bias of 0.3 m/s², dropouts of 120 s), so that E > 0 for every candidate; the
+sentence that says the order is then applied with E as its first key, and the column E' (the runs of E that the zero-lever row of
+the same data survives), were added to the declaration and the report at that point. The criteria and the cells did not change.
+
+Result on the GNSS-and-IMU-only rows with a lever arm of `h300`, `h600`, `h900`, `h1800` (4,200 runs per scheme: 2,448 in the cells of E,
+1,752 in the others; the zero-lever reference has 1,400 runs and `tz` or `circ` in 178 of its 816 runs in the cells of E):
+
+| scheme | bound rad | release m/s | E: `tz` or `circ` in the cells of E | E': of these, runs the zero-lever row of the same data survives | X: `tz` beyond the zero-lever row, other cells | median largest error in the cells of E, m |
+|---|---|---|---|---|---|---|
+| `S7a35r05` | 0.35 | 0.5 | 451 | 45 | 30 | 0.135 |
+| **`S7a35`** | **0.35** | **1.0** | **454** | **50** | **35** | **0.143** |
+| `S7a50` | 0.5 | 1.0 | 489 | 79 | 55 | 0.195 |
+| `S7a35r20` | 0.35 | 2.0 | 502 | 92 | 89 | 0.170 |
+| `S7r05` | 0.7 | 0.5 | 931 | 489 | 51 | 0.253 |
+| `S7a` | 0.7 | 1.0 | 942 | 494 | 67 | 0.259 |
+| `S7` | 0.7 | never | 1,071 | 614 | 274 | 0.306 |
+| `S7r20` | 0.7 | 2.0 | 1,072 | 615 | 129 | 0.304 |
+| `S6vb` (round 3) | none | speed gate | 1,280 | 801 | 319 | 0.328 |
+| `S2s` (full update) | none | always | 532 | 56 | 16 | 0.161 |
+| `S1s` | none | never | 1,930 | 1,413 | 671 | 0.867 |
+| `S0` | | | 1,515 | 1,028 | 829 | 0.400 |
+
+No candidate has E = 0: the zero-lever filter fails in 178 of its 816 runs of those cells too (an accelerometer bias of 0.3 m/s² and the
+120 s dropouts), so the order was applied with E as its first key (the sentence above). It puts `S7a35r05` first, 3 runs of E and 5 of X
+ahead of `S7a35`, which two seeds per configuration cannot tell apart. The code ships `S7a35`, a deviation from the declared order
+for the reason in the last table: the release at 0.5 m/s is open in 65 % of the updates of a standing robot at an accelerometer noise of
+0.1 m/s² per axis, 1.0 m/s from 0.2 m/s² (0.56) and 2.0 m/s from 0.4 m/s² (0.58); the integral of `|a_xy|` of white noise settles at
+about 5 σ, so the threshold has a noise floor (the `hvib` table in `report.md` has the counts of `tz`, `circ` and `xy` too: none at 1.0 m/s). `S2s`, the full update, has as few `tz` as `S7a35` (939 of 4,200 runs against 880) but locks
+the heading wrong while the robot stands (heading over 0.5 rad in 2,509 runs against 1,599) and its position NEES is inside its band in
+18 % of the standing configurations (31 % for `S7a35`).
+
+
+```sh
+experiments/run_eskf_lever.sh /tmp/lever 4   # builds, runs the ten suites, writes report.md (first pass 2 CPU hours, second pass about 2.5 CPU hours;
+                                             # the committed results took 57 minutes of wall time with 4 jobs for 11 schemes, 13 more for the two added ones)
+LEVER_ONLY=S7a35r05,S7a35r20 ...            # run only these schemes (how the two added schemes were run; a full run gives the same rows)
+```
+
+Not done in this pass: a real robot; slopes under motion (the tilt is constant); a bound below 0.35 rad (the smallest tested);
+release thresholds between the three tested; a heading start error with a bound at 0.35 rad other than the three tested; an
+observability-constrained update or first-estimates Jacobians (above).

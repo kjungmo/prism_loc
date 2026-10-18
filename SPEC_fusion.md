@@ -70,6 +70,41 @@ set it); `lever_iterations` (default 1) relinearises `h` and `H` at the correcte
 for more than one Gauss-Newton pass (Bell and Cathey 1993) and is used only by the experiment.
 A zero lever is `updatePosition`, bit for bit, whatever these are set to.
 
+*Bound* (`lever_heading_sigma_max`, default 0.35 rad, 0 = off). With `u = Rᵀẑ` and
+`σ² = uᵀ P_θθ u`, before the gain is formed: if `σ² > σ_max²`, `c = σ_max/σ`,
+`D = I₁₅` with its attitude block `I + (c − 1) u uᵀ`, and `P ← D P Dᵀ`. The heading variance
+is scaled by `c²`, every cross-covariance of the heading with another state by `c`, the
+tilt (across `u`) not at all, and `P` stays symmetric and positive. The estimate is not
+touched. `leverHeadingCapped()` tells whether the last lever update scaled. Equal to the bound
+is not above it.
+
+*Release* (`lever_release_dv` 1.0 m/s, `lever_release_tau` 4 s, 0 = off). `predict` keeps
+`dv ← dv·e^(−dt/τ) + |(R(f − b_a) + g)_xy|·dt` (the horizontal part of the specific force in the
+world frame, a step with `dt ≤ 0` or a non-finite value adds nothing). It reads the sensor and the
+estimated attitude and changes neither `x` nor `P`. While `dv > lever_release_dv` the update uses
+`lever_consider_moving` (default 0: the full update, heading and vertical gyro bias included). The
+bound applies in both cases. The speed gate of the previous version (`lever_motion_speed`,
+`lever_motion_rate`, default 0 = off) is kept for the experiment; `lever_motion_*` and the release
+choose the same mask, the release is applied last.
+
+*Why the bound.* The vertical gyro bias is not corrected while the robot stands, so the
+heading variance grows as `(σ_bgz·t)²` (in the traced run of the third review round the heading
+sigma was 0.71 rad after 10 s and 2.0 rad after 190 s, with the shipped 0.01 rad/s prior). The lever term `−R[t]×` is a good linear model of the antenna
+position only for a heading error of a fraction of a radian; at a heading sigma of 2 rad the
+update moves tilt and the vertical bias by a lot (a corrected tilt next to an unbounded heading in
+the same Jacobian), and after minutes the tilt and the height diverge. The bound keeps the
+variance the update is fed in range. What it costs: once the true heading error is over the
+bound, the published heading and horizontal covariance are optimistic by up to
+`|t_xy|·|heading error|`, at most `2|t_xy|` (README, "what is not observable").
+
+*Why the release.* A horizontal specific force resolved with a wrong heading mispredicts the
+velocity (`F(δv, δθ) = −R[a]×`), so a start, a stop or a turn at speed shows the heading to one
+antenna and an IMU, as it does without a lever arm. A straight drive at constant speed does not
+(`dv` = 0), and a speed gate on the filter's own estimate opens on dead-reckoned speed;
+the integral reads the IMU. Spinning on the spot has `dv` = 0 and stays closed: the antenna
+sweep confounds the heading with the position of one fix, and the first pass of the study
+measured the full update over-confident there (the schemes with a rate gate, S6s and S6t, diverged in 28.8 % of the spin runs).
+
 *Why the heading and the vertical gyro bias.* A single antenna does not separate the
 heading from the position of the body: `p + R·t` stays put if the heading turns and the
 position moves around the antenna. A plain update (`lever_consider` 0) lets the filter
@@ -107,7 +142,9 @@ when `position_covariance[0]` exceeds `gnss_max_pos_cov`. `R₃` from
 
 ## 6. Initialization
 
-- **Manual:** `/initialpose` sets `p`(+yaw); roll/pitch from first IMU gravity; large `P`.
+- **Manual:** `/initialpose` sets `p`(+yaw); roll/pitch from the latest IMU gravity reading (a level
+  attitude in the message is not used when the GNSS antenna has a lever arm: a robot on a slope
+  would start tilted by the slope with a tilt variance of 1e-4 rad²); large `P`.
 - **Auto:** first RTK-fixed sample sets datum + `p`; first IMU sets level attitude;
   **yaw unobservable from single-antenna RTK** — held with large covariance until
   LiDAR-NDT pose updates resolve it (documented).
@@ -160,8 +197,17 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
   the filter will start from. With `t_bs ≠ 0` the roll/pitch variance at start and before
   every reseed comes from the accelerometer (§4, `Eskf::tiltVarianceFromAccel`); if the mount
   is not yet known when the filter starts (a start from `/initialpose`), the attitude
-  covariance is replaced at the first fix, unless the lidar has corrected the filter since the start;
+  covariance and the attitude are replaced at the first fix (roll and pitch from the accelerometer
+  at the heading the filter has), unless the lidar has corrected the filter since the start;
   a fix at a lever arm that arrives before the first IMU sample (a start from `/initialpose`) is held back until it.
+
+`/diagnostics` adds, after the existing values: `heading_source` (`lidar`, `initialpose` or
+`none`: the last heading source), `heading_sigma_rad` (the filter's sigma about the vertical),
+`heading_capped` (`true` while the stretch of lever updates that ended now was bounded, only with
+fixes younger than 2 s), `lever_release` (`open`, `closed`, `n/a` without a lever arm) and
+`gnss_only_s` (seconds since the last heading source or since the start). With a lever arm, the bound
+active for 30 s and no heading source for 30 s the status is WARN `heading not observed: ...`
+(README, "What you see on /diagnostics").
 
 An input whose frame is empty or has no transform is not used, and `/diagnostics` says so
 (WARN; ERROR for the IMU once `startup_timeout_s` has passed). Earlier versions ignored
