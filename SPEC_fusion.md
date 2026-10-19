@@ -96,7 +96,7 @@ bound, the published heading and horizontal covariance are optimistic by up to
 *Honest heading at the release.* The bound hides the
 true heading variance from the update, and the vertical gyro bias keeps turning the true heading while the robot stands
 (1.05 rad after 600 s at 0.1 deg/s; the filter's own spread is then 6 rad with the 0.01 rad/s prior). A full update at the
-release that trusts the bounded 0.35 rad turns the heading the wrong way and tilts the filter. So:
+release that trusts the bounded 0.35 rad can turn the heading the wrong way and tilt the filter. Where the spread is wide, the alignment (item 2) gives the heading before a release can act on it. So:
 1. *Shadow.* `predict` also carries the 2 x 2 covariance of (heading, vertical gyro bias) with the same prediction, never
    bounded; it is set from `P` at the first lever update after a reset and after every update that estimates the heading (the
    release open, the alignment). `headingSigmaHonest()` reads it; `covarianceHonest(lever)` is `P` with the heading variance
@@ -110,9 +110,8 @@ release that trusts the bounded 0.35 rad turns the heading the wrong way and til
    horizontal velocity is set to the antenna's, carried to now by the IMU sum (`lever_align_vel_std` 0.15 m/s); the heading
    variance is `lever_heading_sigma_max²`, independent of every other state (`P ← D P Dᵀ`, `D = I − uuᵀ` on the attitude block, so `P`
    stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`; the horizontal position is seated at the newest fix (`x_xy ← fix_xy − (R t)_xy`), because the position that `predict` dead-reckoned through the blind stretch is not the antenna's, and the update that follows would spend the whole difference on the heading and the vertical gyro bias. It does nothing with a gap of more than `lever_align_gap` (1 s; 2.5 fix periods if that is more) between two fixes anywhere from the first fix of the older velocity to now,
-   a window of more than `lever_align_window` + `max(1 s, 1.5 T)` between the two velocities (after an outage across a start the change of velocity would be taken over the whole outage; the allowance is over one fix period `T` so that the stamp jitter of a 1 Hz stream does not decide the check), or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
-3. *Release.* If the release is open and the variance was held back but the shadow is under `lever_align_sigma`, the shadow is put
-   back (`P ← D P Dᵀ` as above, then the shadow variance) and the bound is not applied while the release is open.
+   or a window of more than `lever_align_window` + `max(1 s, 1.5 T)` between the two velocities (after an outage across a start the change of velocity would be taken over the whole outage; the allowance is over one fix period `T` so that the stamp jitter of a 1 Hz stream does not decide the check),. `leverAligned()` is true for that update.
+3. *Release.* While the release is open the bound is not applied: the heading is estimated with the variance `P` holds. The shadow keeps the honest spread (item 1), and the update does not put it back into `P`.
 4. *Blind.* If the variance was held back, the shadow is over `lever_align_sigma` and the alignment finds nothing, the
    update leaves the attitude columns of `H` out (`H_θ = 0`, a filter without a lever arm) and adds `|t_xy|²` to `R_xx`, `R_yy`: the
    antenna says where the circle of the lever is and tells roll and pitch nothing. The release stays closed. Without it a turn on
@@ -122,7 +121,7 @@ release that trusts the bounded 0.35 rad turns the heading the wrong way and til
    The shadow is over `lever_align_sigma`, so the first start or stop aligns the heading (item 2) and an unalignable robot runs the blind update (item 4). A pose fix from the lidar invalidates the shadow as before.
 6. *Fix rate.* The alignment measures time, not fixes. `Eskf::fixPeriod()` is the median of the last 15 intervals between lever-arm
    fixes, `T`. The velocity of the antenna is taken over `max(lever_align_span, 2 T)` seconds (at least 2 intervals), the window is `max(lever_align_window, 1.5 span)`, a gap is an
-   interval over `max(lever_align_gap, 2.5 T)`, and the history that is checked for gaps and fast turns is the window plus a span. At 5 Hz and above these are 0.8 s, 3 s, 1 s;
+   interval over `max(lever_align_gap, 2.5 T)`, and the history that is checked for gaps is the window plus a span. At 5 Hz and above these are 0.8 s, 3 s, 1 s;
    at 1 Hz 2 s, 3 s, 2.5 s. The fixes are kept for twice the history plus two spans (by time, not by count).
    **Supported fix rate: 1 to 100 Hz** (measured: experiments/README.md, suites `hrate` and `hratex`). If the median interval is over `lever_align_period_ok` (1.05 s, a rate under 1 Hz) and not over `lever_align_period_max` (1.25 s, 0.8 Hz), the alignment runs and
    finds the heading less often (`leverDegradedRate()`, `heading_align_rate: degraded`). If it is over `lever_align_period_max`, `alignHeading` does nothing,

@@ -178,12 +178,14 @@ A trailing `s` means that the roll and pitch variance at the start and at every 
 (the zero lever: every scheme runs `updatePosition`, so its rows are the same in all schemes, which the report checks).
 
 **Which core the rows come from.** The rows of `S1s`, `S2s` and `S8u` in the committed CSVs are written by the harness and the core of this tree
-(round 9); `compare_rows.py` reproduces them bit for bit ("Reproducing"). The other schemes in the CSVs (`S0` to `S8x`, `S6vb`, `S7a35` and
+(round 10); `compare_rows.py` reproduces them bit for bit ("Reproducing"). The other schemes in the CSVs (`S0` to `S8x`, `S6vb`, `S7a35` and
 the rest) differed from `S8u` by switches that the core no longer has: a speed and rate gate, an iterated update, other consider masks,
-`lever_restore`, `lever_blind`, the span guard, the span of 4 fixes, the test of the norms. Their rows were written by the harness and the core
+`lever_restore`, `lever_blind`, the span guard, the span of 4 fixes, the test of the norms. (Round 10 cut two more rules of the core, the fast-turn guard
+of the alignment and the putting back of the heading variance at the release; no scheme of the earlier passes isolates either.) Their rows were written by the harness and the core
 of commit `2011666` (`git show 2011666:experiments/eskf_lever.cpp`). They stay as they are and `report.md` counts them in one frozen table.
-Two more labels name old `S8u` rows: `S8u@2011666` (in `hratex`) and `S8u@0ef1add`, the `S8u` of the core before round 9, kept in the suites where
-round 9 changed a row. The per-round narrative of the passes, with the tables as they were quoted, is in
+Three more labels name old `S8u` rows: `S8u@2011666` (in `hratex`), `S8u@0ef1add`, the `S8u` of the core of round 8, kept in the suites where
+round 9 changed a row, and `S8u@b921395`, the `S8u` of the core of round 9 (with the fast-turn guard and the variance restore), kept in the suites where
+round 10 changed a row. `S8u` is always the code that ships; its meaning moved with the core, and the labels keep the older meanings. The per-round narrative of the passes, with the tables as they were quoted, is in
 [`results/eskf_lever/HISTORY.md`](results/eskf_lever/HISTORY.md).
 
 **Suites** (configurations × seeds; each run has GNSS and IMU only unless it says NDT):
@@ -213,8 +215,10 @@ experiments/run_eskf_lever.sh /tmp/lever 4 hphase   # the phase suite (not in th
 
 The committed results are `experiments/results/eskf_lever/` (`<suite>_runs.csv.gz`: one row per run and scheme; `<suite>_agg.csv.gz`: one row per
 configuration and scheme with the NEES bands) and `report.md`, the output of `eskf_lever_report.py` on all of them. The report prints the tables of
-`S1s`, `S2s` and `S8u` per suite, the comparison of round 9 with round 8, every count that `README.md` and this file quote, and the frozen table of the
-retired schemes.
+`S1s`, `S2s` and `S8u` per suite, the comparison of round 10 with round 9 and of round 9 with round 8, the counts that `README.md` and this file quote about
+the live schemes ("Numbers quoted"), a block of frozen cells (the counts about retired schemes that the two texts quote and that the committed rows hold), and the frozen table of the
+retired schemes. The counts of the removed switches that are not in the frozen cells (the iterated update, the rate gates, the consider masks, the cells of E of the release
+study, the slope reseed) are in [`HISTORY.md`](results/eskf_lever/HISTORY.md) and in the report at commit `0ef1add` (`git show 0ef1add:experiments/results/eskf_lever/report.md`).
 
 ### The shipped design, and the failure behind each rule
 
@@ -224,25 +228,30 @@ The core carries only the rules that a measured failure needs (the seventh revie
 
 | Rule | Suite | Without the rule | With it |
 |---|---|---|---|
-| consider states (heading, vertical gyro bias) | `hsg`, 1,152 runs | 408 (`S2s`, the plain full update) | 49 (`S8u@0ef1add`, all rules); 1 (`S8u`, round 9) |
+| consider states (heading, vertical gyro bias) | `hsg`, 1,152 runs | 408 (`S2s`, the plain full update) | 49 (`S8u@0ef1add`, all rules); 1 (`S8u@b921395` and `S8u`) |
 | bound 0.35 rad | `h900`, `h1800`, standing, 192 runs | 192 (`S6vb`) | 0 (`S7a35`) |
-| release 1.0 m/s | `h300` to `h1800`, 2,448 runs of the cells of E: `tz` or `circ` | 1,071 (`S7`, bound 0.7 rad, never released) | 942 (`S7a`, released); 454 with the bound at 0.35 rad (`S7a35`) |
+| release 1.0 m/s | `h300` to `h1800`, 2,448 runs of the cells of E: `tz` or `circ` (HISTORY.md, second pass; not in the committed report) | 1,071 (`S7`, bound 0.7 rad, never released) | 942 (`S7a`, released); 454 with the bound at 0.35 rad (`S7a35`) |
 | shadow and alignment | `hsg`, 1,152 runs | 375 (`S7a35`) | 81 (`S8a`) |
 | blind update | `hsg`, 1,152 runs | 81 (`S8a`) | 26 (`S8`) |
 | span guard of the alignment | `hgap`, outage of 120 s, 288 runs | 68 (`S8o`) | 11 (`S8`) |
-| unknown start | `hboot`, 576 runs | 219 (`S8`) | 77 (`S8k`, `S8u@0ef1add`); 0 (`S8u`, round 9) |
-| spans in seconds and the rate limit | `hrate`, boot at 1, 10, 20 Hz, 144 runs each | 36, 31, 38 (`S8k`) | 0, 0, 0 (`S8u@0ef1add` and `S8u`) |
-| outage spread | `hgap`, short outages, 1,280 runs of A and B; 640 of the mast | 83; mast diverged 16 (`S8k`) | 32; diverged 0 (`S8u@0ef1add`); 31; mast `tz` 35, diverged 0 (`S8u`, round 9) |
-| fix history by time | `hratex`, 100 Hz, 272 runs | 71 (`S8u@2011666`) | 0 (`S8u@0ef1add`); 1 (`S8u`, round 9: a tight circle of antenna A) |
+| unknown start | `hboot`, 576 runs | 219 (`S8`) | 77 (`S8k`, `S8u@0ef1add`); 0 (`S8u@b921395` and `S8u`) |
+| spans in seconds and the rate limit | `hrate`, boot cells at 1, 10, 20 Hz, antennas A and B, 144 runs each | 36, 31, 38 (`S8k`) | 0, 0, 0 (`S8u@0ef1add`, `S8u@b921395` and `S8u`) |
+| outage spread | `hgap`, short outages, 1,280 runs of A and B; 640 of the mast | 83; mast `tz` 154, diverged 16 (`S8k`) | 32; mast `tz` 132, diverged 0 (`S8u@0ef1add`, the same core era); 31 and 35 (`S8u@b921395`); 1 and 34 (`S8u`, which has the other changes of rounds 9 and 10 as well) |
+| fix history by time | `hratex`, 100 Hz, antennas A and B, 272 runs | 71 (`S8u@2011666`) | 0 (`S8u@0ef1add`); 1 (`S8u@b921395` and `S8u`: a tight circle of antenna A) |
 
-*Switches removed, and why* (each is a scheme or a field that no shipped configuration used):
+The counts in the rows above that name a retired scheme (`S6vb`, `S7a35`, `S8`, `S8a`, `S8k`, `S8o`, `S8u@...`) are printed from the committed rows in the block "Frozen cells
+quoted in README.md and experiments/README.md" of `report.md`. The two release counts of the cells of E are the exception: see HISTORY.md.
+
+*Switches removed, and why* (each is a scheme or a field that no shipped configuration used; the counts in this table are in HISTORY.md and in the report at commit `0ef1add`, except `S7a35` and `S8` in the `lever_restore` row, which are in the frozen cells):
 
 | Removed | Scheme that had it | Measured | Reason |
 |---|---|---|---|
 | `lever_motion_speed`, `lever_motion_rate` (gates on speed and body rate) | `S6s`, `S6t`, `S6v`, `S6va`, `S6vb` | `S6vb` 1,882 of 4,200 runs with `tz`, the release 880; the rate gates diverge in 28.8 % of the spin runs | the release replaced them |
 | `lever_iterations` (iterated update) | `S4s`, `S5s` | iterating `S1s`: 953 against 954 of 15,104 runs diverged; iterating `S2s`: 2,418 against 1,651 | no gain |
 | tilt and horizontal-bias consider masks | `S0`, `S0s` | 2,813 of 15,104 runs diverged, `S1s` 954 | the heading and the vertical gyro bias are the unobservable states |
-| `lever_restore` = false | `S7a35` | 375 `tz` in `hsg`, `S8` 26 | the honest heading is needed with the release |
+| `lever_restore` = false | `S7a35` | 375 `tz` in `hsg`, `S8` 26 (`S7a35` also lacks the shadow, the alignment and the blind update, so the row does not isolate the restore) | the switch went in round 8; the restore itself went in round 10 (see below) |
+| fast-turn guard of the alignment (refuse a window with a body rate over `0.5 lever_align_dv / ‖t_xy‖`) | none (it never had a switch) | the mutant without it passes all 54 gtests; the rows of `S8u` without it and without the variance restore are in "Round 10" below | removed in round 10: no test needs it, and the cells it was meant for are better without it |
+| putting the honest heading variance back into `P` at the release (`if (open && held_back) setHeadingVariance(...)`) | none (the switch `lever_restore` went in round 8; this line stayed) | the mutant without it passes all 54 gtests; its only ablation, `S7a35`, lacks the shadow, the alignment and the blind update as well | removed in round 10: nothing measured needs it (see "Round 10" below) |
 | `lever_blind`, `lever_align_span_guard` = false | `S8a`, `S8o` | see the first table | the rules stay; the switch goes |
 | `lever_align_span` = 0 (the span of 4 fixes) | `S8k` | see the first table (`hrate`) | the spans in seconds replace it |
 | `lever_align_norm` (test of the norms of the two changes of velocity, 0.3) | `S8n`, `S8v` | `hrate`: 0 to 33 of 544 rows differ per rate and the counts stay within 3 runs, but 1 boot run at 1 Hz ends with the heading over 0.5 rad under `S8v` (configuration 148, seed 3), 0 under `S8u@0ef1add`; replica `gnss_gap_across_start`: 2, 4, 13 failing seeds of 300 with the test at spread 0, 0.1, 1, against 0, 1, 4 without | measured harmful in the node scenario |
@@ -320,33 +329,102 @@ Before round 9, 3 of 30 runs of `gnss_boot_wrong_yaw_1hz` ended 2.7 to 3.3 m hig
 
 **What the old text got wrong.** Three claims are rewritten in `README.md`. The 1.5 m mast "gains little": in the suites that start from a stand or
 an outage it now ends well under the zero-lever filter (table above), and over all 108 slices of the live tables it has more runs with `tz` than the
-zero lever in 5 (`h300` drive and turn, and the three cells at 0.5 Hz, which is outside the supported rate; `report.md`, last line of "Numbers
-quoted"). The 1 Hz tail was blamed on the phase between the IMU and GNSS streams of the node rig; the core sweep above and the node repeats show
+zero lever in 4 (`h300` drive and turn, and two cells at 0.5 Hz, which is outside the supported rate; `report.md`, last line of "Numbers
+quoted"; it was 5 slices at round 9). The 1 Hz tail was blamed on the phase between the IMU and GNSS streams of the node rig; the core sweep above and the node repeats show
 that the check on the window and the stale position caused it. `BOOT_Z_TOL_1HZ` in `scripts/fusion_extrinsic_check.py` returns to the 1.0 m of the
 other rates, and "1 to 100 Hz" is supported on the node evidence below.
 
+### Round 10: two rules cut, the numbers made traceable
+
+The tenth review (PR #7: one major and four minor findings) measured two rules of the core that no test needs and that no table named. Both are cut. The other
+findings are answered in the texts and files they name (the frozen cells of `report.md`, the limit on the horizontal arm in `README.md`, the SIGTERM handler of the node check).
+
+**The cuts** (`eskf.cpp`, `eskf.hpp`, `types.hpp`):
+1. The fast-turn guard of the alignment: the two checks `fixes_[i].rate_max * t_xy > 0.5 * lever_align_dv` in `alignHeading`, with `Fix::rate_max`, `rate_max_` and `rate_`.
+2. The variance restore at the release: `if (open && held_back) setHeadingVariance(up, s_hh_)`. While the release is open the heading is estimated with the variance `P` holds. The shadow
+   keeps the honest spread as before.
+
+*Why.* The mutant without each rule passes all 54 gtests of `prism_loc_fusion` (the tests are unchanged: 54 cases, all pass). The review reran the `S8u` rows without them and found the guard
+worse in `h300`, `hgap`, `hyaw` and `hslope`, and the restore worth at most 2 runs in `h300`. This tree reran the rows with both cut (below). The limit "a tight circle that starts during an outage" of
+round 9 was caused by the guard: antenna A has the heading off by over 0.5 rad in 0 of 128 runs now (64 before), and none of the runs passes 1.5 m (32 before).
+
+*What `S8u` means now.* `S8u` is the code that ships, so its rows moved with the core. The rows of the core of round 9 (with the guard and the restore) stay as `S8u@b921395`
+in the suites where any row changed; the rows of the core of round 8 stay as `S8u@0ef1add`. The scheme that this round measures has no name of its own in the CSVs: it is `S8u`.
+No scheme of the earlier passes isolates the guard or the restore (`S7a35` lacks the shadow, the alignment and the blind update as well), so the table below is the only measurement of either.
+
+**Effect on the suites** (`LEVER_ONLY=S8u`, 15 suites, same configurations and seeds; runs with `tz`; the section "Round 10 against round 9" of `report.md` has the other columns):
+
+| Suite and cell | Runs | Round 9 | Round 10 |
+|---|---|---|---|
+| `h300`, A and B | 2,160 | 597 | 565 |
+| `hslope`, A and B | 576 | 13 | 3 |
+| `hyaw`, A and B | 240 | 27 | 1 |
+| `hgap`, A and B (all outages) | 1,664 | 37 | 1 |
+| `hgap`, mast | 832 | 45 | 42 |
+| `hrate`, A and B | 1,632 | 107 | 100 |
+| `hrate`, mast | 816 | 73 | 66 |
+| `hratex`, mast | 544 | 8 | 4 |
+| `hphase`, 1 s, mast | 1,360 | 35 | 18 |
+| `hphase`, 0.5 s, mast | 1,360 | 13 | 3 |
+| `hphase`, 0.2 s, mast | 1,360 | 2 | 6 |
+| `hphase`, A and B, four periods | 10,880 | 13 | 16 |
+
+The heading error over 0.5 rad and the horizontal error over 1.5 m fall where `tz` falls: `hgap`, A and B, head 137 to 10 and `xy>1.5` 51 to 2; `hyaw`, A and B, `xy>1.5` 4 to 0.
+Four cells get worse, all small: `h300`, A and B, head 643 to 656 and `xy>1.5` 15 to 18; `hphase`, A and B, 0.2 s, head 0 to 4; 0.1 s, head 0 to 3; `hphase`, mast, 0.2 s, `tz` 2 to 6.
+`hsg`, `hsgv`, `hboot` and the mast in `h300`, `h600` to `h1800`, `hndt` and `hvib` are unchanged within one run. Antennas A and B in `h300` by motion: drive 121 to 75 of 360,
+start and stop 146 to 148, turn 63 to 74, spin 73 to 74.
+
+**Numbers made traceable.** `report.md` has a block "Frozen cells quoted in README.md and experiments/README.md", read from the committed rows. It holds the counts about retired schemes
+that the two texts quote (rules 2 to 8, the rate limit, the fix history, the observability grid). The counts of the removed switches (the iterated update, the rate gates, the consider masks,
+the cells of E, the slope reseed) are not in it; they are in HISTORY.md and in the report at commit `0ef1add`. Rule 8 is quoted as `S8k` against `S8u@0ef1add` (cores of the same era): the
+earlier text set `S8k` against the `S8u` of round 9, which mixed the effect of the position seat into the effect of the spread.
+
+**SIGTERM.** `scripts/fusion_extrinsic_check.py` had no handler: a SIGTERM (an outer `timeout`) ended the script before its `finally` stopped the node, and the node stayed in its own
+session (the review found 8 such nodes about 2 h old). The handler is installed after `rclpy.init()`, which installs its own. A run under `timeout -s TERM 25` ends with `rc=124` and no
+`fusion_node_main` left; a first version of the handler, installed before `rclpy.init()`, left the node running.
+
+**Node figures.** `scripts/fusion_extrinsic_check.py` on the head of round 10 (code commit `252b34e`), one ROS domain per run, every run in [`results/eskf_lever/node_checks.txt`](results/eskf_lever/node_checks.txt), block "Round 10 head". The default run has 36 scenarios and 249 checks and passes (24 minutes). The repeated scenarios:
+
+| Scenario | Runs | Largest height error | Tilt error | Heading error after the cycle | Bound (height / tilt / heading) |
+|---|---|---|---|---|---|
+| `gnss_boot_wrong_yaw` (A, 5 Hz) | 6 | 0.101 to 0.123 m | 0.0056 to 0.0080 rad | +0.169 to +0.210 rad | 1.0 m / 0.1 rad / 0.5 rad |
+| `gnss_boot_wrong_yaw_b` (B, 5 Hz) | 6 | 0.078 to 0.096 m | 0.0028 to 0.0042 rad | +0.041 to +0.046 rad | same |
+| `gnss_boot_wrong_yaw_10hz` | 6 | 0.045 to 0.053 m | 0.0105 to 0.0150 rad | −0.101 to −0.087 rad | same |
+| `gnss_boot_wrong_yaw_50hz` | 30 | 0.052 to 0.068 m | 0.0064 to 0.0123 rad | −0.003 to +0.016 rad | same |
+| `gnss_boot_wrong_yaw_1hz` | 30 | 0.053 to 0.079 m | 0.0042 to 0.0080 rad | −0.058 to −0.029 rad | same (was 5.0 m / 0.3 rad / 1.0 rad) |
+| `gnss_stand_go` (A) | 6 | 0.016 to 0.028 m | 0.0031 to 0.0037 rad | | 0.25 m / 0.03 rad |
+| `gnss_stand_go_b` (B) | 6 | 0.023 to 0.052 m | 0.0100 to 0.0115 rad | | same |
+
+Of the 30 runs at 50 Hz, 6 ran with six other node runs on the machine and 24 three at a time; none ended with the heading off. The round-9 build had 1 of 54 with the heading 0.99 rad off; the cause of that run is still not known, and 0 of 30 does not show that it is gone (the chance of 0 of 30 at a rate of 1 in 54 is 57 %). The 1 Hz scenario ends 0.053 to 0.079 m high in 30 of 30 runs. The long scenarios pass: `gnss_stand_long` 0.138 m, `gnss_gap_across_start` 0.219 m (0.0302 rad) and `_b` 0.058 m (0.0105 rad). The zero-lever poses are bit for bit those of `main` (lockstep feed of 1,284 poses, sha256 `dbe91c30…`), and the five experiment CSVs of the paper rebuilt from this tree have the hashes of `main`.
+
 ### Reproducing
 
-`LEVER_ONLY=S1s,S2s,S8u` on each suite, then `experiments/compare_rows.py`. The rows of `S1s`, `S2s` and `S8u` that the current core writes equal the committed rows bit for bit in all 15 suites that carry them (`runs` and `agg` files). In round 9 the `S1s` and `S2s` rows were run again with the new core and are equal to the rows that the core of round 8 wrote (the alignment is not reachable for them: no bound, no unknown start); the `S8u` rows were run again, replace the committed ones, and are the committed ones now (`S8u@0ef1add` keeps the old rows). `S1s` is in the first eight suites only.
+`LEVER_ONLY=S1s,S2s,S8u` on a suite, then `experiments/compare_rows.py`. The rows of `S8u` that the current core writes equal the committed rows bit for bit in all
+15 suites that carry them (`runs` and `agg` files): in round 10 the `S8u` rows of every suite were run again, replace the committed ones, and are the committed ones now
+(`S8u@b921395` keeps the rows of round 9 where round 10 changed any row; `S8u@0ef1add` keeps those of round 8). The rows of `S1s` and `S2s` were compared in round 9 on all
+suites that carry them. In round 10 they were run again on the suites below and are equal to the committed rows; on the other suites they were not run again. The round-10 cuts
+cannot reach them: `S1s` and `S2s` have no bound, no shadow and no unknown start, so the alignment and the release that the cuts touch do not run. `S1s` is in the first eight suites only.
+
+Rows are the `runs` and `agg` rows of the schemes named.
 
 | Suite | Schemes compared | Rows | Equal |
 |---|---|---|---|
-| `h300` | S1s,S2s,S8u | 19,440 | 19,440 |
 | `h600` | S1s,S2s,S8u | 2,592 | 2,592 |
 | `h900` | S1s,S2s,S8u | 1,296 | 1,296 |
 | `h1800` | S1s,S2s,S8u | 432 | 432 |
-| `hndt` | S1s,S2s,S8u | 1,728 | 1,728 |
-| `hslope` | S1s,S2s,S8u | 4,320 | 4,320 |
-| `hyaw` | S1s,S2s,S8u | 1,800 | 1,800 |
 | `hvib` | S1s,S2s,S8u | 600 | 600 |
+| `hyaw` | S1s,S2s,S8u | 1,800 | 1,800 |
 | `hsg` | S2s,S8u | 3,840 | 3,840 |
-| `hsgv` | S2s,S8u | 3,840 | 3,840 |
+| `hrate` | S2s,S8u | 8,160 | 8,160 |
+| `h300` | S8u | 6,480 | 6,480 |
+| `hndt` | S8u | 576 | 576 |
+| `hslope` | S8u | 1,440 | 1,440 |
+| `hsgv` | S8u | 1,920 | 1,920 |
 | `hgap` | S8u | 4,160 | 4,160 |
 | `hboot` | S8u | 960 | 960 |
-| `hrate` | S2s,S8u | 8,160 | 8,160 |
-| `hratex` | S2s,S8u | 5,440 | 5,440 |
+| `hratex` | S8u | 2,720 | 2,720 |
 | `hphase` | S8u | 27,200 | 27,200 |
-| all | | 85,808 | 85,808 |
+| all | | 64,176 | 64,176 |
 
 The first-pass suites `g60` and `g300` use schemes of the removed switches and are not rebuilt; their rows are those of `2011666`. The rows of `hratex` that the committed CSVs hold under the scheme name `S8u@2011666` are from the core of that commit (its 100 Hz cells differ from `S8u` because that core kept 256 fixes, 2.56 s at 100 Hz; the alignment needs 4 s). `gap_across_start.txt` is reproduced as well.
 

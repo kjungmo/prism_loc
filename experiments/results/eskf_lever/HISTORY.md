@@ -1,16 +1,16 @@
 # Study 6 (GNSS lever arm), the history of the review rounds 3 to 8
 
 Archive. This file holds what `experiments/README.md` told about the passes of the study before round 9: the schemes that the passes compared,
-the grid, the narration of each pass, and the tables and counts that `README.md` quoted before round 8. It is not edited any more. The
-current text is `experiments/README.md`, section 6; the live tables are `report.md`.
+the grid, the narration of each pass, and the tables and counts that `README.md` quoted before round 8. It is not edited any more, except
+for the addendum at the end (round 10: what the label `S8u` means). The current text is `experiments/README.md`, section 6; the live tables are `report.md`.
 
 Read it with these limits:
 - The scheme names (`S0` to `S8x`, `S6vb`, `S7a35` ...) are those of the passes. Their rows are in the committed CSVs, written by the harness
   and the core of commit `2011666` (`git show 2011666:experiments/eskf_lever.cpp`). The core of this tree has no switch for them; the frozen
   ablation table at the end of `report.md` counts them from the CSVs.
 - The rows of `S8u` were rewritten in round 9 (the core now seats the position at the alignment and allows more than one fix period of
-  stamp jitter): the `S8u` counts in this file are those of the core before round 9. The counts of round 9 are in `experiments/README.md`
-  ("Round 9") and in `report.md`.
+  stamp jitter) and again in round 10 (the fast-turn guard and the variance restore are cut): the `S8u` counts in this file are those of the core
+  before round 9 (`S8u@0ef1add` in the CSVs). The counts of rounds 9 and 10 are in `experiments/README.md` ("Round 9", "Round 10") and in `report.md`.
 - A few of the tables below speak of "the node" or "the PR" in the present tense of their round.
 
 ## First pass (round 3): fifteen ways of applying the antenna fix
@@ -510,3 +510,17 @@ The node check `scripts/fusion_extrinsic_check.py` adds a constant gyro bias (0.
 0.002 rad/s, and 0.5 deg/s on each axis), a reseed, a start before the antenna mount is known,
 a body on a slope, a start and a stop, a gap in the fixes, and (not in the default run: 10
 minutes) 600 s of standing, and 600 s of standing followed by a start and a stop (antennas A and B).
+
+## Addendum (round 10): what the label `S8u` means
+
+`S8u` is the scheme that ships (the `EskfParams` defaults and a start with a guessed heading marked unknown), so the core behind its rows changed three times:
+
+| Label in the CSVs | Core | What differs |
+|---|---|---|
+| `S8u@2011666` (`hratex` only) | commit `2011666` | the fix history by count (256 fixes), the switches still in the core |
+| `S8u@0ef1add` | commit `0ef1add` (round 8) | the switches cut, the fix history by time, the band of 0.8 to 1 Hz reported as degraded |
+| `S8u@b921395` | commit `b921395` (round 9) | the position seated at the newest fix when the alignment succeeds; 1.5 fix periods of stamp jitter allowed in the window check |
+| `S8u` | round 10 | the fast-turn guard of the alignment and the variance restore at the release cut |
+
+No scheme of the passes above measured the guard or the restore on its own. `S7a35` (`lever_restore` = false) also lacks the shadow, the alignment and the blind update, so
+its rows do not isolate the restore. The only measurement of either is the pair `S8u@b921395` and `S8u` (`experiments/README.md`, "Round 10"), which cuts both at once.
