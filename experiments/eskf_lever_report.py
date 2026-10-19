@@ -401,6 +401,20 @@ def frozen_cells(rows):
                 parts.append(f'{hzv} Hz {n(rs, tz)} of {len(rs)}')
         if parts:
             print(f'- Spans in seconds and the rate limit, boot cells, antennas A and B, {sc}: ' + ', '.join(parts) + '.')
+    # Round 10 against round 9, the cells that the texts quote one by one (README.md and experiments/README.md, the limits and the round 10 section)
+    if have('h300', OLD9):
+        parts = []
+        for mo in ('drive', 'startstop', 'turn', 'spin'):
+            a9, a10 = S('h300', OLD9, 'AB', lambda r: r['motion'] == mo), S('h300', 'S8u', 'AB', lambda r: r['motion'] == mo)
+            parts.append(f'{mo} {n(a9, tz)} of {len(a9)} to {n(a10, tz)} of {len(a10)}')
+        print('- Round 10 against round 9, h300, antennas A and B, tz per motion, ' + OLD9 + ' to S8u: ' + ', '.join(parts) + '.')
+    if have('hgap', OLD9):
+        for ant in ('A', 'B'):
+            a9 = S('hgap', OLD9, ant, lambda r: r['motion'] == 'sgdrive' and r['noise'] == 'off-1')
+            a10 = S('hgap', 'S8u', ant, lambda r: r['motion'] == 'sgdrive' and r['noise'] == 'off-1')
+            if a9 and a10:
+                print(f'- Round 10 against round 9, the tight circle (hgap, sgdrive, noise off-1), antenna {ant}: head {n(a9, head)} of {len(a9)} to {n(a10, head)} of {len(a10)}, '
+                      f'xy>1.5 {n(a9, xy15)} to {n(a10, xy15)}, tz {n(a9, tz)} to {n(a10, tz)}.')
     # The reseed on a slope: /initialpose takes roll and pitch from the accelerometer (S7n kept the level attitude of the message)
     for sc in ('S7n', 'S8u'):
         rs = S('hslope', sc, ABM, lambda r: r['slope'] == '0.1')

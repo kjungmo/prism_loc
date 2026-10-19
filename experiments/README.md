@@ -342,12 +342,19 @@ findings are answered in the texts and files they name (the frozen cells of `rep
 
 **The cuts** (`eskf.cpp`, `eskf.hpp`, `types.hpp`):
 1. The fast-turn guard of the alignment: the two checks `fixes_[i].rate_max * t_xy > 0.5 * lever_align_dv` in `alignHeading`, with `Fix::rate_max`, `rate_max_` and `rate_`.
-2. The variance restore at the release: `if (open && held_back) setHeadingVariance(up, s_hh_)`. While the release is open the heading is estimated with the variance `P` holds. The shadow
-   keeps the honest spread as before.
+2. The variance restore at the release: `if (open && held_back) setHeadingVariance(up, s_hh_)`. While the release is open the heading is estimated with the variance `P` holds. After an open
+   update the shadow is re-seeded from `P` (`syncShadow`), so the honest spread between 0.35 and 1 rad is dropped when `P` held the bounded variance. Measured: the fraction of NEES samples with the heading above the band in `h300` is 0.162 now against 0.155 with the restore (review of round 10).
 
 *Why.* The mutant without each rule passes all 54 gtests of `prism_loc_fusion` (the tests are unchanged: 54 cases, all pass). The review reran the `S8u` rows without them and found the guard
 worse in `h300`, `hgap`, `hyaw` and `hslope`, and the restore worth at most 2 runs in `h300`. This tree reran the rows with both cut (below). The limit "a tight circle that starts during an outage" of
-round 9 was caused by the guard: antenna A has the heading off by over 0.5 rad in 0 of 128 runs now (64 before), and none of the runs passes 1.5 m (32 before).
+round 9 was caused by the guard: antenna A has the heading off by over 0.5 rad in 0 of 128 runs now (64 before), and none of the runs passes 1.5 m (32 before). The before-and-after of these cells and of the `h300` motions below is printed in the frozen cells of `report.md` ("Round 10 against round 9").
+
+**Round 11 (the confirmation of round 10: five minor findings).**
+1. `gap_across_start.txt` was the output of the core of round 9. It is written again on the core of this head (command below, 300 seeds): bad seeds 1, 1, 0, 0, 2, 5, 5 at the spreads 0, 0.02, 0.05, 0.1, 0.25, 0.5, 1. The shipped spread of 0.1 has 0 bad seeds of 300, the spread 0 has 1, the whole spread has 5.
+2. `report.md` prints the round-9 side of the round-10 cells that the texts quote one by one: the `h300` tz per motion (drive 121 to 75, start-stop 146 to 148, turn 63 to 74, spin 73 to 74, antennas A and B, 360 runs each) and the tight circle of `hgap` (antenna A: heading 64 to 0 of 128, xy>1.5 32 to 0, tz 28 to 0).
+3. The position variance of the alignment (`P_xx`, `P_yy` gain `|t_xy|² σ_max²`) had no test that needed it (the mutant without it passed all 54 gtests). `EskfLever.AlignmentAddsTheLeverCircleToThePositionVariance` checks the growth to one part in a thousand, with a position noise so large that the update after the alignment cannot take it out. Mutants killed: no `P_xx` term, no `P_yy` term, half of the `P_xx` term, `σ` not squared. The ablation of the review shows almost nothing for this term (A+B identical everywhere, mast `hgap` tz 42 to 44), so the term is kept as a modelling statement (the body origin is known only up to the circle of the lever, to the heading's spread), not as a measured gain. The fusion package has 55 gtests now.
+4. Two comments and one sentence were wrong after the cuts of round 10. After an open update the shadow is re-seeded from `P` (`syncShadow`); when `P` held the bounded variance the honest spread between 0.35 and 1 rad is dropped. Measured: `frac_head_above` in `h300` 0.155 before the cut, 0.162 after.
+5. `gnss_turn_a` and `_b` failed the heading check (0.059 to 0.060 rad against 0.05) when the node initialized one fix late: the rig turned from t = 0. The rig now streams 1 s without turning first. 16 of 16 runs of `gnss_turn_b` pass (4 at a time), every one initialized at (1.30, -0.29, 0.67); a late initialization did not occur in these 16 runs, so the run shows no failure, not that the race is gone.
 
 *What `S8u` means now.* `S8u` is the code that ships, so its rows moved with the core. The rows of the core of round 9 (with the guard and the restore) stay as `S8u@b921395`
 in the suites where any row changed; the rows of the core of round 8 stay as `S8u@0ef1add`. The scheme that this round measures has no name of its own in the CSVs: it is `S8u`.
@@ -427,7 +434,7 @@ Rows are the `runs` and `agg` rows of the schemes named.
 | `hphase` | S8u | 27,200 | 27,200 |
 | all | | 64,176 | 64,176 |
 
-The first-pass suites `g60` and `g300` use schemes of the removed switches and are not rebuilt; their rows are those of `2011666`. The rows of `hratex` that the committed CSVs hold under the scheme name `S8u@2011666` are from the core of that commit (its 100 Hz cells differ from `S8u` because that core kept 256 fixes, 2.56 s at 100 Hz; the alignment needs 4 s). `gap_across_start.txt` is reproduced as well.
+The first-pass suites `g60` and `g300` use schemes of the removed switches and are not rebuilt; their rows are those of `2011666`. The rows of `hratex` that the committed CSVs hold under the scheme name `S8u@2011666` are from the core of that commit (its 100 Hz cells differ from `S8u` because that core kept 256 fixes, 2.56 s at 100 Hz; the alignment needs 4 s). `gap_across_start.txt` was written again on the core of this head (the replica command below, 300 seeds): bad seeds 1, 1, 0, 0, 2, 5, 5 at the spreads 0, 0.02, 0.05, 0.1, 0.25, 0.5, 1 (the file of round 9 had 0, 1, 0, 1, 1, 4, 5).
 
 #### Commands
 

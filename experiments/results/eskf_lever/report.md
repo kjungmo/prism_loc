@@ -911,6 +911,9 @@ Read from the committed rows of the schemes named; none of them can be regenerat
 - Spans in seconds and the rate limit, boot cells, antennas A and B, S8u@0ef1add: 1 Hz 0 of 144, 10 Hz 0 of 144, 20 Hz 0 of 144.
 - Spans in seconds and the rate limit, boot cells, antennas A and B, S8u@b921395: 1 Hz 0 of 144, 10 Hz 0 of 144, 20 Hz 0 of 144.
 - Spans in seconds and the rate limit, boot cells, antennas A and B, S8u: 1 Hz 0 of 144, 10 Hz 0 of 144, 20 Hz 0 of 144.
+- Round 10 against round 9, h300, antennas A and B, tz per motion, S8u@b921395 to S8u: drive 121 of 360 to 75 of 360, startstop 146 of 360 to 148 of 360, turn 63 of 360 to 74 of 360, spin 73 of 360 to 74 of 360.
+- Round 10 against round 9, the tight circle (hgap, sgdrive, noise off-1), antenna A: head 64 of 128 to 0 of 128, xy>1.5 32 to 0, tz 28 to 0.
+- Round 10 against round 9, the tight circle (hgap, sgdrive, noise off-1), antenna B: head 8 of 128 to 8 of 128, xy>1.5 0 to 0, tz 1 to 1.
 - Reseed on a slope of 0.1 rad, level attitude of the message (S7n) against the accelerometer: hslope, S7n: 60 of 288 runs with a tilt over 0.02 rad at the end.
 - Reseed on a slope of 0.1 rad, level attitude of the message (S7n) against the accelerometer: hslope, S8u: 0 of 288 runs with a tilt over 0.02 rad at the end.
 - Observability grid, h300 to h1800, GNSS and IMU only, S7a35 (round 6): 4200 runs, tz 880, excess 98; antennas A and B 2800 runs, tz 585, excess 68; the mast 1400 runs, tz 295, excess 30.

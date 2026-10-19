@@ -533,10 +533,14 @@ def gnss_only_noisy(rig, results, mount, yaw_rate):
     rig.noise = NOISE
     rig.add_static('gnss', mount)
     lever_xy = math.hypot(mount[0][0], mount[0][1])
+    # The node initializes at the first fix it sees, which can be one fix late. A rig that turns from t = 0 would then hand the filter a
+    # yaw that is already 0.3 rad/s x 0.2 s off, and a spin on the spot cannot observe it. Stream 1 s without turning first, so that the
+    # initialization happens at rest, whatever fix it lands on.
+    rig.stream(1.0, gnss=('gnss', mount))
     rig.stream(5.0, gnss=('gnss', mount), yaw_rate=yaw_rate)
     worst = {'z': 0.0, 'tilt': 0.0, 'yaw': 0.0, 'xy_over_sigma': 0.0, 'xy': 0.0}
     n = 0
-    for _ in range(5):                                # t = 10, 15, .. 30 s
+    for _ in range(5):                                # t = 11, 16, .. 31 s
         rig.stream(4.0, gnss=('gnss', mount), yaw_rate=yaw_rate)
         rig.stream(1.0, gnss=('gnss', mount))         # hold still for the second the pose is read in
         e = rig.pose_error(1.0)
