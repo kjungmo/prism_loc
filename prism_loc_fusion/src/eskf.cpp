@@ -213,7 +213,7 @@ bool Eskf::alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up)
   if (!(T > 0.0)) return false;
   if (params_.lever_align_period_max > 0.0 && T > params_.lever_align_period_max) return false;
   const Span sp = alignSpans(T);
-  const double span = sp.span, window = sp.window, gap = sp.gap, slack = std::max(1.0, T), history = sp.history;
+  const double span = sp.span, window = sp.window, gap = sp.gap, slack = std::max(1.0, 1.5 * T), history = sp.history;
   // Index of the first fix of the span that ends at fix k; fixes_.size() if the history is too short.
   auto span_begin = [&](size_t k) -> size_t {
     for (size_t j = k; j-- > 0;)
@@ -285,13 +285,16 @@ bool Eskf::alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up)
     P_(3, 3) += params_.lever_align_vel_std * params_.lever_align_vel_std;
     P_(4, 4) += params_.lever_align_vel_std * params_.lever_align_vel_std;
   }
-  const double sig = params_.lever_heading_sigma_max > 0.0 ? params_.lever_heading_sigma_max : 0.35;
+  const double sig = params_.lever_heading_sigma_max > 0.0 ? params_.lever_heading_sigma_max : kLeverHeadingSigmaMax;
   setHeadingVariance(up, sig * sig);
   // The body origin is known only up to the circle of the lever around the antenna, to the heading's spread.
   const Eigen::Vector3d tw = x_.q.toRotationMatrix() * lever;
   const double var_p = tw.head<2>().squaredNorm() * sig * sig;
   P_(0, 0) += var_p;
   P_(1, 1) += var_p;
+  // The position that predict() dead-reckoned through the blind stretch is not the antenna's: seat it at the newest fix, so that the
+  // update that follows does not see the whole drift as an innovation and spend it on the heading and the gyro bias.
+  x_.p.head<2>() = newest.p - (x_.q.toRotationMatrix() * lever).head<2>();
   fixes_.clear();
   lever_aligned_ = true;
   return true;
@@ -368,8 +371,7 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
   // Release: while the IMU measures horizontal acceleration the heading is observable.
   bool open = leverReleaseOpen();
   bool blind = false;   // the heading is unknown: the antenna says where the circle of the lever is, nothing about roll and pitch
-  if (open) consider = params_.lever_consider_moving;
-  lever_restored_ = false;
+  if (open) consider = 0u;   // released: the full update, heading and vertical gyro bias included
   lever_aligned_ = false;
   lever_blind_ = false;
   if (!shadow_valid_) syncShadow(up);
@@ -403,7 +405,6 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
   }
   if (open && held_back) {   // put the honest variance back
     setHeadingVariance(up, s_hh_);
-    lever_restored_ = true;
   }
   // Keep the heading uncertainty this update sees inside the range where -R[t]x is a fair
   // linear model of the lever term (lever_heading_sigma_max). The bound is not applied while the
