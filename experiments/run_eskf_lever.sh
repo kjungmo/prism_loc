@@ -14,7 +14,7 @@
 # Schemes of this build: S1s, S2s and S8u (the code that ships; EskfParams defaults); `ignore` in the first-pass suites. LEVER_ONLY=S8u
 # runs just one scheme. The schemes of the earlier passes (S0 to S8x) differ from S8u by switches that the core no longer has; their rows
 # in the committed CSVs were run with this harness and the core of commit 2011666 (git show 2011666:experiments/eskf_lever.cpp). The
-# S8u rows of the core before round 9 are in the CSVs as S8u@0ef1add. To check that this build reproduces the committed rows of S1s, S2s
+# S8u rows of the cores of round 8 and round 9 are in the CSVs as S8u@0ef1add and S8u@b921395 (the suites where a later round changed a row). To check that this build reproduces the committed rows of S1s, S2s
 # and S8u, run a suite into OUT_DIR and compare:
 #   LEVER_ONLY=S2s,S8u experiments/run_eskf_lever.sh /tmp/lever 4 hrate
 #   python3 experiments/compare_rows.py experiments/results/eskf_lever/hrate /tmp/lever/hrate S2s,S8u

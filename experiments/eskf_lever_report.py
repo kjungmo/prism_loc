@@ -7,8 +7,11 @@ PREFIX is OUT/<suite>. Two parts:
 
   1. The live tables: S1s, S2s and S8u, the schemes that this tree's harness writes (EskfParams defaults; S8u is the code that ships),
      per suite, with the zero lever ("Z") of the same data beside them, and under the heading "Numbers quoted in README.md and
-     experiments/README.md" every count that the two texts quote about them. A run of a subset of the suites leaves out the tables of the
-     others.
+     experiments/README.md" every count that the two texts quote about them, the comparison of round 10 with round 9 and of round 9 with
+     round 8, and a block of frozen cells (the counts about retired schemes that README.md and experiments/README.md quote, read from the
+     committed rows). A run of a subset of the suites leaves out the tables of the others. The counts of the removed switches that are not in
+     the frozen cells (the iterated update, the rate gates, the consider masks, the cells of E, the slope reseed) are in HISTORY.md and in
+     the report at commit 0ef1add.
   2. One frozen ablation table: every other scheme in the CSVs (S0 to S8x, S6vb, ignore, S8u@2011666 ...), per suite, read from the committed
      rows as they are. Those rows were written by the harness and the core of commit 2011666 (see experiments/README.md); this tree
      cannot regenerate them. The earlier tables of each pass (by gyro bias, by antenna, selection criteria, NEES bands, the paired
@@ -27,7 +30,9 @@ import sys
 from collections import defaultdict
 
 LIVE = ('S1s', 'S2s', 'S8u')
-OLD = 'S8u@0ef1add'   # the S8u rows of the core before round 9, kept where round 9 changed any row
+OLD8 = 'S8u@0ef1add'   # the S8u rows of the core of round 8, kept where round 9 changed any row
+OLD9 = 'S8u@b921395'   # the S8u rows of the core of round 9 (fast-turn guard, variance restore), kept where round 10 changed any row
+ABM = ('A', 'B', 'M')
 ARMS = (('A, B', ('A', 'B')), ('M (mast)', ('M',)), ('Z (zero lever)', ('Z',)))
 SUITE_ORDER = ('g60', 'g300', 'h300', 'h600', 'h900', 'h1800', 'hndt', 'hslope', 'hyaw', 'hvib', 'hsg', 'hsgv', 'hgap', 'hboot', 'hrate', 'hratex',
                'hphase', 'hgapsweep')
@@ -250,38 +255,45 @@ def phases(rows, zero):
             print(f'| {per} s | {idx} | {out[0]} | {out[1]} | {zmax:.2f} |')
 
 
-def round9(rows):
-    """Round 9 against round 8: the S8u rows now, and the S8u@0ef1add rows (the core before the position was seated at the alignment and the
-    window allowed more than one fix period of stamp jitter), in the suites where any row changed."""
-    old = {r['suite'] for r in rows if r['scheme'] == OLD}
-    if not old:
-        return
-    print('\n## Round 9 against round 8: S8u now, and S8u@0ef1add (the core of round 8), by suite\n')
-    print('Same configurations, same seeds, same data; only the core differs. `S8u@0ef1add` rows are the committed rows of the core before round 9.\n')
-    print('| suite | antennas | runs | tz before / now | z>1 before / now | head before / now | xy>1.5 before / now | circ before / now |\n|---|---|---|---|---|---|---|---|')
-    for su in SUITE_ORDER:
-        if su not in old:
+def rounds(rows):
+    """Round 10 against round 9 and round 9 against round 8. Round 10 cut the fast-turn guard of the alignment and the variance restore at
+    the release; round 9 seated the position at the alignment and allowed more stamp jitter in the window check. In a suite where a round
+    changed no row, nothing was renamed: the S8u rows are then the rows of the earlier core as well."""
+    has9 = {r['suite'] for r in rows if r['scheme'] == OLD9}
+    for title, old, name_new in (('Round 10 against round 9: S8u now, and ' + OLD9 + ' (the core of round 9: fast-turn guard and variance restore)', OLD9, lambda su: 'S8u'),
+                                 ('Round 9 against round 8: ' + OLD9 + ' (or S8u where round 10 changed no row), and ' + OLD8 + ' (the core of round 8)', OLD8,
+                                  lambda su: OLD9 if su in has9 else 'S8u')):
+        olds = {r['suite'] for r in rows if r['scheme'] == old}
+        if not olds:
             continue
-        for label, ants in ARMS[:2]:
-            a = [r for r in rows if r['suite'] == su and r['scheme'] == OLD and r['antenna'] in ants]
-            b = [r for r in rows if r['suite'] == su and r['scheme'] == 'S8u' and r['antenna'] in ants]
-            cell = lambda f: f'{sum(map(f, a))} / {sum(map(f, b))}'
-            print(f'| {su} | {label} | {len(b)} | {cell(tz)} | {cell(z1)} | {cell(head)} | {cell(xy15)} | {cell(circ)} |')
-    # by fix rate and by phase, antennas A and B and the mast
-    for title, suites, keyf in (('hrate and hratex by fix rate', ('hrate', 'hratex'), hz), ('hphase by fix period', ('hphase',), lambda r: r['noise'].split('i')[0][1:] + ' s')):
-        sel = [r for r in rows if r['suite'] in suites and r['scheme'] in (OLD, 'S8u') and r['antenna'] in ('A', 'B', 'M')]
-        if not any(r['scheme'] == OLD for r in sel):
-            continue
-        print(f'\n### {title}\n')
-        print('| fix | antennas | runs | tz before / now | head before / now | xy>1.5 before / now |\n|---|---|---|---|---|---|')
-        keys = sorted({keyf(r) for r in sel}, key=lambda k: -float(k.split()[0]) if keyf is not hz else -float(k.split()[0]))
-        for k in keys:
+        newlab = 'now' if old == OLD9 else 'round 9'
+        oldlab = 'round 9' if old == OLD9 else 'round 8'
+        print(f'\n## {title}, by suite\n')
+        print(f'Same configurations, same seeds, same data; only the core differs. `{old}` rows are the committed rows of the older core.\n')
+        print(f'| suite | antennas | runs | tz {oldlab} / {newlab} | z>1 {oldlab} / {newlab} | head {oldlab} / {newlab} | xy>1.5 {oldlab} / {newlab} | circ {oldlab} / {newlab} |\n|---|---|---|---|---|---|---|---|')
+        for su in SUITE_ORDER:
+            if su not in olds:
+                continue
             for label, ants in ARMS[:2]:
-                a = [r for r in sel if keyf(r) == k and r['scheme'] == OLD and r['antenna'] in ants]
-                b = [r for r in sel if keyf(r) == k and r['scheme'] == 'S8u' and r['antenna'] in ants]
-                if a and b:
-                    cell = lambda f: f'{sum(map(f, a))} / {sum(map(f, b))}'
-                    print(f'| {k} | {label} | {len(b)} | {cell(tz)} | {cell(head)} | {cell(xy15)} |')
+                a = [r for r in rows if r['suite'] == su and r['scheme'] == old and r['antenna'] in ants]
+                b = [r for r in rows if r['suite'] == su and r['scheme'] == name_new(su) and r['antenna'] in ants]
+                cell = lambda f: f'{sum(map(f, a))} / {sum(map(f, b))}'
+                print(f'| {su} | {label} | {len(b)} | {cell(tz)} | {cell(z1)} | {cell(head)} | {cell(xy15)} | {cell(circ)} |')
+        # by fix rate and by phase, antennas A and B and the mast
+        for t2, suites, keyf in (('hrate and hratex by fix rate', ('hrate', 'hratex'), hz), ('hphase by fix period', ('hphase',), lambda r: r['noise'].split('i')[0][1:] + ' s')):
+            sel = [r for r in rows if r['suite'] in suites and r['antenna'] in ('A', 'B', 'M')]
+            if not any(r['scheme'] == old for r in sel):
+                continue
+            print(f'\n### {t2} ({oldlab} against {newlab})\n')
+            print(f'| fix | antennas | runs | tz {oldlab} / {newlab} | head {oldlab} / {newlab} | xy>1.5 {oldlab} / {newlab} |\n|---|---|---|---|---|---|')
+            keys = sorted({keyf(r) for r in sel}, key=lambda k: -float(k.split()[0]))
+            for k in keys:
+                for label, ants in ARMS[:2]:
+                    a = [r for r in sel if keyf(r) == k and r['scheme'] == old and r['antenna'] in ants]
+                    b = [r for r in sel if keyf(r) == k and r['scheme'] == name_new(r['suite']) and r['antenna'] in ants]
+                    if a and b:
+                        cell = lambda f: f'{sum(map(f, a))} / {sum(map(f, b))}'
+                        print(f'| {k} | {label} | {len(b)} | {cell(tz)} | {cell(head)} | {cell(xy15)} |')
 
 
 def quoted(rows, zero):
@@ -348,6 +360,74 @@ def quoted(rows, zero):
               f'{max(num(r, "max_z") for r in rs):.2f} m; phase 0: tz {n(p0, tz)}; the worst phase has tz {worst}.')
 
 
+def frozen_cells(rows):
+    """The counts that README.md and experiments/README.md quote about the retired schemes (and the S8u rows of earlier cores), read from the
+    committed rows. The counts of the removed switches (the iterated update, the rate gates, the consider masks, the cells of E of the release
+    study, the slope reseed) are not here: they are in HISTORY.md, and in the report at commit 0ef1add (git show 0ef1add:experiments/results/eskf_lever/report.md)."""
+    print('\n### Frozen cells quoted in README.md and experiments/README.md\n')
+    print('Read from the committed rows of the schemes named; none of them can be regenerated by this tree (`S8u@0ef1add` and `S8u@b921395` are the S8u rows of the cores of rounds 8 and 9). '
+          'Antennas A, B and M unless the line says otherwise; `tz` unless it says otherwise.\n')
+    n = lambda rs, pred: sum(map(pred, rs))
+    div = lambda r: num(r, 'max_z') > 100.0 or num(r, 'max_tilt') > 1.5
+    S = lambda su, sc, ants, pick=lambda r: True: [r for r in rows if r['suite'] == su and r['scheme'] == sc and r['antenna'] in ants and pick(r)]
+    have = lambda su, sc: any(r['suite'] == su and r['scheme'] == sc for r in rows)
+
+    def line(rule, su, sc, rs, pred=tz, what='tz'):
+        if rs:
+            print(f'- {rule}: {su}, {sc}: {n(rs, pred)} of {len(rs)} runs with {what}.')
+    for sc in ('S6vb', 'S7a35'):   # rule 2, the bound
+        rs = [r for su in ('h900', 'h1800') for r in S(su, sc, ABM, lambda r: r['motion'] == 'stand')]
+        line('Rule 2, bound (standing 900 s and 1,800 s)', 'h900 and h1800', sc, rs)
+    for sc in ('S6vb', 'S7a35'):   # rule 3, the release
+        rs = [r for su in ('h300', 'h600', 'h900', 'h1800') for r in S(su, sc, ABM, lambda r: r['ndt'] == '0')]
+        line('Rule 3, release (GNSS and IMU only)', 'h300 to h1800', sc, rs)
+    for rule, sc in (('Rule 5, shadow and alignment, without', 'S7a35'), ('Rule 5 and rule 6, with the shadow and the alignment, without the blind update', 'S8a'),
+                     ('Rule 6, with the blind update', 'S8')):
+        line(rule, 'hsg', sc, S('hsg', sc, ABM))
+    for sc in ('S8o', 'S8'):   # the span guard
+        line('Rule 5, span guard, outage of 120 s', 'hgap', sc, S('hgap', sc, ABM, lambda r: r['drop_s'] == '120'))
+    for sc in ('S8', 'S8k', OLD8, OLD9, 'S8u'):   # rule 7
+        line('Rule 7, unknown start', 'hboot', sc, S('hboot', sc, ABM))
+    for sc in ('S8k', OLD8, OLD9, 'S8u'):   # rule 8, short outages at the first start
+        for label, ants in (('antennas A and B', 'AB'), ('the mast M', 'M')):
+            rs = S('hgap', sc, ants, lambda r: r['noise'].startswith('off'))
+            if rs:
+                print(f'- Rule 8, outage spread, short outages: hgap, {sc}, {label}: {n(rs, tz)} of {len(rs)} runs with tz, {n(rs, div)} diverged.')
+    for sc in ('S8k', OLD8, OLD9, 'S8u'):   # the rate limit
+        parts = []
+        for hzv in (1, 10, 20):
+            rs = S('hrate', sc, 'AB', lambda r: abs(1 / fix_period(r) - hzv) < 1e-6 and kind(r) == 'boot')
+            if rs:
+                parts.append(f'{hzv} Hz {n(rs, tz)} of {len(rs)}')
+        if parts:
+            print(f'- Spans in seconds and the rate limit, boot cells, antennas A and B, {sc}: ' + ', '.join(parts) + '.')
+    # The reseed on a slope: /initialpose takes roll and pitch from the accelerometer (S7n kept the level attitude of the message)
+    for sc in ('S7n', 'S8u'):
+        rs = S('hslope', sc, ABM, lambda r: r['slope'] == '0.1')
+        if rs:
+            print(f'- Reseed on a slope of 0.1 rad, level attitude of the message (S7n) against the accelerometer: hslope, {sc}: {n(rs, lambda r: num(r, "end_tilt") > 0.02)} of {len(rs)} runs '
+                  'with a tilt over 0.02 rad at the end.')
+    # The observability grid with a lever arm (README.md, limits): runs with tz, and runs with tz whose zero-lever run has none (excess)
+    zero = Zero(rows)
+    grid = [r for r in rows if r['suite'] in ('h300', 'h600', 'h900', 'h1800') and r['ndt'] == '0' and r['antenna'] in ABM]
+    has9 = {r['suite'] for r in grid if r['scheme'] == OLD9}
+    for label, pick in (('S7a35 (round 6)', lambda r: r['scheme'] == 'S7a35'),
+                        ('round 9 (' + OLD9 + ' where round 10 changed a row, S8u elsewhere)', lambda r: r['scheme'] == (OLD9 if r['suite'] in has9 else 'S8u')),
+                        ('S8u (shipped)', lambda r: r['scheme'] == 'S8u')):
+        rs = [r for r in grid if pick(r)]
+        if rs:
+            ab = [r for r in rs if r['antenna'] in ('A', 'B')]
+            m = [r for r in rs if r['antenna'] == 'M']
+            print(f'- Observability grid, h300 to h1800, GNSS and IMU only, {label}: {len(rs)} runs, tz {n(rs, tz)}, excess {zero.excess(rs)}; antennas A and B {len(ab)} runs, tz {n(ab, tz)}, '
+                  f'excess {zero.excess(ab)}; the mast {len(m)} runs, tz {n(m, tz)}, excess {zero.excess(m)}.')
+    sh = [r for r in grid if r['scheme'] == 'S8u']
+    ex = [r for r in sh if tz(r) and zero.of(r) is not None and not tz(zero.of(r))]
+    print(f'- Observability grid, S8u: of the {len(ex)} excess runs, {sum(r["acc_bias"] == "0.3" for r in ex)} are in cells with an accelerometer bias of 0.3 m/s^2.')
+    for sc in ('S8u@2011666', OLD8, OLD9, 'S8u'):   # the fix history by time
+        rs = S('hratex', sc, 'AB', lambda r: abs(1 / fix_period(r) - 100) < 1e-6)
+        line('Fix history by time, 100 Hz, antennas A and B', 'hratex', sc, rs)
+
+
 def mast_summary():
     both = {k: v for k, v in MASTZ.items() if 'M' in v and 'Z' in v}
     worse = sorted(k for k, v in both.items() if v['M'] > v['Z'])
@@ -358,7 +438,7 @@ def mast_summary():
 def frozen(rows):
     """One table: every scheme that is not S1s, S2s or S8u, per suite, from the committed rows. The runs are the lever-arm runs (antennas A, B, M; A and B in g60, g300)."""
     print('\n## Frozen ablation: the retired schemes, read from the committed CSVs\n')
-    print('Rows written by the harness and the core of commit `2011666`, except `S8u@2011666` (the S8u of that commit, in `hratex`) and `S8u@0ef1add` (the S8u of the core of round 8, in the suites where round 9 changed a row); '
+    print('Rows written by the harness and the core of commit `2011666`, except `S8u@2011666` (the S8u of that commit, in `hratex`) `S8u@0ef1add` (the S8u of the core of round 8, in the suites where round 9 changed a row) and `S8u@b921395` (the S8u of the core of round 9, in the suites where round 10 changed a row); '
           'not regenerated by this tree. '
           'Lever-arm runs only (antennas A, B, M); `ignore` and the zero lever Z: see the live tables. A scheme that a suite does not carry has no row.\n')
     print('| suite | scheme | runs | tz | z>1 | circ | xy>1 | head | diverged |\n|---|---|---|---|---|---|---|---|---|')
@@ -388,8 +468,9 @@ def main():
     boot(live, zero)
     rates(live, zero)
     phases(live, zero)
-    round9(rows)
+    rounds(rows)
     quoted(live, zero)
+    frozen_cells(rows)
     mast_summary()
     frozen(rows)
     return 0

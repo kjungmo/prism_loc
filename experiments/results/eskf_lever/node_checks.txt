@@ -1,4 +1,4 @@
-Node runs of scripts/fusion_extrinsic_check.py for the GNSS lever-arm update (study 6): the blocks "Final head" at the end are the runs of the final head (default run, long scenarios, repeated runs with one ROS domain per run); the blocks "Round 7" before them are the runs of the round before, those before that are older. The older blocks are history: the rig of the script ran its IMU at about 85 Hz then.
+Node runs of scripts/fusion_extrinsic_check.py for the GNSS lever-arm update (study 6): the block "Round 10 head" at the end is the runs of the final head (default run, repeated runs with one ROS domain per run, the long scenarios); the block "Final head" before it is the head of round 9; the blocks "Round 7" before them are the runs of the round before, those before that are older. The older blocks are history: the rig of the script ran its IMU at about 85 Hz then.
 Raw output of the script (PASS/FAIL lines), the synthetic rig of the script, ROS 2 Humble, Release build of the four packages,
 several runs at once on one 12-core machine. Each block is one run; the numbers of a node run vary from run to run (timing of the 100 Hz loop, noise draws).
 
@@ -1414,3 +1414,139 @@ The stand-then-go scenarios do not print a heading error (nan).
 default run (fusion_extrinsic_check.py --tolerate-imu-gaps): 249 PASS, 0 FAIL, rc 0, 24 minutes (36 scenarios), domain 170
 zero-lever lockstep feed (1,284 poses, base_link frames and identity static TFs): sha256 dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25 both, equal to main
 the paper's five experiment CSVs rebuilt from this tree: bbs_relocalization 4313e0a2, eskf_nees bead7fef, eskf_track 9abba38a, mcl_particles d41e9eff, mcl_tracking 52f2a930 (equal to main)
+
+=== Round 10 head (code commit 252b34e): repeated runs, one ROS domain per run, 7 to 13 other node runs on the machine at a time in the second wave ===
+Core change: the fast-turn guard of the alignment and the variance restore at the release are cut.
+height = largest height error in the 80 s from the start; tilt = largest tilt error; heading error = after the cycle; motion = seconds until heading_source "motion".
+The stand-then-go scenarios do not print a heading error (nan).
+
+[gnss_boot_wrong_yaw_1hz] 30 runs
+  domain 120: height 0.067 m, tilt 0.0080 rad, heading error -0.053 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 121: height 0.065 m, tilt 0.0078 rad, heading error -0.051 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 122: height 0.064 m, tilt 0.0057 rad, heading error -0.043 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 123: height 0.059 m, tilt 0.0058 rad, heading error -0.045 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 124: height 0.073 m, tilt 0.0078 rad, heading error -0.055 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 125: height 0.071 m, tilt 0.0058 rad, heading error -0.044 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 126: height 0.071 m, tilt 0.0064 rad, heading error -0.048 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 127: height 0.064 m, tilt 0.0068 rad, heading error -0.058 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 128: height 0.075 m, tilt 0.0057 rad, heading error -0.041 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 129: height 0.072 m, tilt 0.0052 rad, heading error -0.041 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 130: height 0.073 m, tilt 0.0072 rad, heading error -0.047 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 131: height 0.062 m, tilt 0.0057 rad, heading error -0.048 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 132: height 0.072 m, tilt 0.0078 rad, heading error -0.048 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 133: height 0.062 m, tilt 0.0060 rad, heading error -0.032 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 134: height 0.067 m, tilt 0.0061 rad, heading error -0.048 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 135: height 0.068 m, tilt 0.0056 rad, heading error -0.044 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 136: height 0.057 m, tilt 0.0062 rad, heading error -0.046 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 137: height 0.053 m, tilt 0.0042 rad, heading error -0.036 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 138: height 0.079 m, tilt 0.0065 rad, heading error -0.047 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 139: height 0.061 m, tilt 0.0062 rad, heading error -0.053 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 140: height 0.070 m, tilt 0.0053 rad, heading error -0.038 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 141: height 0.068 m, tilt 0.0059 rad, heading error -0.052 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 142: height 0.067 m, tilt 0.0079 rad, heading error -0.048 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 143: height 0.061 m, tilt 0.0054 rad, heading error -0.036 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 144: height 0.077 m, tilt 0.0058 rad, heading error -0.040 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 145: height 0.062 m, tilt 0.0056 rad, heading error -0.029 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 146: height 0.076 m, tilt 0.0059 rad, heading error -0.045 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 147: height 0.056 m, tilt 0.0061 rad, heading error -0.047 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 148: height 0.066 m, tilt 0.0060 rad, heading error -0.041 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 149: height 0.064 m, tilt 0.0062 rad, heading error -0.046 rad, motion 10.0 s, 0 FAIL, rc 0
+  height 0.053 to 0.079 m; tilt 0.0042 to 0.0080 rad; |heading| 0.029 to 0.058 rad; motion 10.0 to 10.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_boot_wrong_yaw] 6 runs
+  domain 150: height 0.113 m, tilt 0.0068 rad, heading error +0.194 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 151: height 0.104 m, tilt 0.0069 rad, heading error +0.193 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 152: height 0.101 m, tilt 0.0056 rad, heading error +0.169 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 153: height 0.101 m, tilt 0.0069 rad, heading error +0.190 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 154: height 0.123 m, tilt 0.0080 rad, heading error +0.210 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 155: height 0.123 m, tilt 0.0075 rad, heading error +0.206 rad, motion 8.0 s, 0 FAIL, rc 0
+  height 0.101 to 0.123 m; tilt 0.0056 to 0.0080 rad; |heading| 0.169 to 0.210 rad; motion 8.0 to 8.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_boot_wrong_yaw_b] 6 runs
+  domain 160: height 0.091 m, tilt 0.0036 rad, heading error +0.045 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 161: height 0.078 m, tilt 0.0033 rad, heading error +0.045 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 162: height 0.090 m, tilt 0.0028 rad, heading error +0.043 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 163: height 0.089 m, tilt 0.0042 rad, heading error +0.041 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 164: height 0.095 m, tilt 0.0031 rad, heading error +0.045 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 165: height 0.096 m, tilt 0.0037 rad, heading error +0.046 rad, motion 8.0 s, 0 FAIL, rc 0
+  height 0.078 to 0.096 m; tilt 0.0028 to 0.0042 rad; |heading| 0.041 to 0.046 rad; motion 8.0 to 8.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_boot_wrong_yaw_10hz] 6 runs
+  domain 170: height 0.053 m, tilt 0.0150 rad, heading error -0.101 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 171: height 0.051 m, tilt 0.0110 rad, heading error -0.094 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 172: height 0.050 m, tilt 0.0105 rad, heading error -0.091 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 173: height 0.053 m, tilt 0.0112 rad, heading error -0.087 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 174: height 0.048 m, tilt 0.0114 rad, heading error -0.099 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 175: height 0.045 m, tilt 0.0115 rad, heading error -0.101 rad, motion 8.0 s, 0 FAIL, rc 0
+  height 0.045 to 0.053 m; tilt 0.0105 to 0.0150 rad; |heading| 0.087 to 0.101 rad; motion 8.0 to 8.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_boot_wrong_yaw_50hz] 6 runs
+  domain 180: height 0.058 m, tilt 0.0076 rad, heading error +0.010 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 181: height 0.065 m, tilt 0.0093 rad, heading error +0.015 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 182: height 0.059 m, tilt 0.0080 rad, heading error +0.003 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 183: height 0.066 m, tilt 0.0069 rad, heading error -0.001 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 184: height 0.063 m, tilt 0.0106 rad, heading error +0.010 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 185: height 0.053 m, tilt 0.0074 rad, heading error -0.003 rad, motion 8.0 s, 0 FAIL, rc 0
+  height 0.053 to 0.066 m; tilt 0.0069 to 0.0106 rad; |heading| 0.001 to 0.015 rad; motion 8.0 to 8.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_boot_wrong_yaw_50hz, 24 more runs, three at a time] 24 runs
+  domain 200: height 0.058 m, tilt 0.0123 rad, heading error +0.016 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 201: height 0.061 m, tilt 0.0081 rad, heading error +0.004 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 202: height 0.055 m, tilt 0.0075 rad, heading error +0.004 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 203: height 0.060 m, tilt 0.0066 rad, heading error +0.011 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 204: height 0.060 m, tilt 0.0105 rad, heading error +0.014 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 205: height 0.052 m, tilt 0.0092 rad, heading error +0.015 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 206: height 0.058 m, tilt 0.0072 rad, heading error +0.005 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 207: height 0.063 m, tilt 0.0080 rad, heading error -0.002 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 208: height 0.058 m, tilt 0.0079 rad, heading error +0.003 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 209: height 0.058 m, tilt 0.0105 rad, heading error +0.015 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 210: height 0.062 m, tilt 0.0086 rad, heading error +0.003 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 211: height 0.057 m, tilt 0.0074 rad, heading error +0.005 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 212: height 0.055 m, tilt 0.0087 rad, heading error +0.014 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 213: height 0.059 m, tilt 0.0097 rad, heading error +0.013 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 214: height 0.061 m, tilt 0.0088 rad, heading error +0.011 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 215: height 0.065 m, tilt 0.0091 rad, heading error +0.001 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 216: height 0.061 m, tilt 0.0092 rad, heading error +0.014 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 217: height 0.063 m, tilt 0.0089 rad, heading error +0.011 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 218: height 0.054 m, tilt 0.0064 rad, heading error +0.001 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 219: height 0.059 m, tilt 0.0065 rad, heading error -0.010 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 220: height 0.057 m, tilt 0.0080 rad, heading error -0.006 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 221: height 0.060 m, tilt 0.0080 rad, heading error +0.007 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 222: height 0.068 m, tilt 0.0081 rad, heading error +0.010 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 223: height 0.057 m, tilt 0.0084 rad, heading error +0.006 rad, motion 8.0 s, 0 FAIL, rc 0
+  height 0.052 to 0.068 m; tilt 0.0064 to 0.0123 rad; |heading| 0.001 to 0.016 rad; motion 8.0 to 8.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_stand_go] 6 runs
+  domain 100: height 0.028 m, tilt 0.0037 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 101: height 0.016 m, tilt 0.0031 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 102: height 0.024 m, tilt 0.0031 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 103: height 0.020 m, tilt 0.0031 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 104: height 0.018 m, tilt 0.0031 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 105: height 0.024 m, tilt 0.0036 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  height 0.016 to 0.028 m; tilt 0.0031 to 0.0037 rad; |heading| nan to nan rad; motion 1.0 to 1.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_stand_go_b] 6 runs
+  domain 110: height 0.023 m, tilt 0.0109 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 111: height 0.029 m, tilt 0.0115 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 112: height 0.034 m, tilt 0.0100 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 113: height 0.031 m, tilt 0.0109 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 114: height 0.052 m, tilt 0.0107 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 115: height 0.046 m, tilt 0.0115 rad, heading error +nan rad, motion 1.0 s, 0 FAIL, rc 0
+  height 0.023 to 0.052 m; tilt 0.0100 to 0.0115 rad; |heading| nan to nan rad; motion 1.0 to 1.0 s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_stand_long] 1 runs
+  domain 190: height 0.138 m, tilt 0.0024 rad, heading error +nan rad, motion nan s, 0 FAIL, rc 0
+  height 0.138 to 0.138 m; tilt 0.0024 to 0.0024 rad; |heading| nan to nan rad; motion nan to nan s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_gap_across_start] 1 runs
+  domain 191: height 0.219 m, tilt 0.0302 rad, heading error +nan rad, motion nan s, 0 FAIL, rc 0
+  height 0.219 to 0.219 m; tilt 0.0302 to 0.0302 rad; |heading| nan to nan rad; motion nan to nan s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+[gnss_gap_across_start_b] 1 runs
+  domain 192: height 0.058 m, tilt 0.0105 rad, heading error +nan rad, motion nan s, 0 FAIL, rc 0
+  height 0.058 to 0.058 m; tilt 0.0105 to 0.0105 rad; |heading| nan to nan rad; motion nan to nan s; runs over 0.5 m: 0; FAIL lines 0; rc != 0: 0
+
+default run (fusion_extrinsic_check.py --tolerate-imu-gaps): 36 scenarios, 249 PASS, 0 FAIL, rc 0, 24 minutes, domain 210, with 2 to 6 other node runs on the machine
+zero-lever lockstep feed (1,284 poses, base_link frames and identity static TFs): sha256 dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25 both, equal to main
+the paper's five experiment CSVs rebuilt from this tree: bbs_relocalization 4313e0a2, eskf_nees bead7fef, eskf_track 9abba38a, mcl_particles d41e9eff, mcl_tracking 52f2a930 (equal to main)
+SIGTERM: scripts/fusion_extrinsic_check.py --scenario gnss_stand_go under `timeout -s TERM 25`: rc 124, no fusion_node_main left (the handler installed before rclpy.init() left the node running)
