@@ -1265,6 +1265,9 @@ def run_scenario(name, params, pcd):
     log = open(f'fusion_extrinsic_{name}.log', 'w')
     proc = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     rclpy.init()
+    # SIGTERM (an outer `timeout`, a CI cancel) must unwind the `finally` below, which stops the node: the default action ends this script at
+    # once and leaves fusion_node_main running, in its own session. rclpy.init() installs its own handler, so this one comes after it.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(1))
     node = rclpy.create_node(f'prism_loc_fusion_extrinsic_check_{name}')
     rig = Rig(node)
     results = []
@@ -1285,7 +1288,10 @@ def run_scenario(name, params, pcd):
             os.killpg(proc.pid, signal.SIGTERM)
             proc.wait(timeout=10)
         except (ProcessLookupError, subprocess.TimeoutExpired):
-            os.killpg(proc.pid, signal.SIGKILL)
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         log.close()
     return results
 

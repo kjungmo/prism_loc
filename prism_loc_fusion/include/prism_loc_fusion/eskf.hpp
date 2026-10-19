@@ -30,7 +30,7 @@ class Eskf {
   //  - Bound: the heading standard deviation seen by the update is limited to
   //    EskfParams::lever_heading_sigma_max by scaling the heading error variable (P <- D P D^T).
   //  - Release: while releaseAccumulator() is over EskfParams::lever_release_dv, the update is
-  //    the full one and the bound is not applied. The honest heading variance is put back.
+  //    the full one and the bound is not applied.
   //  - Honest heading: the filter keeps the spread that the bound hides (headingSigmaHonest(),
   //    covarianceHonest()), re-finds the heading from a change of velocity (alignHeading()), and
   //    while it cannot, leaves roll and pitch out of the lever term (leverBlind()).
@@ -113,7 +113,6 @@ class Eskf {
   NominalState x_;
   Mat15 P_{Mat15::Identity()};
   EskfParams params_;
-  double rate_{0.0};   // norm of the bias-corrected angular rate of the last predict()
   double dv_acc_{0.0};       // see lever_release_dv; touches neither x nor P
   bool lever_capped_{false};
   bool lever_aligned_{false}, lever_blind_{false};
@@ -131,10 +130,9 @@ class Eskf {
   void spreadAfterOutage();
   bool unknown_pending_{false};     // markHeadingUnknown() has marked the start and the fix rate is not yet known to be supported
   bool rate_unsupported_{false}, rate_degraded_{false};
-  struct Fix { double t; Eigen::Vector2d s, p; double rate_max; Eigen::Vector2d d; };   // clock_, cum_a_, the antenna fix, the largest body rate since the previous fix and cum_p_, of one lever update
+  struct Fix { double t; Eigen::Vector2d s, p; Eigen::Vector2d d; };   // clock_, cum_a_, the antenna fix and cum_p_, of one lever update
   std::deque<Fix> fixes_;
   double clock_{0.0};
-  double rate_max_{0.0};
   Eigen::Vector2d cum_a_{Eigen::Vector2d::Zero()};   // sum of the world-frame horizontal acceleration since the start, see alignHeading()
   Eigen::Vector2d cum_p_{Eigen::Vector2d::Zero()};   // its integral over time (cum_a_ dt), see spreadAfterOutage()
 };

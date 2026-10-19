@@ -62,7 +62,7 @@ struct EskfParams {
   // seconds and at least 2 fixes, T being the measured fix period (the median of the last 15
   // intervals). The window between the two velocities is max(lever_align_window, 1.5 span), a gap
   // is an interval over max(lever_align_gap, 2.5 T), and the alignment refuses a window with a
-  // gap or a body rate over 0.5 lever_align_dv / |t_xy|.
+  // gap.
   double lever_align_span{0.8};
   double lever_align_window{3.0};
   double lever_align_gap{1.0};
