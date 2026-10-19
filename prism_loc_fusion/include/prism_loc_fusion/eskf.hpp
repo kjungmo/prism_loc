@@ -29,8 +29,8 @@ class Eskf {
   // base_frame"):
   //  - Bound: the heading standard deviation seen by the update is limited to
   //    EskfParams::lever_heading_sigma_max by scaling the heading error variable (P <- D P D^T).
-  //  - Release: while releaseAccumulator() is over EskfParams::lever_release_dv, the mask is
-  //    lever_consider_moving and the bound is not applied. The honest heading variance is put back.
+  //  - Release: while releaseAccumulator() is over EskfParams::lever_release_dv, the update is
+  //    the full one and the bound is not applied. The honest heading variance is put back.
   //  - Honest heading: the filter keeps the spread that the bound hides (headingSigmaHonest(),
   //    covarianceHonest()), re-finds the heading from a change of velocity (alignHeading()), and
   //    while it cannot, leaves roll and pitch out of the lever term (leverBlind()).
@@ -88,10 +88,8 @@ class Eskf {
   // shadow of the heading variance that predict() carries while the bound holds the heading back.
   // The same as headingSigma() when nothing is held back.
   double headingSigmaHonest() const;
-  // True if the last updatePositionLever() restored the honest heading variance (the first
-  // update after a release that follows a held-back stretch), and if it re-acquired the heading
-  // from the motion first (lever_align_sigma).
-  bool leverRestored() const { return lever_restored_; }
+  // True if the last updatePositionLever() re-acquired the heading from the motion first
+  // (lever_align_sigma).
   bool leverAligned() const { return lever_aligned_; }
   // True if the last updatePositionLever() took the heading as unknown: held back, over
   // lever_align_sigma, and not alignable from the motion.
@@ -118,7 +116,7 @@ class Eskf {
   double rate_{0.0};   // norm of the bias-corrected angular rate of the last predict()
   double dv_acc_{0.0};       // see lever_release_dv; touches neither x nor P
   bool lever_capped_{false};
-  bool lever_restored_{false}, lever_aligned_{false}, lever_blind_{false};
+  bool lever_aligned_{false}, lever_blind_{false};
   // Shadow of the heading: covariance of (heading, vertical gyro bias), valid from the first
   // lever update after a reset; see EskfParams (the honest heading).
   bool shadow_valid_{false};

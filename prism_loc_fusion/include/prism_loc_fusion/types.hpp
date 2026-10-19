@@ -13,6 +13,9 @@ enum LeverConsider : unsigned {
   kConsiderHeading = 1u,            // attitude error about the vertical
   kConsiderGyroBiasVertical = 4u,   // gyro bias component along the vertical
 };
+// The default bound (rad) on the heading standard deviation that a lever update sees, and the variance an aligned heading gets
+// when the bound is off.
+constexpr double kLeverHeadingSigmaMax = 0.35;
 struct EskfParams {
   double sigma_acc{1e-2};
   double sigma_gyro{1e-3};
@@ -28,20 +31,19 @@ struct EskfParams {
   // lever_consider: the error states that the update counts in its innovation covariance but
   // does not correct (Schmidt-Kalman "consider" states), a mask of LeverConsider. One antenna and
   // an IMU do not observe the heading and the vertical gyro bias while the robot stands, turns on
-  // the spot or travels without accelerating. lever_consider_moving is the mask used instead
-  // while the release is open (default 0: the full update).
+  // the spot or travels without accelerating. While the release is open the update is the full
+  // one (no consider state).
   unsigned lever_consider{kConsiderHeading | kConsiderGyroBiasVertical};
-  unsigned lever_consider_moving{0u};
   // Bound (rad) on the heading standard deviation that one update sees; 0 = off. When
   // sqrt(u^T P_theta u), u = R^T z, is over the bound, the heading error variable is scaled by
   // c = bound / sigma (P <- D P D^T, D = I + (c - 1) u u^T on the attitude block): the heading
   // variance by c^2, every heading cross-covariance by c, the tilt untouched. Without it the
   // heading variance of a standing robot grows without limit and the lever term -R[t]x leaves
   // its linear range.
-  double lever_heading_sigma_max{0.35};
+  double lever_heading_sigma_max{kLeverHeadingSigmaMax};
   // Release: while the decaying integral of the horizontal specific force in the world frame,
-  // dv = dv exp(-dt / lever_release_tau) + |a_xy| dt (m/s), is over lever_release_dv, the mask is
-  // lever_consider_moving and the bound is not applied. 0 = never.
+  // dv = dv exp(-dt / lever_release_tau) + |a_xy| dt (m/s), is over lever_release_dv, the update is
+  // the full one and the bound is not applied. 0 = never.
   double lever_release_dv{1.0};
   double lever_release_tau{4.0};
   // Honest heading. The bound hides the heading spread, which keeps growing while the robot

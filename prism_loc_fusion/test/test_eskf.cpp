@@ -700,7 +700,7 @@ TEST(EskfLever, ReleaseFollowsTheAccelerationIntegral) {
   EXPECT_TRUE(std::isfinite(h.releaseAccumulator()));
 }
 
-// While the release is open the heading is corrected by the fix (lever_consider_moving), and while it is
+// While the release is open the heading is corrected by the fix (the full update), and while it is
 // closed it is not, whatever the filter's speed is: a robot that has driven at a constant speed (speed
 // 2 m/s, no acceleration) is closed, one that has just accelerated is open.
 TEST(EskfLever, ReleaseLetsTheFixTurnTheHeadingOnlyWhileTheImuSeesAcceleration) {
@@ -714,21 +714,20 @@ TEST(EskfLever, ReleaseLetsTheFixTurnTheHeadingOnlyWhileTheImuSeesAcceleration) 
   EXPECT_GT(headingTurnedByFix(after1), 1e-3);          // 1 s after: 1.22, still over it (the decay is exp(-t / 4 s))
   EXPECT_LT(headingTurnedByFix(after), 1e-14);          // 3 s after: decayed under it, though the filter's speed is 2 m/s
   EXPECT_GT(after.state().v.norm(), 1.0);
-  EskfParams released_considers = ep;
-  released_considers.lever_consider_moving = kConsiderHeading;     // the released mask is the one used
-  Eskf c = accelerated(released_considers, 1.0, 2.0, 0.0);
-  EXPECT_LT(headingTurnedByFix(c), 1e-14);
+  EskfParams never = ep;
+  never.lever_release_dv = 0.0;                                    // 0 = the release never opens
+  Eskf nv = accelerated(never, 1.0, 2.0, 0.0);
+  EXPECT_LT(headingTurnedByFix(nv), 1e-14);
 }
 
 // The accumulator reads the specific force and nothing else: with it on (a time constant) or off (zero) the
 // state and covariance are bit for bit the same after the same predictions and the same lever update, as long as
-// the released mask equals the considered one.
+// the release does not open (a threshold that it never reaches).
 TEST(EskfLever, AccumulatorDoesNotTouchStateOrCovariance) {
   EskfParams on, off;
   on.lever_release_tau = 4.0;
   off.lever_release_tau = 0.0;
-  on.lever_consider_moving = off.lever_consider_moving = on.lever_consider;
-  on.lever_heading_sigma_max = off.lever_heading_sigma_max = 0.0;   // an open release also lifts the bound: a difference in P
+  on.lever_release_dv = off.lever_release_dv = 1e9;                 // the accumulator runs, the release does not open
   Eskf a = accelerated(on, 1.0, 2.0, 0.5), b = accelerated(off, 1.0, 2.0, 0.5);
   EXPECT_GT(a.releaseAccumulator(), 1.0);
   EXPECT_EQ(b.releaseAccumulator(), 0.0);
@@ -821,7 +820,6 @@ TEST(EskfLever, DefaultsAreTheChosenScheme) {
   EXPECT_EQ(d.lever_release_dv, 1.0);
   EXPECT_EQ(d.lever_release_tau, 4.0);
   EXPECT_EQ(d.lever_consider, kConsiderHeading | kConsiderGyroBiasVertical);
-  EXPECT_EQ(d.lever_consider_moving, 0u);
   EXPECT_NEAR(d.lever_start_sigma, M_PI / std::sqrt(3.0), 1e-12);                 // a start with no heading source: the spread of an unknown heading
   EXPECT_EQ(d.lever_align_span, 0.8);                                     // the alignment's spans are seconds
   EXPECT_EQ(d.lever_align_period_ok, 1.05);                               // the slowest supported fix rate: 1 Hz and 5 % for the jitter of the stamps
@@ -892,9 +890,12 @@ struct GoRun {
   bool blind_when_standing{false};
 };
 // A robot that stands for `stand_s` on GNSS and IMU alone, its heading `yaw0` off from the start (the filter keeps 0.5 rad^2),
-// with a vertical gyro bias, then accelerates at 0.5 m/s^2 along x for 3 s and cruises for `cruise_s`. Antenna at `lever`.
+// with a vertical gyro bias, then accelerates at `accel` (0.5 m/s^2) along x for 3 s and cruises for `cruise_s`. Antenna at `lever`.
+// jitter_s: the stamp of every fix is late by a draw from [0, jitter_s) (the filter's clock, moved over the 3 IMU ticks before the fix;
+// the IMU integrates the true time).
 GoRun runStandGo(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, double cruise_s, double yaw0, double bias_dps, unsigned seed,
-                 bool unknown_start = false, int fix_every = 20, double acc_bias = 0.0, double accel_scale = 1.0) {
+                 bool unknown_start = false, int fix_every = 20, double acc_bias = 0.0, double accel_scale = 1.0,
+                 double accel = 0.5, double jitter_s = 0.0) {
   Rng rng(seed);
   ep.sigma_acc = 0.02;
   ep.sigma_gyro = 0.002;
@@ -914,12 +915,20 @@ GoRun runStandGo(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, do
   const double dt = 0.01;
   GoRun out;
   const int n_stand = static_cast<int>(stand_s / dt), n = n_stand + static_cast<int>((3.0 + cruise_s) / dt);
+  double late_prev = 0.0, late_next = 0.0;
   for (int k = 1; k <= n; ++k) {
     const double t = k * dt - stand_s;   // time since the start
     double a = 0.0, x = 0.0;
-    if (t > 0.0 && t <= 3.0) { a = 0.5; x = 0.25 * t * t; }
-    else if (t > 3.0) { x = 2.25 + 1.5 * (t - 3.0); }
-    f.predict(Eigen::Vector3d(accel_scale * a + acc_bias, 0, 9.81) + noise3(0.02), bias + noise3(0.002), dt);
+    if (t > 0.0 && t <= 3.0) { a = accel; x = 0.5 * accel * t * t; }
+    else if (t > 3.0) { x = 1.5 * accel * 3.0 + 3.0 * accel * (t - 3.0); }
+    double dt_k = dt;
+    if (jitter_s > 0.0) {
+      const int phase = k % fix_every;   // 0 on the fix tick
+      if (phase == 1) late_next = jitter_s * rng.uniform();   // the lateness of the next fix's stamp
+      if (phase == 0 || phase >= fix_every - 2) dt_k += (late_next - late_prev) / 3.0;
+      if (phase == 0) late_prev = late_next;
+    }
+    f.predict(Eigen::Vector3d(accel_scale * a + acc_bias, 0, 9.81) + noise3(0.02), bias + noise3(0.002), dt_k);
     if (k % fix_every == 0) {
       f.updatePositionLever(Eigen::Vector3d(x, 0, 0) + lever + noise3(0.02), lever, R);
       out.aligned += f.leverAligned() ? 1 : 0;
@@ -1425,4 +1434,94 @@ TEST(EskfLever, OutageSpreadActsOnlyAfterAnOutageWithAnUnknownHeading) {
       }
     }
   }
+}
+
+// 1 Hz fixes whose stamps are late by 0 to 20 ms, a boot with the heading 2 rad off, a stand of 20 s, then a start at 1 m/s^2. The
+// alignment's window check was a knife edge at a fix period T >= 1 s (the limit was 4 T and the span 4 T +- the jitter), the alignment came
+// one fix late, the full update saw a position innovation of metres and tilted the filter. Every seed must end level, at the right height
+// and with the heading found.
+TEST(EskfLever, OneHertzFixesWithStampJitterAlignAtTheStartAndKeepTheFilterLevel) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  int bad = 0;
+  double latest = 0.0;   // the latest first alignment, seconds after the start
+  for (unsigned seed = 1; seed <= 40; ++seed) {
+    const GoRun r = runStandGo(EskfParams(), lever, 20.0, 15.0, 2.0, 0.1, seed, true, 100, 0.0, 1.0, 1.0, 0.02);
+    latest = std::max(latest, r.first_aligned_s);
+    const bool ok = r.aligned >= 1 && r.heading_err_end < 0.5 && r.tilt_end < 0.03 && r.z_max < 0.5;
+    EXPECT_TRUE(ok) << "seed " << seed << ": aligned " << r.aligned << ", heading " << r.heading_err_end << ", tilt " << r.tilt_end << ", z " << r.z_max;
+    bad += ok ? 0 : 1;
+  }
+  EXPECT_EQ(bad, 0);
+  EXPECT_LT(latest, 2.5) << "first alignment: the fix 2 s after the start has the change of velocity (1 m/s^2 over 2 s), the fix 3 s after is one fix late";
+}
+
+// An alignment hands the next update the antenna's position: the position that predict() dead-reckoned through the blind stretch (with the
+// wrong heading) is replaced at the fix, so that the update that follows sees an innovation of the fix noise, not of the drift, and does not
+// spend the drift on the heading and the vertical gyro bias. Checked right after the aligned update, over 20 seeds.
+TEST(EskfLever, AlignmentSeatsThePositionAtTheNewestFix) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  int seen = 0;
+  for (unsigned seed = 1; seed <= 20; ++seed) {
+    Rng rng(seed);
+    EskfParams ep;
+    ep.sigma_acc = 0.02;
+    ep.sigma_gyro = 0.002;
+    Eskf f(ep);
+    Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+    P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+    P0.block<3, 3>(9, 9) *= 1e-2;
+    P0.block<3, 3>(12, 12) *= 1e-4;
+    NominalState x0;
+    x0.q = so3Exp(Eigen::Vector3d(0, 0, 2.0));
+    x0.p = lever - x0.q * lever;
+    f.initialize(x0, P0);
+    ASSERT_TRUE(f.markHeadingUnknown());
+    const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
+    for (int k = 1; k <= 3800; ++k) {
+      const double t = k * 0.01 - 20.0;
+      const double a = t > 0.0 ? 1.0 : 0.0, x = t > 0.0 ? 0.5 * t * t : 0.0;
+      f.predict(Eigen::Vector3d(a, 0, 9.81) + Eigen::Vector3d(rng.gaussian(0, 0.02), rng.gaussian(0, 0.02), rng.gaussian(0, 0.02)),
+                Eigen::Vector3d(0, 0, 0.0017) + Eigen::Vector3d(rng.gaussian(0, 0.002), rng.gaussian(0, 0.002), rng.gaussian(0, 0.002)), 0.01);
+      if (k % 100 == 0) {   // 1 Hz
+        const Eigen::Vector3d fix = Eigen::Vector3d(x, 0, 0) + lever + Eigen::Vector3d(rng.gaussian(0, 0.02), rng.gaussian(0, 0.02), rng.gaussian(0, 0.02));
+        f.updatePositionLever(fix, lever, R);
+        if (f.leverAligned()) {
+          ++seen;
+          EXPECT_LT(std::fabs(so3Log(f.state().q).z()), 0.15) << "seed " << seed;                    // the heading the alignment found stays
+          EXPECT_LT(std::fabs(f.state().bg.z()), 0.003) << "seed " << seed;                          // the vertical gyro bias stays at its prior (0), not spent
+          break;
+        }
+      }
+    }
+  }
+  EXPECT_GE(seen, 18);
+}
+
+// The covariance the node publishes: P with the heading variance that the bound holds back put in, and the position of the body origin
+// as uncertain as that heading makes it. Nothing held back: P itself, bit for bit.
+TEST(EskfLever, CovarianceHonestPutsTheHeldBackHeadingSpreadIntoThePublishedCovariance) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  NominalState x0;
+  x0.q = so3Exp(Eigen::Vector3d(0.3, -0.2, 1.0));
+  Eskf::Mat15 P0 = Eskf::Mat15::Identity() * 1e-2;
+  Eskf plain, marked;
+  plain.initialize(x0, P0);
+  marked.initialize(x0, P0);
+  EXPECT_TRUE(plain.covarianceHonest(lever) == plain.covariance());
+  EXPECT_TRUE(marked.covarianceHonest(lever) == marked.covariance());   // no shadow yet
+  ASSERT_TRUE(marked.markHeadingUnknown());
+  const Eskf::Mat15 P = marked.covariance(), H = marked.covarianceHonest(lever);
+  const Eigen::Vector3d up = x0.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
+  const double var = up.dot(P.block<3, 3>(6, 6) * up), spread = M_PI * M_PI / 3.0;   // lever_start_sigma^2
+  EXPECT_NEAR(up.dot(H.block<3, 3>(6, 6) * up), spread, 1e-12);                       // the heading variance is the held one
+  EXPECT_NEAR(H(0, 0) - P(0, 0), lever.head<2>().squaredNorm() * (1.0 - var), 1e-12);   // the body origin: |t_xy|^2 min(spread, 1) - min(var, 1)
+  EXPECT_NEAR(H(1, 1) - P(1, 1), lever.head<2>().squaredNorm() * (1.0 - var), 1e-12);
+  Eigen::Matrix3d tilt_dirs = Eigen::Matrix3d::Identity() - up * up.transpose();      // the tilt part of the attitude block is not touched
+  EXPECT_NEAR((tilt_dirs * (H.block<3, 3>(6, 6) - P.block<3, 3>(6, 6)) * tilt_dirs).norm(), 0.0, 1e-12);
+  Eskf::Mat15 D = H - P;
+  D.block<3, 3>(6, 6).setZero();
+  D(0, 0) = D(1, 1) = 0.0;
+  EXPECT_EQ(D.norm(), 0.0);                                                           // nothing else changes
+  Eigen::SelfAdjointEigenSolver<Eskf::Mat15> es(H);
+  EXPECT_GT(es.eigenvalues().minCoeff(), 0.0);
 }
