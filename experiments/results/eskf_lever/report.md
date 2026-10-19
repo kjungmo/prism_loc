@@ -3148,9 +3148,9 @@ Schemes (round 7: S8k is the S8u of the fifth and sixth rounds, S8u the code tha
 
 # Lever-arm study, sixth pass: the fix rate, and a short outage at the first start
 
-## Suite hrate: the same boot and stand-then-go cells at fix rates of 0.5, 1, 2, 5, 10 and 20 Hz
+## Suites hrate and hratex: the same boot and stand-then-go cells at fix rates of 0.5 to 100 Hz
 
-Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is the same at every rate): *boot* = gyro bias 0.1 deg/s and accelerometer bias 0.1 m/s^2, a stand of 6, 30 or 300 s, `initial_yaw` 0.1, 0.3 or 2.0 rad off, then the start-stop cycle or the circle; *stand-then-go* = stand 300 or 900 s, gyro bias 0 or 0.2 deg/s, accelerometer bias 0 or 0.1 m/s^2, `initial_yaw` 0.1 rad off. Schemes: S8k = the alignment of the fifth and sixth rounds (span of 4 fixes); S8t = spans in seconds only; S8n = the test of the norms only (the sixth review's proposal, 30 %); S8v = S8u + the test of the norms; S8u = spans in seconds, the fix-rate limit and the spread after an outage (what the code ships; the spread acts only after an outage, none in this suite); S8 = no unknown start; S2s, S6vb = the comparators. tz = tilt > 0.05 rad or abs z > 0.5 m; z>1 = abs z > 1 m; heading>0.5 = heading error over 0.5 rad at the end; xy>1.5 = largest horizontal error over 1.5 m. Antennas A and B (a horizontal arm) and, apart, the mast M (no horizontal arm).
+Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is the same at every rate): *boot* = gyro bias 0.1 deg/s and accelerometer bias 0.1 m/s^2, a stand of 6, 30 or 300 s, `initial_yaw` 0.1, 0.3 or 2.0 rad off, then the start-stop cycle or the circle; *stand-then-go* = stand 300 or 900 s, gyro bias 0 or 0.2 deg/s, accelerometer bias 0 or 0.1 m/s^2, `initial_yaw` 0.1 rad off. Schemes: S8k = the alignment of the fifth and sixth rounds (span of 4 fixes); S8t = spans in seconds only; S8n = the test of the norms only (the sixth review's proposal, 30 %); S8v = S8u + the test of the norms; S8u = spans in seconds, the fix-rate limit and the spread after an outage (what the code ships; the spread acts only after an outage, none in this suite); S8 = no unknown start; S2s, S6vb = the comparators; S8u@2011666 = the S8u of commit 2011666 (hratex only: the same harness built against the core before the fix of the history and the fix-rate limit). hratex has no S8k, S8t, S8n, S8v rows. tz = tilt > 0.05 rad or abs z > 0.5 m; z>1 = abs z > 1 m; heading>0.5 = heading error over 0.5 rad at the end; xy>1.5 = largest horizontal error over 1.5 m. Antennas A and B (a horizontal arm) and, apart, the mast M (no horizontal arm).
 
 
 ### Antennas A and B, by cell
@@ -3173,6 +3173,18 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 | 0.5 Hz | stand-then-go | S8n | 128 | 53 | 29 | 64 | 63 |
 | 0.5 Hz | stand-then-go | S8v | 128 | 51 | 29 | 64 | 63 |
 | 0.5 Hz | stand-then-go | S8u | 128 | 51 | 29 | 64 | 63 |
+| 0.833 Hz | boot | S2s | 144 | 60 | 38 | 27 | 33 |
+| 0.833 Hz | boot | S8u@2011666 | 144 | 3 | 0 | 1 | 19 |
+| 0.833 Hz | boot | S8u | 144 | 3 | 0 | 1 | 19 |
+| 0.833 Hz | stand-then-go | S2s | 128 | 68 | 37 | 24 | 31 |
+| 0.833 Hz | stand-then-go | S8u@2011666 | 128 | 2 | 0 | 3 | 16 |
+| 0.833 Hz | stand-then-go | S8u | 128 | 2 | 0 | 3 | 16 |
+| 0.909 Hz | boot | S2s | 144 | 61 | 39 | 29 | 25 |
+| 0.909 Hz | boot | S8u@2011666 | 144 | 3 | 0 | 1 | 11 |
+| 0.909 Hz | boot | S8u | 144 | 3 | 0 | 1 | 11 |
+| 0.909 Hz | stand-then-go | S2s | 128 | 68 | 43 | 35 | 42 |
+| 0.909 Hz | stand-then-go | S8u@2011666 | 128 | 1 | 0 | 0 | 8 |
+| 0.909 Hz | stand-then-go | S8u | 128 | 1 | 0 | 0 | 8 |
 | 1 Hz | boot | S2s | 144 | 66 | 34 | 29 | 11 |
 | 1 Hz | boot | S6vb | 144 | 65 | 56 | 44 | 40 |
 | 1 Hz | boot | S8 | 144 | 46 | 30 | 65 | 39 |
@@ -3253,6 +3265,18 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 | 20 Hz | stand-then-go | S8n | 128 | 40 | 0 | 64 | 41 |
 | 20 Hz | stand-then-go | S8v | 128 | 0 | 0 | 0 | 0 |
 | 20 Hz | stand-then-go | S8u | 128 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot | S2s | 144 | 69 | 49 | 41 | 0 |
+| 50 Hz | boot | S8u@2011666 | 144 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot | S8u | 144 | 0 | 0 | 0 | 0 |
+| 50 Hz | stand-then-go | S2s | 128 | 89 | 41 | 50 | 0 |
+| 50 Hz | stand-then-go | S8u@2011666 | 128 | 0 | 0 | 0 | 0 |
+| 50 Hz | stand-then-go | S8u | 128 | 0 | 0 | 0 | 0 |
+| 100 Hz | boot | S2s | 144 | 76 | 44 | 44 | 0 |
+| 100 Hz | boot | S8u@2011666 | 144 | 30 | 0 | 89 | 27 |
+| 100 Hz | boot | S8u | 144 | 0 | 0 | 0 | 0 |
+| 100 Hz | stand-then-go | S2s | 128 | 92 | 45 | 51 | 0 |
+| 100 Hz | stand-then-go | S8u@2011666 | 128 | 41 | 0 | 64 | 36 |
+| 100 Hz | stand-then-go | S8u | 128 | 0 | 0 | 0 | 0 |
 
 ### Antennas A and B, boot, by `initial_yaw` error
 
@@ -3282,6 +3306,24 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 | 0.5 Hz | boot, yaw 2 | S8n | 48 | 42 | 12 | 48 | 47 |
 | 0.5 Hz | boot, yaw 2 | S8v | 48 | 44 | 26 | 46 | 44 |
 | 0.5 Hz | boot, yaw 2 | S8u | 48 | 44 | 26 | 46 | 44 |
+| 0.833 Hz | boot, yaw 0.1 | S2s | 48 | 9 | 5 | 3 | 6 |
+| 0.833 Hz | boot, yaw 0.1 | S8u@2011666 | 48 | 0 | 0 | 0 | 0 |
+| 0.833 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 0.833 Hz | boot, yaw 0.3 | S2s | 48 | 9 | 7 | 4 | 6 |
+| 0.833 Hz | boot, yaw 0.3 | S8u@2011666 | 48 | 0 | 0 | 0 | 0 |
+| 0.833 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 0.833 Hz | boot, yaw 2 | S2s | 48 | 42 | 26 | 20 | 21 |
+| 0.833 Hz | boot, yaw 2 | S8u@2011666 | 48 | 3 | 0 | 1 | 19 |
+| 0.833 Hz | boot, yaw 2 | S8u | 48 | 3 | 0 | 1 | 19 |
+| 0.909 Hz | boot, yaw 0.1 | S2s | 48 | 10 | 6 | 5 | 5 |
+| 0.909 Hz | boot, yaw 0.1 | S8u@2011666 | 48 | 0 | 0 | 0 | 0 |
+| 0.909 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 0.909 Hz | boot, yaw 0.3 | S2s | 48 | 12 | 7 | 5 | 3 |
+| 0.909 Hz | boot, yaw 0.3 | S8u@2011666 | 48 | 0 | 0 | 1 | 0 |
+| 0.909 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 1 | 0 |
+| 0.909 Hz | boot, yaw 2 | S2s | 48 | 39 | 26 | 19 | 17 |
+| 0.909 Hz | boot, yaw 2 | S8u@2011666 | 48 | 3 | 0 | 0 | 11 |
+| 0.909 Hz | boot, yaw 2 | S8u | 48 | 3 | 0 | 0 | 11 |
 | 1 Hz | boot, yaw 0.1 | S2s | 48 | 10 | 6 | 3 | 1 |
 | 1 Hz | boot, yaw 0.1 | S6vb | 48 | 6 | 4 | 3 | 3 |
 | 1 Hz | boot, yaw 0.1 | S8 | 48 | 0 | 0 | 16 | 2 |
@@ -3402,6 +3444,24 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 | 20 Hz | boot, yaw 2 | S8n | 48 | 38 | 0 | 48 | 37 |
 | 20 Hz | boot, yaw 2 | S8v | 48 | 0 | 0 | 0 | 0 |
 | 20 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot, yaw 0.1 | S2s | 48 | 10 | 5 | 3 | 0 |
+| 50 Hz | boot, yaw 0.1 | S8u@2011666 | 48 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot, yaw 0.3 | S2s | 48 | 15 | 7 | 9 | 0 |
+| 50 Hz | boot, yaw 0.3 | S8u@2011666 | 48 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot, yaw 2 | S2s | 48 | 44 | 37 | 29 | 0 |
+| 50 Hz | boot, yaw 2 | S8u@2011666 | 48 | 0 | 0 | 0 | 0 |
+| 50 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 100 Hz | boot, yaw 0.1 | S2s | 48 | 16 | 7 | 5 | 0 |
+| 100 Hz | boot, yaw 0.1 | S8u@2011666 | 48 | 0 | 0 | 16 | 0 |
+| 100 Hz | boot, yaw 0.1 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 100 Hz | boot, yaw 0.3 | S2s | 48 | 15 | 6 | 5 | 0 |
+| 100 Hz | boot, yaw 0.3 | S8u@2011666 | 48 | 0 | 0 | 25 | 0 |
+| 100 Hz | boot, yaw 0.3 | S8u | 48 | 0 | 0 | 0 | 0 |
+| 100 Hz | boot, yaw 2 | S2s | 48 | 45 | 31 | 34 | 0 |
+| 100 Hz | boot, yaw 2 | S8u@2011666 | 48 | 30 | 0 | 48 | 27 |
+| 100 Hz | boot, yaw 2 | S8u | 48 | 0 | 0 | 0 | 0 |
 
 ### Mast M, by cell
 
@@ -3423,6 +3483,18 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 | 0.5 Hz | stand-then-go | S8n | 64 | 32 | 28 | 28 | 22 |
 | 0.5 Hz | stand-then-go | S8v | 64 | 32 | 28 | 29 | 23 |
 | 0.5 Hz | stand-then-go | S8u | 64 | 32 | 28 | 29 | 23 |
+| 0.833 Hz | boot | S2s | 72 | 31 | 20 | 14 | 9 |
+| 0.833 Hz | boot | S8u@2011666 | 72 | 23 | 13 | 9 | 0 |
+| 0.833 Hz | boot | S8u | 72 | 23 | 13 | 9 | 0 |
+| 0.833 Hz | stand-then-go | S2s | 64 | 44 | 31 | 21 | 17 |
+| 0.833 Hz | stand-then-go | S8u@2011666 | 64 | 25 | 16 | 5 | 0 |
+| 0.833 Hz | stand-then-go | S8u | 64 | 25 | 16 | 5 | 0 |
+| 0.909 Hz | boot | S2s | 72 | 33 | 19 | 15 | 9 |
+| 0.909 Hz | boot | S8u@2011666 | 72 | 24 | 9 | 10 | 1 |
+| 0.909 Hz | boot | S8u | 72 | 24 | 9 | 10 | 1 |
+| 0.909 Hz | stand-then-go | S2s | 64 | 39 | 22 | 18 | 21 |
+| 0.909 Hz | stand-then-go | S8u@2011666 | 64 | 20 | 15 | 4 | 3 |
+| 0.909 Hz | stand-then-go | S8u | 64 | 20 | 15 | 4 | 3 |
 | 1 Hz | boot | S2s | 72 | 29 | 15 | 8 | 0 |
 | 1 Hz | boot | S6vb | 72 | 38 | 32 | 27 | 15 |
 | 1 Hz | boot | S8 | 72 | 35 | 29 | 40 | 2 |
@@ -3503,6 +3575,18 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 | 20 Hz | stand-then-go | S8n | 64 | 22 | 6 | 32 | 1 |
 | 20 Hz | stand-then-go | S8v | 64 | 16 | 0 | 0 | 0 |
 | 20 Hz | stand-then-go | S8u | 64 | 16 | 0 | 0 | 0 |
+| 50 Hz | boot | S2s | 72 | 27 | 13 | 14 | 0 |
+| 50 Hz | boot | S8u@2011666 | 72 | 19 | 0 | 4 | 0 |
+| 50 Hz | boot | S8u | 72 | 19 | 0 | 4 | 0 |
+| 50 Hz | stand-then-go | S2s | 64 | 40 | 13 | 30 | 0 |
+| 50 Hz | stand-then-go | S8u@2011666 | 64 | 16 | 0 | 2 | 0 |
+| 50 Hz | stand-then-go | S8u | 64 | 16 | 0 | 2 | 0 |
+| 100 Hz | boot | S2s | 72 | 32 | 10 | 23 | 0 |
+| 100 Hz | boot | S8u@2011666 | 72 | 27 | 0 | 45 | 0 |
+| 100 Hz | boot | S8u | 72 | 15 | 0 | 1 | 0 |
+| 100 Hz | stand-then-go | S2s | 64 | 36 | 8 | 29 | 0 |
+| 100 Hz | stand-then-go | S8u@2011666 | 64 | 23 | 0 | 32 | 0 |
+| 100 Hz | stand-then-go | S8u | 64 | 16 | 0 | 1 | 0 |
 
 ### Zero lever Z (the same data; it does not depend on the scheme, one scheme shown), by cell
 
@@ -3510,6 +3594,10 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 |---|---|---|---|---|---|---|---|
 | 0.5 Hz | boot | S8u | 72 | 30 | 23 | 18 | 15 |
 | 0.5 Hz | stand-then-go | S8u | 64 | 26 | 15 | 12 | 12 |
+| 0.833 Hz | boot | S8u | 72 | 31 | 22 | 9 | 4 |
+| 0.833 Hz | stand-then-go | S8u | 64 | 26 | 10 | 11 | 7 |
+| 0.909 Hz | boot | S8u | 72 | 29 | 14 | 9 | 4 |
+| 0.909 Hz | stand-then-go | S8u | 64 | 27 | 12 | 16 | 11 |
 | 1 Hz | boot | S8u | 72 | 28 | 17 | 9 | 0 |
 | 1 Hz | stand-then-go | S8u | 64 | 29 | 9 | 16 | 0 |
 | 2 Hz | boot | S8u | 72 | 24 | 16 | 9 | 0 |
@@ -3520,11 +3608,19 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 | 10 Hz | stand-then-go | S8u | 64 | 26 | 7 | 10 | 0 |
 | 20 Hz | boot | S8u | 72 | 27 | 9 | 4 | 0 |
 | 20 Hz | stand-then-go | S8u | 64 | 29 | 8 | 9 | 0 |
+| 50 Hz | boot | S8u | 72 | 28 | 16 | 7 | 0 |
+| 50 Hz | stand-then-go | S8u | 64 | 32 | 10 | 11 | 0 |
+| 100 Hz | boot | S8u | 72 | 28 | 12 | 6 | 0 |
+| 100 Hz | stand-then-go | S8u | 64 | 22 | 4 | 6 | 0 |
 
-### Numbers quoted in README.md and experiments/README.md: hrate
+### Numbers quoted in README.md and experiments/README.md: hrate and hratex
 
 - 0.5 Hz (a fix every 2 s), S8k, antennas A and B, 272 runs: tz 101, z>1 41, heading>0.5 at the end 153, xy>1.5 125.
 - 0.5 Hz (a fix every 2 s), S8u, antennas A and B, 272 runs: tz 105, z>1 59, heading>0.5 at the end 147, xy>1.5 127.
+- 0.833 Hz (a fix every 1.2 s), S8u@2011666, antennas A and B, 272 runs: tz 5, z>1 0, heading>0.5 at the end 4, xy>1.5 35.
+- 0.833 Hz (a fix every 1.2 s), S8u, antennas A and B, 272 runs: tz 5, z>1 0, heading>0.5 at the end 4, xy>1.5 35.
+- 0.909 Hz (a fix every 1.1 s), S8u@2011666, antennas A and B, 272 runs: tz 4, z>1 0, heading>0.5 at the end 1, xy>1.5 19.
+- 0.909 Hz (a fix every 1.1 s), S8u, antennas A and B, 272 runs: tz 4, z>1 0, heading>0.5 at the end 1, xy>1.5 19.
 - 1 Hz (a fix every 1 s), S8k, antennas A and B, 272 runs: tz 77, z>1 18, heading>0.5 at the end 153, xy>1.5 102.
 - 1 Hz (a fix every 1 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
 - 2 Hz (a fix every 0.5 s), S8k, antennas A and B, 272 runs: tz 6, z>1 0, heading>0.5 at the end 5, xy>1.5 8.
@@ -3535,8 +3631,16 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 - 10 Hz (a fix every 0.1 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
 - 20 Hz (a fix every 0.05 s), S8k, antennas A and B, 272 runs: tz 78, z>1 0, heading>0.5 at the end 153, xy>1.5 78.
 - 20 Hz (a fix every 0.05 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
+- 50 Hz (a fix every 0.02 s), S8u@2011666, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
+- 50 Hz (a fix every 0.02 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
+- 100 Hz (a fix every 0.01 s), S8u@2011666, antennas A and B, 272 runs: tz 71, z>1 0, heading>0.5 at the end 153, xy>1.5 63.
+- 100 Hz (a fix every 0.01 s), S8u, antennas A and B, 272 runs: tz 0, z>1 0, heading>0.5 at the end 0, xy>1.5 0.
 - 0.5 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 42, heading>0.5 at the end 48.
 - 0.5 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 44, heading>0.5 at the end 46.
+- 0.833 Hz, S8u@2011666, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 3, heading>0.5 at the end 1.
+- 0.833 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 3, heading>0.5 at the end 1.
+- 0.909 Hz, S8u@2011666, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 3, heading>0.5 at the end 0.
+- 0.909 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 3, heading>0.5 at the end 0.
 - 1 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 35, heading>0.5 at the end 48.
 - 1 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
 - 2 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 3, heading>0.5 at the end 4.
@@ -3547,8 +3651,16 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 - 10 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
 - 20 Hz, S8k, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 38, heading>0.5 at the end 48.
 - 20 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
+- 50 Hz, S8u@2011666, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
+- 50 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
+- 100 Hz, S8u@2011666, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 30, heading>0.5 at the end 48.
+- 100 Hz, S8u, boot with `initial_yaw` 2 rad off, antennas A and B, 48 runs: tz 0, heading>0.5 at the end 0.
 - 0.5 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 53, heading>0.5 at the end 64.
 - 0.5 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 51, heading>0.5 at the end 64.
+- 0.833 Hz, S8u@2011666, stand-then-go, antennas A and B, 128 runs: tz 2, heading>0.5 at the end 3.
+- 0.833 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 2, heading>0.5 at the end 3.
+- 0.909 Hz, S8u@2011666, stand-then-go, antennas A and B, 128 runs: tz 1, heading>0.5 at the end 0.
+- 0.909 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 1, heading>0.5 at the end 0.
 - 1 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 41, heading>0.5 at the end 64.
 - 1 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
 - 2 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 1, heading>0.5 at the end 0.
@@ -3559,6 +3671,31 @@ Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is th
 - 10 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
 - 20 Hz, S8k, stand-then-go, antennas A and B, 128 runs: tz 40, heading>0.5 at the end 64.
 - 20 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+- 50 Hz, S8u@2011666, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+- 50 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+- 100 Hz, S8u@2011666, stand-then-go, antennas A and B, 128 runs: tz 41, heading>0.5 at the end 64.
+- 100 Hz, S8u, stand-then-go, antennas A and B, 128 runs: tz 0, heading>0.5 at the end 0.
+
+The test of the norms of the two changes of velocity (`lever_align_norm` 0.3; the core of commit 2011666 had it). A row is one run of one antenna; two rows differ if any column of the runs file differs.
+
+- 0.5 Hz: S8v differs from S8u in 0 of 544 rows.
+- 0.5 Hz: S8n differs from S8k in 0 of 544 rows.
+- 1 Hz: S8v differs from S8u in 1 of 544 rows.
+- 1 Hz: S8n differs from S8k in 0 of 544 rows.
+- 2 Hz: S8v differs from S8u in 3 of 544 rows.
+- 2 Hz: S8n differs from S8k in 7 of 544 rows.
+- 5 Hz: S8v differs from S8u in 5 of 544 rows.
+- 5 Hz: S8n differs from S8k in 5 of 544 rows.
+- 10 Hz: S8v differs from S8u in 6 of 544 rows.
+- 10 Hz: S8n differs from S8k in 33 of 544 rows.
+- 20 Hz: S8v differs from S8u in 9 of 544 rows.
+- 20 Hz: S8n differs from S8k in 0 of 544 rows.
+- 0.5 Hz, boot, antennas A and B (144 runs): S8v heading>0.5 at the end in 83 (cfg 0 seed 2, cfg 8 seed 0, cfg 8 seed 1), S8u in 83.
+- 1 Hz, boot, antennas A and B (144 runs): S8v heading>0.5 at the end in 1 (cfg 148 seed 3), S8u in 0.
+- 2 Hz, boot, antennas A and B (144 runs): S8v heading>0.5 at the end in 0 (), S8u in 0.
+- 5 Hz, boot, antennas A and B (144 runs): S8v heading>0.5 at the end in 1 (cfg 429 seed 2), S8u in 1.
+- 10 Hz, boot, antennas A and B (144 runs): S8v heading>0.5 at the end in 0 (), S8u in 0.
+- 20 Hz, boot, antennas A and B (144 runs): S8v heading>0.5 at the end in 0 (), S8u in 0.
 
 ## Suite hgap, the short outages: the fixes stop just before or in the middle of the first acceleration after a stand
 
@@ -3791,5 +3928,130 @@ The outage begins `off` s after the end of the stand (sgstart accelerates from 6
 - S8k, antennas A and B, the outage begins 1 s before the circle (sgdrive, off-1; 256 runs): tz 48, xy>1.5 42; antenna A alone 42 of 128.
 - S8u, antennas A and B, outages that end before the circle starts or that do not cover its start (1024 runs): tz 2, xy>1.5 2.
 - S8u, antennas A and B, the outage begins 1 s before the circle (sgdrive, off-1; 256 runs): tz 30, xy>1.5 32; antenna A alone 32 of 128.
-- S8k, mast M, stand 900 s at 0.2 deg/s (160 runs): tz 140, z>1 52, diverged 16.
-- S8u, mast M, stand 900 s at 0.2 deg/s (160 runs): tz 123, z>1 16, diverged 0.
+- S8k, antenna A, the outage begins 1 s before the circle (128 runs): heading>0.5 at the end 64, xy>1.5 42.
+- S8k, antenna B, the outage begins 1 s before the circle (128 runs): heading>0.5 at the end 24, xy>1.5 0.
+- S8u, antenna A, the outage begins 1 s before the circle (128 runs): heading>0.5 at the end 64, xy>1.5 32.
+- S8u, antenna B, the outage begins 1 s before the circle (128 runs): heading>0.5 at the end 11, xy>1.5 0.
+- S8k, mast M, the long outages (30 s and 120 s, the cells of the fifth pass; 192 runs): tz 15.
+- S8u, mast M, the long outages (30 s and 120 s, the cells of the fifth pass; 192 runs): tz 17.
+- zero lever, the long outages (192 runs): tz 29.
+- S8k, mast M, stand 900 s at 0.2 deg/s (160 runs): tz 140, z>1 52, diverged 16; the zero lever on the same data has tz in 61 of 160; tz where the zero-lever run has none (excess) 84.
+- S8u, mast M, stand 900 s at 0.2 deg/s (160 runs): tz 123, z>1 16, diverged 0; the zero lever on the same data has tz in 61 of 160; tz where the zero-lever run has none (excess) 73.
+
+
+# Lever-arm study: the phase of the fixes
+
+Suite hphase: the cells of hrate (GNSS and IMU only, no /initialpose, 4 seeds, antennas A and B) at fix periods of 1, 0.5, 0.2 and 0.1 s, with the fixes 0, 1/10, ..., 9/10 of a fix period after the whole seconds on which the motion starts (hrate has phase 0 only). Scheme S8u. tz = tilt > 0.05 rad or abs z > 0.5 m; z>1 = abs z > 1 m; heading>0.5 = heading error over 0.5 rad at the end; the same IMU data at every phase of a cell. Boot = 144 runs per phase, stand-then-go = 128.
+
+| fix period | phase (tenths) | boot: tz / heading>0.5 / z>1 | stand-then-go: tz / heading>0.5 / z>1 | largest height error m |
+|---|---|---|---|---|
+| 1 s | 0 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.35 |
+| 1 s | 1 | 0 / 0 / 0 (144) | 1 / 0 / 0 (128) | 0.66 |
+| 1 s | 2 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.49 |
+| 1 s | 3 | 5 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.43 |
+| 1 s | 4 | 3 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.40 |
+| 1 s | 5 | 3 / 5 / 0 (144) | 2 / 5 / 1 (128) | 1.45 |
+| 1 s | 6 | 2 / 0 / 0 (144) | 1 / 0 / 0 (128) | 0.94 |
+| 1 s | 7 | 3 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.42 |
+| 1 s | 8 | 3 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.44 |
+| 1 s | 9 | 3 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.47 |
+| 0.5 s | 0 | 0 / 0 / 0 (144) | 1 / 0 / 1 (128) | 1.69 |
+| 0.5 s | 1 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.43 |
+| 0.5 s | 2 | 1 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.54 |
+| 0.5 s | 3 | 1 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.57 |
+| 0.5 s | 4 | 1 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.58 |
+| 0.5 s | 5 | 1 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.58 |
+| 0.5 s | 6 | 1 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.57 |
+| 0.5 s | 7 | 1 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.56 |
+| 0.5 s | 8 | 1 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.55 |
+| 0.5 s | 9 | 1 / 0 / 0 (144) | 1 / 0 / 0 (128) | 0.61 |
+| 0.2 s | 0 | 0 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.25 |
+| 0.2 s | 1 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.28 |
+| 0.2 s | 2 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.28 |
+| 0.2 s | 3 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.28 |
+| 0.2 s | 4 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.23 |
+| 0.2 s | 5 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.23 |
+| 0.2 s | 6 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.24 |
+| 0.2 s | 7 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.24 |
+| 0.2 s | 8 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.26 |
+| 0.2 s | 9 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.26 |
+| 0.1 s | 0 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.18 |
+| 0.1 s | 1 | 0 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.19 |
+| 0.1 s | 2 | 0 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.19 |
+| 0.1 s | 3 | 0 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.20 |
+| 0.1 s | 4 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.20 |
+| 0.1 s | 5 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.19 |
+| 0.1 s | 6 | 0 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.19 |
+| 0.1 s | 7 | 0 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.19 |
+| 0.1 s | 8 | 0 / 1 / 0 (144) | 0 / 0 / 0 (128) | 0.19 |
+| 0.1 s | 9 | 0 / 0 / 0 (144) | 0 / 0 / 0 (128) | 0.19 |
+
+### Numbers quoted in README.md and experiments/README.md: hphase
+
+- 1 s, boot: 1440 runs over 10 phases, tz 22, heading>0.5 at the end 6, z>1 0, largest height error 0.90 m; phase 0: tz 0; the worst phase has tz 5 of 144.
+- 1 s, both kinds: 2720 runs over 10 phases, tz 26, heading>0.5 at the end 11, z>1 1.
+- 1 s, stand-then-go: 1280 runs over 10 phases, tz 4, heading>0.5 at the end 5, z>1 1, largest height error 1.45 m; phase 0: tz 0; the worst phase has tz 2 of 128.
+- 0.5 s, boot: 1440 runs over 10 phases, tz 8, heading>0.5 at the end 4, z>1 0, largest height error 0.61 m; phase 0: tz 0; the worst phase has tz 1 of 144.
+- 0.5 s, both kinds: 2720 runs over 10 phases, tz 10, heading>0.5 at the end 4, z>1 1.
+- 0.5 s, stand-then-go: 1280 runs over 10 phases, tz 2, heading>0.5 at the end 0, z>1 1, largest height error 1.69 m; phase 0: tz 1; the worst phase has tz 1 of 128.
+- 0.2 s, boot: 1440 runs over 10 phases, tz 0, heading>0.5 at the end 1, z>1 0, largest height error 0.26 m; phase 0: tz 0; the worst phase has tz 0 of 144.
+- 0.2 s, both kinds: 2720 runs over 10 phases, tz 0, heading>0.5 at the end 1, z>1 0.
+- 0.2 s, stand-then-go: 1280 runs over 10 phases, tz 0, heading>0.5 at the end 0, z>1 0, largest height error 0.28 m; phase 0: tz 0; the worst phase has tz 0 of 128.
+- 0.1 s, boot: 1440 runs over 10 phases, tz 0, heading>0.5 at the end 6, z>1 0, largest height error 0.17 m; phase 0: tz 0; the worst phase has tz 0 of 144.
+- 0.1 s, both kinds: 2720 runs over 10 phases, tz 0, heading>0.5 at the end 6, z>1 0.
+- 0.1 s, stand-then-go: 1280 runs over 10 phases, tz 0, heading>0.5 at the end 0, z>1 0, largest height error 0.20 m; phase 0: tz 0; the worst phase has tz 0 of 128.
+
+
+# Lever-arm study: the sweep of `lever_outage_spread`
+
+Suite hgap (all 832 configurations, 4 seeds) with the S8u of commit 2011666 and `lever_outage_spread` set to the value in the scheme name (`LEVER_ONLY=S8x LEVER_SPREAD=<value> LEVER_NORM=0`); antennas A and B (lever arm with a horizontal part), M (mast). *Short* = the cells whose noise column reads off<s> (outages of 1.5 to 12 s at the first start), *long* = the outages of 30 s and 120 s of the fifth pass. tz, xy>1.5, z>1 and diverged as in the sixth pass.
+
+| `lever_outage_spread` | short, A and B: tz / xy>1.5 (of 1,280) | short, mast: tz / z>1 / diverged (of 640) | long, A and B: tz (30 s, 120 s; of 192 each) | long, mast: tz (30 s, 120 s; of 96 each) |
+|---|---|---|---|---|
+| 0 | 83 / 76 (1280) | 154 / 59 / 16 (640) | 6, 4 (192, 192) | 7, 8 (96, 96) |
+| 0.02 | 43 / 59 (1280) | 138 / 22 / 1 (640) | 6, 3 (192, 192) | 10, 8 (96, 96) |
+| 0.05 | 38 / 39 (1280) | 134 / 18 / 0 (640) | 5, 3 (192, 192) | 10, 9 (96, 96) |
+| 0.1 | 32 / 34 (1280) | 132 / 16 / 0 (640) | 4, 2 (192, 192) | 8, 9 (96, 96) |
+| 0.25 | 35 / 36 (1280) | 134 / 14 / 0 (640) | 5, 2 (192, 192) | 8, 12 (96, 96) |
+| 0.5 | 34 / 41 (1280) | 133 / 15 / 0 (640) | 5, 2 (192, 192) | 9, 17 (96, 96) |
+| 1 | 36 / 41 (1280) | 132 / 14 / 0 (640) | 5, 1 (192, 192) | 9, 21 (96, 96) |
+
+The node scenario `gnss_gap_across_start` on the core (`experiments/eskf_gap_across_start.cpp`, NSEED=300): `gap_across_start.txt` is the output of the core of the PR (the spread only), `gap_across_start_2011666.txt` that of the core of 2011666, which also had the test of the norms of the two changes of velocity (`lever_align_norm`, the column "norm test"):
+
+```
+# gap_across_start.txt
+gnss_gap_across_start on the core, antenna A, 300 seeds: runs with tilt > 0.05 rad or height error > 0.5 m after the fixes return
+outage spread    bad  worst z (m)   worst tilt
+0                  0        0.275       0.0354
+0.02               1        0.398       0.0702
+0.05               1        0.581       0.0560
+0.1                1        0.607       0.0558
+0.25               2        0.481       0.0663
+0.5                3        0.566       0.0688
+1                  4        0.559       0.0797
+
+# gap_across_start_2011666.txt
+gnss_gap_across_start on the core, antenna A, 300 seeds: runs with tilt > 0.05 rad or height error > 0.5 m after the fixes return
+outage spread  norm test    bad  worst z (m)   worst tilt
+0              0              0        0.275       0.0354
+0              0.15           1        6.772       0.3184
+0              0.3            2        7.093       0.3184
+0.02           0              1        0.398       0.0702
+0.02           0.15           4       48.758       0.5851
+0.02           0.3            5       48.758       0.5851
+0.05           0              1        0.581       0.0560
+0.05           0.15           5       21.677       0.6363
+0.05           0.3            4       18.554       0.6363
+0.1            0              1        0.607       0.0558
+0.1            0.15           7       24.824       0.4873
+0.1            0.3            4        8.138       0.2958
+0.25           0              2        0.481       0.0663
+0.25           0.15           8        8.900       0.4758
+0.25           0.3            6        8.900       0.6099
+0.5            0              3        0.566       0.0688
+0.5            0.15          15       52.998       0.7776
+0.5            0.3            9       52.998       0.7776
+1              0              4        0.559       0.0797
+1              0.15          19      105.702       1.1347
+1              0.3           13        5.551       0.4859
+```

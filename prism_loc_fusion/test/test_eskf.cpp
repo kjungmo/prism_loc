@@ -11,6 +11,8 @@
 using namespace prism_loc_fusion;
 
 static Eskf::Mat15 initCov(double s) { return Eskf::Mat15::Identity() * s; }
+// The consider masks that LeverConsider offers: none, either state, both.
+static const unsigned kMasks[] = {0u, kConsiderHeading, kConsiderGyroBiasVertical, kConsiderHeading | kConsiderGyroBiasVertical};
 
 TEST(Eskf, StaticImuStaysPut) {
   Eskf f;                                   // level, zero bias
@@ -134,12 +136,10 @@ Eigen::Matrix<double, 15, 3> considerGain(const NominalState& x, const Eskf::Mat
   const Eigen::Matrix<double, 3, 15> H = Eskf::leverArmJacobian(x.q, lever);
   Eigen::Matrix<double, 15, 3> K = P * H.transpose() * (H * P * H.transpose() + R).inverse();
   const Eigen::Vector3d up = x.q.toRotationMatrix().transpose() * Eigen::Vector3d::UnitZ();
-  const Eigen::Matrix3d along = up * up.transpose(), across = Eigen::Matrix3d::Identity() - along;
+  const Eigen::Matrix3d along = up * up.transpose();
   Eigen::Matrix3d keep_att = Eigen::Matrix3d::Identity(), keep_bg = Eigen::Matrix3d::Identity();
   if (consider & kConsiderHeading) keep_att -= along;
-  if (consider & kConsiderTilt) keep_att -= across;
   if (consider & kConsiderGyroBiasVertical) keep_bg -= along;
-  if (consider & kConsiderGyroBiasHorizontal) keep_bg -= across;
   K.block<3, 3>(6, 0) = keep_att * K.block<3, 3>(6, 0);
   K.block<3, 3>(12, 0) = keep_bg * K.block<3, 3>(12, 0);
   return K;
@@ -158,7 +158,7 @@ Eskf::Mat15 correlatedCov() {
 
 // One update ends in the state boxplus predicts from the correction K y, with the Joseph
 // covariance for that gain: for the default parameters, and for every combination of
-// consider states that LeverConsider offers.
+// consider states that LeverConsider offers (none, either, both).
 TEST(EskfLever, UpdateIsTheConsiderGainWithJosephCovariance) {
   const NominalState x0 = tiltedState();
   const Eskf::Mat15 P0 = correlatedCov();
@@ -166,7 +166,7 @@ TEST(EskfLever, UpdateIsTheConsiderGainWithJosephCovariance) {
   const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
   struct Case { bool use_default; unsigned mask; };
   std::vector<Case> cases = {{true, kConsiderHeading | kConsiderGyroBiasVertical}};
-  for (unsigned m = 0; m < 16; ++m) cases.push_back({false, m});
+  for (unsigned m : kMasks) cases.push_back({false, m});
   for (const Case& c : cases) {
     EskfParams ep;
     if (!c.use_default) ep.lever_consider = c.mask;
@@ -196,7 +196,6 @@ TEST(EskfLever, UpdateIsTheConsiderGainWithJosephCovariance) {
 // Under the default the heading and the vertical gyro bias are not corrected (exactly: the
 // parts of the correction along the vertical are zero) and roll, pitch and the horizontal
 // gyro biases are, on a body tilted so that the vertical is not a coordinate axis.
-// With all attitude and gyro-bias states considered (the first version) none of them moves.
 TEST(EskfLever, DefaultCorrectsTiltAndHorizontalGyroBiasButNotHeading) {
   const NominalState x0 = tiltedState();
   const Eskf::Mat15 P0 = correlatedCov();
@@ -212,42 +211,6 @@ TEST(EskfLever, DefaultCorrectsTiltAndHorizontalGyroBiasButNotHeading) {
   EXPECT_LT(std::fabs(dbg.dot(up)), 1e-14);                     // vertical gyro bias: none
   EXPECT_GT((dtheta - up * dtheta.dot(up)).norm(), 1e-3);       // roll and pitch: corrected
   EXPECT_GT((dbg - up * dbg.dot(up)).norm(), 1e-4);             // horizontal gyro bias: corrected
-  EskfParams first;
-  first.lever_consider = kConsiderAttitudeAndGyroBias;
-  Eskf g(first);
-  g.initialize(x0, P0);
-  g.updatePositionLever(z, lever, R);
-  EXPECT_TRUE(g.state().q.coeffs() == x0.q.coeffs());           // all considered: untouched, bit for bit
-  EXPECT_TRUE(g.state().bg == x0.bg);
-  for (int i : {6, 7, 8, 12, 13, 14}) EXPECT_NEAR(g.covariance()(i, i), P0(i, i), 1e-15) << i;
-}
-
-// The iterated update relinearises at each pass: with a heading 0.6 rad off, a lever of 1 m
-// and a tight fix, three passes land the antenna closer to the fix than one pass, and
-// lever_iterations 1 (the default) is the ordinary update bit for bit.
-TEST(EskfLever, IteratedUpdateRelinearises) {
-  NominalState x0;
-  x0.q = so3Exp(Eigen::Vector3d(0, 0, 0.6));   // the truth has heading 0
-  Eskf::Mat15 P0 = initCov(1e-6);
-  P0(8, 8) = 0.5;                              // the heading is the only uncertain state
-  const Eigen::Vector3d lever(1.0, 0.0, 0.0);
-  const Eigen::Vector3d fix = lever;
-  const Eigen::Matrix3d R = Eigen::Matrix3d::Identity() * 1e-6;
-  EskfParams p1;
-  p1.lever_consider = 0u;
-  EskfParams p3 = p1;
-  p3.lever_iterations = 3;
-  EskfParams p0 = p1;   // iterations left at the default
-  Eskf one(p1), three(p3), dflt(p0);
-  for (Eskf* f : {&one, &three, &dflt}) f->initialize(x0, P0);
-  for (Eskf* f : {&one, &three, &dflt}) f->updatePositionLever(fix, lever, R);
-  const double r1 = (fix - Eskf::leverArmPosition(one.state(), lever)).norm();
-  const double r3 = (fix - Eskf::leverArmPosition(three.state(), lever)).norm();
-  EXPECT_GT(r1, 0.02);                         // one step of a 0.6 rad turn leaves a clear miss
-  EXPECT_LT(r3, r1 / 10.0);
-  EXPECT_TRUE(one.state().q.coeffs() == dflt.state().q.coeffs());
-  EXPECT_TRUE(one.covariance() == dflt.covariance());
-  EXPECT_LT(std::fabs(so3Log(x0.q.conjugate() * three.state().q).z() + 0.6), 0.02);   // the heading went to 0
 }
 
 TEST(EskfLever, AttitudeCovarianceAndTiltVariance) {
@@ -406,8 +369,8 @@ LeverRun runLever(const Eigen::Vector3d& lever, double yaw_rate, double yaw0_err
 
 // GNSS and IMU alone for a minute, standing or turning on the spot, for the two antenna
 // mounts the node check uses, with the heading 0.1 rad off at the start, without a gyro
-// bias and with two (the 0.003, -0.002, 0.002 rad/s of the review, and 0.5 deg/s on each
-// axis). Thresholds fixed before the first run of this test:
+// bias and with two (0.003, -0.002, 0.002 rad/s, and 0.5 deg/s on each
+// axis). Thresholds:
 //   height within 0.1 m and tilt within 0.03 rad (the fix corrects both, whatever the bias);
 //   heading error = 0.1 rad + vertical gyro bias x 60 s, within 0.05 rad (the heading is a
 //     consider state while the robot stands or turns on the spot: the fix does not touch it,
@@ -446,8 +409,8 @@ TEST(EskfLever, GnssOnlyStaysConsistentOverAMinute) {
   }
 }
 
-// A lever of exactly zero is the plain position update whatever the consider states or the
-// number of iterations are set to: the settings only act on an antenna off the origin.
+// A lever of exactly zero is the plain position update whatever the consider states are set to:
+// the settings only act on an antenna off the origin.
 TEST(EskfLever, ZeroLeverIgnoresTheSchemeSettings) {
   Eskf::Mat15 P0 = initCov(0.3);
   P0(0, 8) = P0(8, 0) = 0.05;
@@ -458,78 +421,17 @@ TEST(EskfLever, ZeroLeverIgnoresTheSchemeSettings) {
   Eskf ref;
   ref.initialize(tiltedState(), P0);
   ref.updatePosition(z, R);
-  for (unsigned mask = 0; mask < 16; ++mask) {
-    for (int iterations : {1, 3}) {
-      EskfParams ep;
-      ep.lever_consider = mask;
-      ep.lever_iterations = iterations;
-      Eskf f(ep);
-      f.initialize(tiltedState(), P0);
-      f.updatePositionLever(z, Eigen::Vector3d::Zero(), R);
-      EXPECT_TRUE(f.state().p == ref.state().p && f.state().v == ref.state().v &&
-                  f.state().q.coeffs() == ref.state().q.coeffs() && f.state().ba == ref.state().ba &&
-                  f.state().bg == ref.state().bg && f.covariance() == ref.covariance())
-          << mask << " " << iterations;
-    }
+  for (unsigned mask : kMasks) {
+    EskfParams ep;
+    ep.lever_consider = mask;
+    Eskf f(ep);
+    f.initialize(tiltedState(), P0);
+    f.updatePositionLever(z, Eigen::Vector3d::Zero(), R);
+    EXPECT_TRUE(f.state().p == ref.state().p && f.state().v == ref.state().v &&
+                f.state().q.coeffs() == ref.state().q.coeffs() && f.state().ba == ref.state().ba &&
+                f.state().bg == ref.state().bg && f.covariance() == ref.covariance())
+        << mask;
   }
-}
-
-// The motion gate: with a speed or rate over its threshold the update leaves out
-// lever_consider_moving instead of lever_consider. Level body, so the heading is the
-// attitude error about z; a position-heading covariance gives the fix a reason to turn it.
-namespace {
-double headingTurnedBy(EskfParams ep, double speed, double sigma_v, double rate, double dt = 0.01) {
-  NominalState x0;
-  x0.v = Eigen::Vector3d(speed, 0.0, 0.0);
-  Eskf::Mat15 P0 = initCov(1e-4);
-  P0.block<3, 3>(3, 3) = Eigen::Matrix3d::Identity() * sigma_v * sigma_v;
-  P0(8, 8) = 0.3;
-  P0(1, 8) = P0(8, 1) = 0.05;
-  Eskf f(ep);
-  f.initialize(x0, P0);
-  if (rate > 0.0) {
-    // predict() with an angular rate of `rate` about z; keep the state change small
-    f.predict(Eigen::Vector3d(0, 0, 9.81), Eigen::Vector3d(0, 0, rate), dt);
-  }
-  const Eigen::Quaterniond q_before = f.state().q;
-  const Eigen::Vector3d lever(1.0, 0.0, 0.5);
-  f.updatePositionLever(f.state().p + f.state().q.toRotationMatrix() * lever + Eigen::Vector3d(0.0, 0.2, 0.0), lever,
-                        Eigen::Matrix3d::Identity() * 1e-4);
-  return std::fabs(so3Log(q_before.conjugate() * f.state().q).z());
-}
-}  // namespace
-
-TEST(EskfLever, MotionGateLeavesTheHeadingOutOnlyWhileStanding) {
-  EskfParams ep;
-  ep.lever_consider = kConsiderHeading | kConsiderGyroBiasVertical;
-  ep.lever_consider_moving = 0u;
-  ep.lever_motion_speed = 0.3;
-  ep.lever_motion_rate = 0.1;
-  EXPECT_LT(headingTurnedBy(ep, 0.0, 0.01, 0.0), 1e-14);        // standing: heading not corrected
-  EXPECT_GT(headingTurnedBy(ep, 0.5, 0.01, 0.0), 1e-3);         // moving: corrected
-  EXPECT_LT(headingTurnedBy(ep, 0.29, 0.01, 0.0), 1e-14);       // just under the speed threshold
-  EXPECT_LT(headingTurnedBy(ep, 0.3, 0.01, 0.0), 1e-14);        // exactly at it: not over
-  EXPECT_GT(headingTurnedBy(ep, 0.31, 0.01, 0.0), 1e-3);        // just over it
-  EXPECT_LT(headingTurnedBy(ep, 0.5, 0.2, 0.0), 1e-14);         // 0.5 m/s is not 3 sigma of a 0.2 m/s uncertainty
-  EXPECT_GT(headingTurnedBy(ep, 0.7, 0.2, 0.0), 1e-3);          // 0.7 m/s is
-  EXPECT_LT(headingTurnedBy(ep, 0.0, 0.01, 0.09), 1e-14);       // under the rate threshold
-  EXPECT_LT(headingTurnedBy(ep, 0.0, 0.01, 0.1), 1e-14);        // exactly at it: not over
-  EXPECT_GT(headingTurnedBy(ep, 0.0, 0.01, 0.11), 1e-3);        // over it
-  EXPECT_GT(headingTurnedBy(ep, 0.0, 0.01, -0.11) + headingTurnedBy(ep, 0.0, 0.01, 0.11), 1e-3);
-  EskfParams no_rate = ep;
-  no_rate.lever_motion_rate = 0.0;                              // rate test off
-  EXPECT_LT(headingTurnedBy(no_rate, 0.0, 0.01, 0.5), 1e-14);
-  EXPECT_GT(headingTurnedBy(no_rate, 0.5, 0.01, 0.0), 1e-3);
-  EskfParams no_speed = ep;
-  no_speed.lever_motion_speed = 0.0;                            // speed test off
-  EXPECT_LT(headingTurnedBy(no_speed, 5.0, 0.01, 0.0), 1e-14);
-  EXPECT_GT(headingTurnedBy(no_speed, 0.0, 0.01, 0.5), 1e-3);
-  EskfParams off = ep;
-  off.lever_motion_speed = off.lever_motion_rate = 0.0;         // both off: the gate is off
-  EXPECT_LT(headingTurnedBy(off, 5.0, 0.01, 0.5), 1e-14);
-  EskfParams moving_considers = ep;
-  moving_considers.lever_consider_moving = kConsiderHeading;     // the moving mask is the one used
-  EXPECT_LT(headingTurnedBy(moving_considers, 0.5, 0.01, 0.0), 1e-14);
 }
 
 // --- the bound on the heading uncertainty and the release by acceleration
@@ -686,7 +588,7 @@ LongRun runStanding(EskfParams ep, const Eigen::Vector3d& lever, const Eigen::Ve
 }
 }  // namespace
 
-// The failure of the review (round 3): a robot that stands for 15 minutes on GNSS and IMU alone. Without
+// A robot that stands for 15 minutes on GNSS and IMU alone. Without
 // the bound the heading variance grows with (vertical gyro bias sigma x t)^2, the lever term leaves its linear
 // range and the tilt and height diverge; with it the heading sigma never exceeds the bound after an update,
 // and the tilt, the height and the position stay within what a standing robot can have (two antenna mounts,
@@ -709,7 +611,7 @@ TEST(EskfLever, HeadingSigmaStaysAtTheBoundForFifteenMinutes) {
       EXPECT_LT(r.max_z, 0.15) << at;
       EXPECT_LT(r.max_xy_beyond, 0.3) << at;      // circle + 0.6 m (the tangential wander of a consider filter reaches circle + 0.38 m)
       // The same without the bound (and without the release, which would correct the heading when a tilt error leaks into the
-      // integral), 600 s: the failure of the review.
+      // integral), 600 s: the failure that the bound prevents.
       EskfParams no_bound;
       no_bound.lever_heading_sigma_max = 0.0;
       no_bound.lever_release_dv = 0.0;
@@ -802,7 +704,7 @@ TEST(EskfLever, ReleaseFollowsTheAccelerationIntegral) {
 // closed it is not, whatever the filter's speed is: a robot that has driven at a constant speed (speed
 // 2 m/s, no acceleration) is closed, one that has just accelerated is open.
 TEST(EskfLever, ReleaseLetsTheFixTurnTheHeadingOnlyWhileTheImuSeesAcceleration) {
-  EskfParams ep;     // the defaults: bound 0.35, release at 1.0 m/s, no speed gate
+  EskfParams ep;     // the defaults: bound 0.35, release at 1.0 m/s
   Eskf stands = accelerated(ep, 1.0, 0.0, 0.0), brief = accelerated(ep, 1.0, 0.5, 0.0), long_acc = accelerated(ep, 1.0, 2.0, 0.0);
   Eskf after = accelerated(ep, 1.0, 2.0, 3.0);
   EXPECT_LT(headingTurnedByFix(stands), 1e-14);
@@ -818,23 +720,6 @@ TEST(EskfLever, ReleaseLetsTheFixTurnTheHeadingOnlyWhileTheImuSeesAcceleration) 
   EXPECT_LT(headingTurnedByFix(c), 1e-14);
 }
 
-// The bound applies while the release is open too (the version before the honest release, lever_restore off): the full
-// update still sees a heading sigma of at most the bound. With lever_restore (the default) the bound is not applied
-// while the release is open: the full update sees the heading variance the filter holds (see
-// HonestReleaseIsNotBounded).
-TEST(EskfLever, BoundAlsoAppliesWhileReleased) {
-  EskfParams ep;
-  ep.lever_restore = false;
-  Eskf f = accelerated(ep, 1.0, 2.0, 0.0);
-  ASSERT_TRUE(f.leverReleaseOpen());
-  Eskf::Mat15 P = f.covariance();
-  P(8, 8) = 4.0;
-  f.initialize(f.state(), P);
-  nullFix(f, Eigen::Vector3d(0.5, 0.0, 1.0));
-  EXPECT_TRUE(f.leverHeadingCapped());
-  EXPECT_NEAR(f.headingSigma(), ep.lever_heading_sigma_max, 1e-9);
-}
-
 // The accumulator reads the specific force and nothing else: with it on (a time constant) or off (zero) the
 // state and covariance are bit for bit the same after the same predictions and the same lever update, as long as
 // the released mask equals the considered one.
@@ -843,7 +728,7 @@ TEST(EskfLever, AccumulatorDoesNotTouchStateOrCovariance) {
   on.lever_release_tau = 4.0;
   off.lever_release_tau = 0.0;
   on.lever_consider_moving = off.lever_consider_moving = on.lever_consider;
-  on.lever_restore = off.lever_restore = false;   // with it, an open release also lifts the bound: a difference in P
+  on.lever_heading_sigma_max = off.lever_heading_sigma_max = 0.0;   // an open release also lifts the bound: a difference in P
   Eskf a = accelerated(on, 1.0, 2.0, 0.5), b = accelerated(off, 1.0, 2.0, 0.5);
   EXPECT_GT(a.releaseAccumulator(), 1.0);
   EXPECT_EQ(b.releaseAccumulator(), 0.0);
@@ -927,26 +812,21 @@ TEST(EskfLever, HeadingSigmaIsTheSigmaAboutTheVertical) {
   EXPECT_EQ(k.headingSigma(), 0.0);
 }
 
-// The defaults are the scheme the grid chose (experiments/eskf_lever.cpp, second pass; README): a bound of
-// 0.35 rad on the heading sigma, release at 1.0 m/s of horizontal acceleration integral over a 4 s window,
-// no speed gate, the heading and the vertical gyro bias considered. Pinned by value and by what they do: with
+// The defaults are the shipped scheme (README): a bound of 0.35 rad on the heading sigma, release at
+// 1.0 m/s of horizontal acceleration integral over a 4 s window, the heading and the vertical gyro bias considered. Pinned by value and by what they do: with
 // 1 m/s^2 along x from rest the integral passes 1.0 m/s after 4 s x ln(4 / 3) = 1.15 s.
 TEST(EskfLever, DefaultsAreTheChosenScheme) {
   const EskfParams d;
   EXPECT_EQ(d.lever_heading_sigma_max, 0.35);
   EXPECT_EQ(d.lever_release_dv, 1.0);
   EXPECT_EQ(d.lever_release_tau, 4.0);
-  EXPECT_EQ(d.lever_motion_speed, 0.0);
-  EXPECT_EQ(d.lever_motion_rate, 0.0);
   EXPECT_EQ(d.lever_consider, kConsiderHeading | kConsiderGyroBiasVertical);
   EXPECT_EQ(d.lever_consider_moving, 0u);
-  EXPECT_EQ(d.lever_iterations, 1);
-  EXPECT_TRUE(d.lever_align_span_guard);                                  // fifth review: the alignment refuses a window with a gap
   EXPECT_NEAR(d.lever_start_sigma, M_PI / std::sqrt(3.0), 1e-12);                 // a start with no heading source: the spread of an unknown heading
-  EXPECT_EQ(d.lever_align_span, 0.8);                                     // sixth review: the alignment's spans are seconds, not fixes (0.8 s = 4 fixes at 5 Hz)
-  EXPECT_EQ(d.lever_align_norm, 0.0);                                     // the test of the norms (0.3) is off: it made gnss_gap_across_start worse (types.hpp)
-  EXPECT_EQ(d.lever_align_period_max, 1.25);                              // the slowest supported fix rate: 0.8 Hz
-  EXPECT_EQ(d.lever_outage_spread, 0.1);                                  // sixth review, finding 2: the covariance after an outage with an unknown heading
+  EXPECT_EQ(d.lever_align_span, 0.8);                                     // the alignment's spans are seconds
+  EXPECT_EQ(d.lever_align_period_ok, 1.05);                               // the slowest supported fix rate: 1 Hz and 5 % for the jitter of the stamps
+  EXPECT_EQ(d.lever_align_period_max, 1.25);                              // beyond it (0.8 Hz) the alignment does nothing
+  EXPECT_EQ(d.lever_outage_spread, 0.1);                                  // the covariance after an outage with an unknown heading
   Eskf f(d);
   f.initialize(NominalState(), initCov(0.01));
   int steps = 0;
@@ -985,10 +865,10 @@ TEST(EskfLever, ReleaseCountsTheHorizontalAccelerationInTheWorldFrame) {
 }
 
 // --- the honest release: the shadow of the heading variance, the kinematic alignment, the blind update
-//     (lever_restore, lever_align_sigma, lever_align_dv, lever_blind) ---
+//     (lever_align_sigma, lever_align_dv) ---
 
 // With the release open and the heading variance held by nothing (the filter's own, 4 rad^2), the bound is not applied
-// and the full update sees all of it; the honest version of BoundAlsoAppliesWhileReleased.
+// and the full update sees all of it.
 TEST(EskfLever, HonestReleaseIsNotBounded) {
   EskfParams ep;
   Eskf f = accelerated(ep, 1.0, 2.0, 0.0);
@@ -1058,11 +938,11 @@ GoRun runStandGo(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, do
 }
 }  // namespace
 
-// The failure of the fourth review: a robot that stands for minutes on GNSS and IMU and then starts. The heading was off by
+// A robot that stands for minutes on GNSS and IMU and then starts. The heading was off by
 // the integrated vertical gyro bias (1.2 rad here), the bound held the filter at 0.35 rad, and the full update at the release
 // turned the heading the wrong way and tilted the filter. Now: the filter reports the honest spread while it stands, finds the heading from the
 // first 0.5 m/s^2 of the start, and ends the start with a small heading error, a level attitude and the right height.
-// The control is the previous behaviour (lever_restore off): wrong heading, tilt, height.
+// The control has no alignment (lever_align_sigma 0): the release runs a full update on the honest spread.
 TEST(EskfLever, StartAfterALongStandFindsTheHeading) {
   const Eigen::Vector3d lever(0.5, 0.0, 1.0);
   const double bias_dps = 0.1;
@@ -1075,7 +955,7 @@ TEST(EskfLever, StartAfterALongStandFindsTheHeading) {
   EXPECT_LT(now.tilt_end, 0.03);
   EXPECT_LT(now.z_max, 0.3);
   EskfParams old;
-  old.lever_restore = false;
+  old.lever_align_sigma = 0.0;
   const GoRun before = runStandGo(old, lever, 600.0, 15.0, 0.1, bias_dps, 3);
   EXPECT_EQ(before.aligned, 0);
   EXPECT_GT(before.heading_err_end + before.tilt_end * 10.0 + before.z_max, now.heading_err_end + now.tilt_end * 10.0 + now.z_max);
@@ -1132,18 +1012,7 @@ TEST(EskfLever, NoAlignmentWithoutAChangeOfVelocityAndBlindWhileTheHeadingIsUnkn
   EXPECT_NEAR(f.headingSigma(), ep.lever_heading_sigma_max, 1e-3);
 }
 
-// lever_restore off is the version before: none of the new states is ever reached, and the honest heading sigma is the
-// filter's.
-TEST(EskfLever, RestoreOffNeverAlignsOrGoesBlind) {
-  EskfParams ep;
-  ep.lever_restore = false;
-  const GoRun r = runStandGo(ep, Eigen::Vector3d(0.5, 0.0, 1.0), 300.0, 5.0, 0.1, 0.1, 3);
-  EXPECT_EQ(r.aligned, 0);
-  EXPECT_EQ(r.blind_updates, 0);
-  EXPECT_DOUBLE_EQ(r.sigma_honest, r.sigma_capped);
-}
-
-// --- the fifth review: an outage across the start, and the default boot with a heading that is only a guess ---
+// --- an outage across the start, and the default boot with a heading that is only a guess ---
 
 namespace {
 struct GapRun { int aligned_after{0}, aligned_total{0}; double heading_err_end{0.0}, tilt_max{0.0}, z_max{0.0}, sigma_end{0.0}; };
@@ -1200,10 +1069,9 @@ GapRun runGap(EskfParams ep, const Eigen::Vector3d& lever, double stand_s, doubl
 }
 }  // namespace
 
-// The fifth review: the fixes stop 10 s before the start and come back 120 s later, while the robot runs the start-stop cycle (the
-// fixes return during a braking). The alignment used the last fix before the outage and the IMU sum over the whole outage, and set the
-// heading from them 0.8 s after the fixes returned (heading 0.3 rad off, locked at 0.35 rad of spread, tilt 0.7 rad, height -43 m in the
-// reviewer's simulation). Now a gap anywhere between the two spans refuses the alignment.
+// The fixes stop 10 s before the start and come back 120 s later, while the robot runs the start-stop cycle (the fixes return during a
+// braking). An alignment from the last fix before the outage and the IMU sum over the whole outage would set a wrong heading with a small
+// spread, then tilt the filter. A gap anywhere between the two spans refuses the alignment.
 TEST(EskfLever, OutageAcrossTheStartDoesNotAlignOnTheWholeOutage) {
   const Eigen::Vector3d lever(0.5, 0.0, 1.0);
   for (unsigned seed : {3u, 4u, 5u}) {
@@ -1238,7 +1106,7 @@ TEST(EskfLever, StartWithAGuessedHeadingFindsItAtTheFirstStart) {
 }
 
 // markHeadingUnknown() touches neither x nor P; it holds the honest spread at lever_start_sigma, and does nothing when that is 0
-// or under lever_align_sigma, or when lever_restore is off.
+// or under lever_align_sigma.
 TEST(EskfLever, MarkHeadingUnknownOnlySetsTheShadow) {
   EskfParams ep;
   Eskf f(ep);
@@ -1254,11 +1122,10 @@ TEST(EskfLever, MarkHeadingUnknownOnlySetsTheShadow) {
   EXPECT_EQ(f.state().q.coeffs(), q_before.coeffs());
   EXPECT_NEAR(f.headingSigmaHonest(), ep.lever_start_sigma, 1e-9);
   EXPECT_GT(f.headingSigmaHonest(), ep.lever_align_sigma);
-  for (int variant = 0; variant < 3; ++variant) {
+  for (int variant = 0; variant < 2; ++variant) {
     EskfParams q;
     if (variant == 0) q.lever_start_sigma = 0.0;
     if (variant == 1) q.lever_start_sigma = 0.9 * q.lever_align_sigma;
-    if (variant == 2) q.lever_restore = false;
     Eskf g(q);
     g.initialize(x0, P0);
     EXPECT_FALSE(g.markHeadingUnknown()) << variant;
@@ -1266,11 +1133,10 @@ TEST(EskfLever, MarkHeadingUnknownOnlySetsTheShadow) {
   }
 }
 
-// --- round 7, finding 1: the alignment measures time, not fixes ---
-// The sixth review found that the alignment worked only at fix rates of 5 Hz to just under 10 Hz: its span was 4 fixes. At 1 Hz the span was 4 s
-// and never passed the check of its length, so a start with an unknown heading (markHeadingUnknown, the default boot) ran blind for good; at 10 Hz
-// the span was 0.4 s and the noise of the fixes gave alignments at constant speed. The span, the window and the gap limit are now seconds scaled by
-// the measured fix period, and the change of velocity from the IMU and the one from the fixes must have the same norm.
+// --- the alignment measures time, not fixes ---
+// The span, the window and the gap limit are seconds scaled by the measured fix period, so the alignment works from 1 Hz to 100 Hz: a span of
+// a few fixes would be 4 s at 1 Hz (never passes its own length check) and 0.04 s at 100 Hz (the noise of the fixes gives alignments at constant
+// speed), and a history of a few hundred fixes would be shorter than the window at 100 Hz.
 
 namespace {
 // A robot with an unknown heading drives at constant speed along x, 1.5 m/s, from the first fix on. The accelerometer has a bias, which an IMU sum
@@ -1305,20 +1171,13 @@ int alignmentsAtConstantSpeed(EskfParams ep, int fix_every, double acc_bias, uns
   return aligned;
 }
 
-EskfParams fourFixSpan() {   // the alignment of the earlier rounds
-  EskfParams p;
-  p.lever_align_span = 0.0;
-  p.lever_align_norm = 0.0;
-  p.lever_align_period_max = 0.0;
-  return p;
-}
 }  // namespace
 
 // The default boot (no heading source, initial_yaw 2 or -1.5 rad off, a stand of 20 s, then a start of 0.5 m/s^2) finds the heading at fix rates
-// of 1, 2, 5, 10 and 20 Hz, and not before the start.
+// of 1 to 100 Hz, and not before the start.
 TEST(EskfLever, AlignmentFindsTheHeadingAtEveryFixRate) {
   const Eigen::Vector3d lever(0.5, 0.0, 1.0);
-  for (int every : {5, 10, 20, 50, 100}) {   // 20, 10, 5, 2 and 1 Hz at the 100 Hz of the test
+  for (int every : {1, 2, 5, 10, 20, 50, 100}) {   // 100, 50, 20, 10, 5, 2 and 1 Hz at the 100 Hz of the test
     for (double yaw0 : {2.0, -1.5}) {
       const GoRun r = runStandGo(EskfParams(), lever, 20.0, 15.0, yaw0, 0.1, 3, true, every);
       const std::string at = "fix every " + std::to_string(every) + " ticks, yaw0 " + std::to_string(yaw0);
@@ -1332,40 +1191,16 @@ TEST(EskfLever, AlignmentFindsTheHeadingAtEveryFixRate) {
   }
 }
 
-// The control: the span of 4 fixes of the earlier rounds never aligns at 1 Hz, and the robot ends the start with the heading it had.
-TEST(EskfLever, FourFixSpanNeverAlignsAtOneHz) {
-  const GoRun r = runStandGo(fourFixSpan(), Eigen::Vector3d(0.5, 0.0, 1.0), 20.0, 15.0, 2.0, 0.1, 3, true, 100);
-  EXPECT_EQ(r.aligned, 0);
-  EXPECT_GT(r.heading_err_end, 1.0);
-}
-
-// Constant speed with an accelerometer bias is not a change of velocity. At 10 Hz the span of 4 fixes (0.4 s) has fix noise of 0.07 m/s per
-// velocity, and the alignment of the earlier rounds fired on it; a span of 0.8 s and the test of the norms do not, at any rate.
+// Constant speed with an accelerometer bias is not a change of velocity: no alignment at any rate.
 TEST(EskfLever, NoAlignmentAtConstantSpeedAtAnyFixRate) {
   for (unsigned seed : {1u, 2u, 3u, 4u, 5u, 6u})
-    for (int every : {5, 10, 20, 50, 100})
+    for (int every : {1, 2, 5, 10, 20, 50, 100})
       EXPECT_EQ(alignmentsAtConstantSpeed(EskfParams(), every, 0.1, seed, 120.0), 0) << "fix every " << every << " seed " << seed;
 }
 
-// The change of velocity from the IMU and the one from the fixes must have the same norm (a rotation about the vertical keeps it). An
-// accelerometer that reads 1.8 times the acceleration gives a change of velocity of the right direction and 1.8 times the norm: the alignment
-// refuses it at the first change of velocity (lever_align_norm 0.3, off by default) and aligns seconds later, when the two agree better; without the test it
-// aligns at the first change.
-TEST(EskfLever, AlignmentRefusesChangesOfVelocityOfDifferentNorms) {
-  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
-  EskfParams with_test;
-  with_test.lever_align_norm = 0.3;
-  const GoRun refused = runStandGo(with_test, lever, 20.0, 15.0, 2.0, 0.1, 3, true, 20, 0.0, 1.8);
-  const GoRun accepted = runStandGo(EskfParams(), lever, 20.0, 15.0, 2.0, 0.1, 3, true, 20, 0.0, 1.8);
-  EXPECT_LT(accepted.first_aligned_s, 2.0);                       // the first change of velocity of the start
-  EXPECT_GT(refused.first_aligned_s, accepted.first_aligned_s + 2.0);   // refused until the IMU sum and the fixes agree better
-  // with the right scale both align
-  EXPECT_GE(runStandGo(with_test, lever, 20.0, 15.0, 2.0, 0.1, 3, true, 20, 0.0, 1.0).aligned, 1);
-  EXPECT_GE(runStandGo(with_test, lever, 20.0, 15.0, 2.0, 0.1, 3, true, 20, 0.0, 1.2).aligned, 1);   // 20 % off: inside the 30 % of the test
-}
-
 // A fix period over lever_align_period_max (a rate under 0.8 Hz) is not supported: after the first fixes the filter says so, takes back the
-// start marked unknown (the spread is the filter's own again), and never aligns. At 1 Hz it keeps the mark.
+// start marked unknown (the spread is the filter's own again), and never aligns. Between 1.05 s and 1.25 s the alignment runs and the rate is
+// reported as degraded. At 1 Hz the filter keeps the mark and reports neither.
 TEST(EskfLever, FixRateUnderTheLimitIsReportedAndTheUnknownStartTakenBack) {
   const Eigen::Vector3d lever(0.5, 0.0, 1.0);
   const EskfParams ep;
@@ -1403,6 +1238,21 @@ TEST(EskfLever, FixRateUnderTheLimitIsReportedAndTheUnknownStartTakenBack) {
   Eskf marked = run(100, 20, &early, &aligned);   // 1 Hz
   EXPECT_FALSE(marked.leverUnsupportedRate());
   EXPECT_NEAR(marked.fixPeriod(), 1.0, 1e-6);
+  EXPECT_FALSE(marked.leverDegradedRate());
+  Eskf edge = run(104, 30, &early, &aligned);     // 1.04 s: under the limit, supported
+  EXPECT_FALSE(edge.leverUnsupportedRate() || edge.leverDegradedRate());
+  Eskf degraded = run(106, 30, &early, &aligned); // 1.06 s: over it, degraded
+  EXPECT_TRUE(degraded.leverDegradedRate());
+  EXPECT_FALSE(degraded.leverUnsupportedRate());
+  EXPECT_NEAR(degraded.headingSigmaHonest(), ep.lever_start_sigma, 0.3);   // the start stays marked unknown (30 s of gyro noise and bias prior added)
+  Eskf degraded2 = run(124, 40, &early, &aligned); // 1.24 s: the last degraded period
+  EXPECT_TRUE(degraded2.leverDegradedRate() && !degraded2.leverUnsupportedRate());
+  Eskf over = run(126, 40, &early, &aligned);     // 1.26 s: unsupported
+  EXPECT_TRUE(over.leverUnsupportedRate());
+  EXPECT_FALSE(over.leverDegradedRate());
+  degraded.initialize(x0, P0);                    // a new start forgets both
+  over.initialize(x0, P0);
+  EXPECT_FALSE(degraded.leverDegradedRate() || degraded.leverUnsupportedRate() || over.leverDegradedRate() || over.leverUnsupportedRate());
   // Right after the first six fixes the slow filter's honest spread is the filter's own start spread, not the unknown 1.81 rad.
   Eskf g(ep);
   g.initialize(x0, P0);
@@ -1413,6 +1263,29 @@ TEST(EskfLever, FixRateUnderTheLimitIsReportedAndTheUnknownStartTakenBack) {
   }
   EXPECT_TRUE(g.leverUnsupportedRate());
   EXPECT_LT(g.headingSigmaHonest(), 1.0);   // 0.71 rad of the start, plus 15 s of the gyro noise and bias prior
+}
+
+// Fixes that carry no time (many updates without a predict in between: a stamp that does not advance) neither grow the history without
+// bound nor give a fix period or a non-finite state; a sparse and a dense stream both keep working afterwards.
+TEST(EskfLever, FixesWithoutTimeAreBounded) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  Eskf f{EskfParams()};
+  Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+  P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+  NominalState x0;
+  x0.p = -(x0.q * lever);
+  f.initialize(x0, P0);
+  const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
+  for (int k = 0; k < 20000; ++k) f.updatePositionLever(Eigen::Vector3d::Zero(), lever, R);   // 20,000 fixes at one instant
+  EXPECT_DOUBLE_EQ(f.fixPeriod(), 0.0);
+  EXPECT_FALSE(f.leverUnsupportedRate());
+  EXPECT_TRUE(f.state().p.allFinite() && f.covariance().allFinite());
+  for (int k = 1; k <= 3000; ++k) {   // then 100 Hz fixes for 30 s
+    f.predict(Eigen::Vector3d(0, 0, 9.81), Eigen::Vector3d::Zero(), 0.01);
+    f.updatePositionLever(Eigen::Vector3d::Zero(), lever, R);
+  }
+  EXPECT_NEAR(f.fixPeriod(), 0.01, 1e-9);
+  EXPECT_TRUE(f.state().p.allFinite() && f.covariance().allFinite());
 }
 
 // fixPeriod() is the median of the last intervals: an outage of the fixes does not change it, and it is 0 before 3 fixes.
@@ -1437,18 +1310,36 @@ TEST(EskfLever, FixPeriodIsTheMedianInterval) {
   EXPECT_NEAR(f.fixPeriod(), 0.2, 1e-9);
 }
 
-// --- round 7, finding 2: a short outage of the fixes that begins just before the first acceleration after a long stand ---
+// An outage of the fixes leaves the fixes from before it in the history: the first fix after 60 s without fixes still sees the fix period
+// of the stream that went before (a history cut by time alone would hold two fixes then and read no period).
+TEST(EskfLever, HistoryKeepsTheFixesAcrossAnOutage) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  Eskf f{EskfParams()};
+  Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+  P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+  NominalState x0;
+  x0.p = -(x0.q * lever);
+  f.initialize(x0, P0);
+  const Eigen::Matrix3d R = Eigen::Vector3d(4e-4, 4e-4, 1.0).asDiagonal();
+  for (int k = 1; k <= 12000; ++k) {
+    f.predict(Eigen::Vector3d(0, 0, 9.81), Eigen::Vector3d::Zero(), 0.01);
+    const bool out = k > 3000 && k <= 9000;   // 60 s without fixes
+    if (k % 20 == 0 && !out) f.updatePositionLever(Eigen::Vector3d::Zero(), lever, R);
+    if (k == 9020) { EXPECT_NEAR(f.fixPeriod(), 0.2, 1e-9); }   // the first fix after the outage
+  }
+}
+
+// --- a short outage of the fixes that begins just before the first acceleration after a long stand ---
 // After 900 s of standing the heading is wrong by 3 rad (a vertical gyro bias of 0.2 deg/s), and the filter holds it as unknown. An outage of 1.5 to
 // 12 s that begins 1 s before the start lets predict() dead-reckon the acceleration in that heading: the velocity it gains is off by up to twice the
-// velocity change, and P, with the heading held at its bound, said it was not. The first fixes after the outage then explained the velocity error as a tilt
-// and an accelerometer bias: the mast (no horizontal arm, so no circle of the lever to absorb it) diverged to a tilt of 3 rad and a height of 1,600 m, and
-// antennas A and B had a position error of 3 m for 20 s. EskfParams::lever_outage_spread raises the position and velocity covariance by the heading spread
-// times the velocity change and the position the IMU summed over the outage.
+// velocity change, and P, with the heading held at its bound, says it is not. The first fixes after the outage would explain the velocity error as a tilt
+// and an accelerometer bias; the mast (no horizontal arm, so no circle of the lever to absorb it) would diverge. EskfParams::lever_outage_spread raises
+// the position and velocity covariance by the heading spread times the velocity change and the position that the IMU summed over the outage.
 TEST(EskfLever, ShortOutageAtTheFirstStartDoesNotTiltTheFilter) {
   struct Cell { Eigen::Vector3d lever; bool mast; };
   const Cell cells[] = {{Eigen::Vector3d(0.5, 0.0, 1.0), false}, {Eigen::Vector3d(-0.3, 0.2, 1.0), false}, {Eigen::Vector3d(0.0, 0.0, 1.5), true}};
-  EskfParams before;
-  before.lever_outage_spread = 0.0;
+  EskfParams control;   // no spread after the outage
+  control.lever_outage_spread = 0.0;
   int bad_before = 0;
   double worst_tilt_now = 0.0, worst_z_now = 0.0, worst_mast_tilt_now = 0.0, worst_mast_z_now = 0.0, worst_mast_z_before = 0.0;
   for (const Cell& c : cells)
@@ -1456,7 +1347,7 @@ TEST(EskfLever, ShortOutageAtTheFirstStartDoesNotTiltTheFilter) {
       for (unsigned seed : {1u, 3u}) {
         // 900 s of standing at 0.2 deg/s (the heading is 3 rad off), then the start-stop cycle: the fixes stop 5 s into it (1 s before the acceleration)
         const GapRun now = runGap(EskfParams(), c.lever, 900.0, -5.0, drop, 0.2, seed);
-        const GapRun was = runGap(before, c.lever, 900.0, -5.0, drop, 0.2, seed);
+        const GapRun was = runGap(control, c.lever, 900.0, -5.0, drop, 0.2, seed);
         if (c.mast) {
           worst_mast_tilt_now = std::max(worst_mast_tilt_now, now.tilt_max);
           worst_mast_z_now = std::max(worst_mast_z_now, now.z_max);
@@ -1467,16 +1358,16 @@ TEST(EskfLever, ShortOutageAtTheFirstStartDoesNotTiltTheFilter) {
         }
         bad_before += (was.tilt_max > 0.3 || was.z_max > 1.0) ? 1 : 0;
       }
-  EXPECT_LT(worst_tilt_now, 0.03);        // antennas A and B: the largest tilt error of 16 runs (before: up to 0.15 rad)
-  EXPECT_LT(worst_z_now, 0.15);           // and height error (before: up to 1.3 m)
-  EXPECT_LT(worst_mast_tilt_now, 0.3);    // the mast: no divergence (before: 3 rad and tens of metres to 2,000 m in some runs)
+  EXPECT_LT(worst_tilt_now, 0.03);        // antennas A and B: the largest tilt error of 16 runs (control: up to 0.15 rad)
+  EXPECT_LT(worst_z_now, 0.15);           // and height error (control: up to 1.3 m)
+  EXPECT_LT(worst_mast_tilt_now, 0.3);    // the mast: no divergence (control: 3 rad and tens of metres to 2,000 m in some runs)
   EXPECT_LT(worst_mast_z_now, 2.0);
-  EXPECT_GT(worst_mast_z_before, 20.0);   // the control: the version before diverged
+  EXPECT_GT(worst_mast_z_before, 20.0);   // the control diverged
   EXPECT_GE(bad_before, 2);
 }
 
 // The spread acts only after an outage with the heading unknown: with the outage but a heading that is known (a stand of 20 s after /initialpose-like
-// 0.1 rad start, shadow under lever_align_sigma) and with no outage, the covariance is the one of the version before, bit for bit.
+// 0.1 rad start, shadow under lever_align_sigma) and with no outage, the covariance equals the one without the spread, bit for bit.
 TEST(EskfLever, OutageSpreadActsOnlyAfterAnOutageWithAnUnknownHeading) {
   const Eigen::Vector3d lever(0.5, 0.0, 1.0);
   EskfParams off;

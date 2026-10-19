@@ -1,14 +1,13 @@
 // eskf_gap_across_start.cpp -- the node scenario gnss_gap_across_start (scripts/fusion_extrinsic_check.py) on the real Eskf core, for many seeds.
 //
-// SYNTHETIC EXPERIMENT (study 6, sixth pass). The scenario: GNSS and IMU only, antenna A (0.5, 0, 1.0), a stand of 300 s with a gyro bias of 0.5 deg/s on
+// SYNTHETIC EXPERIMENT. The scenario: GNSS and IMU only, antenna A (0.5, 0, 1.0), a stand of 300 s with a gyro bias of 0.5 deg/s on
 // each axis (1, -1, 1), then the start-stop cycle (still 6 s, 0 -> 1.5 m/s in 3 s, 20 s at 1.5 m/s, 1.5 -> 0 in 3 s, still), the fixes (5 Hz) out for 120 s from 10 s
 // before the start. The node runs it once; this runs it for NSEED seeds (default 100) and counts the runs whose tilt exceeds 0.05 rad or whose height error
-// exceeds 0.5 m in the 60 s after the fixes return (the bounds of the node check). It was written when the first version of the sixth review's fixes
-// (the test of the norms of the two changes of velocity, lever_align_norm 0.3, and the spread of the covariance after an outage, lever_outage_spread 1)
-// made the node scenario fail once: the table is the evidence for the shipped values (README, "Sixth pass").
+// exceeds 0.5 m in the 60 s after the fixes return (the bounds of the node check). It sweeps lever_outage_spread: the table is the evidence for the
+// shipped value (experiments/README.md, study 6).
 //
 //   g++ -O2 -std=c++17 -I prism_loc_fusion/include -I /usr/include/eigen3 prism_loc_fusion/src/*.cpp experiments/eskf_gap_across_start.cpp -o /tmp/gap
-//   NSEED=300 /tmp/gap            # the sweep: lever_outage_spread 0 ... 1 against lever_align_norm 0, 0.15, 0.3; deterministic for one compiler and standard library
+//   NSEED=300 /tmp/gap            # the sweep; deterministic for one compiler and standard library
 //   VERBOSE=1 NSEED=12 /tmp/gap   # one line per seed and setting
 #include <algorithm>
 #include <cmath>
@@ -80,24 +79,21 @@ int main() {
   const Eigen::Vector3d lever(0.5, 0.0, 1.0);
   const unsigned nseed = static_cast<unsigned>(std::getenv("NSEED") ? std::atoi(std::getenv("NSEED")) : 100);
   const double spreads[] = {0.0, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0};
-  const double norms[] = {0.0, 0.15, 0.3};
   std::printf("gnss_gap_across_start on the core, antenna A, %u seeds: runs with tilt > 0.05 rad or height error > 0.5 m after the fixes return\n", nseed);
-  std::printf("%-14s %-10s %5s %12s %12s\n", "outage spread", "norm test", "bad", "worst z (m)", "worst tilt");
-  for (double sp : spreads)
-    for (double nm : norms) {
-      int bad = 0;
-      double wz = 0.0, wt = 0.0;
-      for (unsigned seed = 1; seed <= nseed; ++seed) {
-        EskfParams ep;
-        ep.lever_outage_spread = sp;
-        ep.lever_align_norm = nm;
-        const Out r = run(ep, lever, 300.0, 10.0, 120.0, seed);
-        bad += (r.z > 0.5 || r.tilt > 0.05) ? 1 : 0;
-        wz = std::max(wz, r.z);
-        wt = std::max(wt, r.tilt);
-        if (std::getenv("VERBOSE")) std::printf("  spread %g norm %g seed %u: z %.3f tilt %.4f heading error %.3f aligned %d\n", sp, nm, seed, r.z, r.tilt, r.head, r.aligned);
-      }
-      std::printf("%-14g %-10g %5d %12.3f %12.4f\n", sp, nm, bad, wz, wt);
+  std::printf("%-14s %5s %12s %12s\n", "outage spread", "bad", "worst z (m)", "worst tilt");
+  for (double sp : spreads) {
+    int bad = 0;
+    double wz = 0.0, wt = 0.0;
+    for (unsigned seed = 1; seed <= nseed; ++seed) {
+      EskfParams ep;
+      ep.lever_outage_spread = sp;
+      const Out r = run(ep, lever, 300.0, 10.0, 120.0, seed);
+      bad += (r.z > 0.5 || r.tilt > 0.05) ? 1 : 0;
+      wz = std::max(wz, r.z);
+      wt = std::max(wt, r.tilt);
+      if (std::getenv("VERBOSE")) std::printf("  spread %g seed %u: z %.3f tilt %.4f heading error %.3f aligned %d\n", sp, seed, r.z, r.tilt, r.head, r.aligned);
     }
+    std::printf("%-14g %5d %12.3f %12.4f\n", sp, bad, wz, wt);
+  }
   return 0;
 }

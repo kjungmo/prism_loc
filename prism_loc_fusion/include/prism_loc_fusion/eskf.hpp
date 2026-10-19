@@ -15,39 +15,29 @@ class Eskf {
   void updatePose(const Eigen::Vector3d& p_meas, const Eigen::Quaterniond& q_meas,
                   const Eigen::Matrix<double, 6, 6>& R);
   void updatePosition(const Eigen::Vector3d& p_meas, const Eigen::Matrix3d& R);
-  // Position fix of a point fixed to the body at `lever` (body frame), e.g. a GNSS
-  // antenna: h(x) = p + R(q) lever.
+  // Position fix of a point fixed to the body at `lever` (body frame), e.g. a GNSS antenna:
+  // h(x) = p + R(q) lever. The update uses the full Jacobian and the Joseph covariance, and a gain
+  // from which the states in EskfParams::lever_consider are removed (Schmidt-Kalman "consider"
+  // states): by default the heading and the vertical gyro bias, which one antenna and an IMU do not
+  // observe while the robot stands. Their uncertainty still enters the innovation covariance, so
+  // the position is not trusted beyond what the heading allows. Roll and pitch, the horizontal
+  // gyro biases, position, velocity and the accelerometer bias are corrected. That needs a roll
+  // and pitch variance of about 1e-4 rad^2 at the start (attitudeCovariance(),
+  // tiltVarianceFromAccel()): with 0.5 rad^2 the first fixes tilt the filter.
   //
-  // Full Jacobian (below), Joseph covariance, and a gain from which the states in
-  // EskfParams::lever_consider are removed (Schmidt-Kalman "consider" states): by default
-  // the heading and the vertical gyro bias. A single antenna does not separate the heading
-  // from the position of the body, and a plain update there let heading and vertical bias
-  // drift while the covariance shrank (measured, experiments/eskf_lever.cpp: the full update
-  // is over-confident in most GNSS-and-IMU-only runs). Their uncertainty still enters the
-  // innovation covariance H P H^T, so the position is not trusted beyond what the heading
-  // allows. Roll and pitch, the horizontal gyro biases, position, velocity and the
-  // accelerometer bias are corrected. That needs a roll and pitch variance of about 1e-4 rad^2
-  // at the start (attitudeCovariance(), tiltVarianceFromAccel()): with 0.5 rad^2 the first
-  // fixes after a start or a reseed tilt the filter.
-  //
-  // Two more rules decide how much of the heading the update sees (README, "GNSS antenna off
-  // base_frame"; experiments/eskf_lever.cpp, second pass):
+  // The rules that decide how much of the heading the update sees (README.md, "GNSS antenna off
+  // base_frame"):
   //  - Bound: the heading standard deviation seen by the update is limited to
-  //    EskfParams::lever_heading_sigma_max by scaling the heading error variable
-  //    (P <- D P D^T). The vertical gyro bias is never corrected while the robot stands, so
-  //    the heading variance would grow without limit, the term -R[t]x would leave its linear
-  //    range, and the tilt and height would diverge after minutes. The bound keeps it in range;
-  //    the price is that, once the true heading error is over the bound, the reported heading
-  //    and horizontal uncertainty are optimistic by up to the horizontal lever arm.
-  //  - Release: while predict() has seen horizontal acceleration (releaseAccumulator() above
-  //    EskfParams::lever_release_dv) the mask is lever_consider_moving: a start, a stop or a
-  //    turn at speed shows the heading to one antenna and an IMU, as it does without a lever.
-  //  - Honest heading (EskfParams::lever_restore): the bound hides the heading spread the filter really holds, which grows while
-  //    the robot stands. The filter keeps it (headingSigmaHonest(), covarianceHonest()), re-finds the heading from the first change
-  //    of velocity after a stand (alignHeading()) instead of releasing at the bounded sigma, and while it cannot, leaves roll and
-  //    pitch out of the lever term (leverBlind()). The bound is not applied while the release is open.
-  //  - Unknown start (markHeadingUnknown(), EskfParams::lever_start_sigma): a start whose heading is only a guess holds the spread of an
-  //    unknown heading in the shadow, so that the first start aligns it instead of running a full update on a heading 1 to 3 rad off.
+  //    EskfParams::lever_heading_sigma_max by scaling the heading error variable (P <- D P D^T).
+  //  - Release: while releaseAccumulator() is over EskfParams::lever_release_dv, the mask is
+  //    lever_consider_moving and the bound is not applied. The honest heading variance is put back.
+  //  - Honest heading: the filter keeps the spread that the bound hides (headingSigmaHonest(),
+  //    covarianceHonest()), re-finds the heading from a change of velocity (alignHeading()), and
+  //    while it cannot, leaves roll and pitch out of the lever term (leverBlind()).
+  //  - Unknown start (markHeadingUnknown()): a start whose heading is a guess holds the spread of
+  //    an unknown heading, so that the first start or stop aligns it.
+  //  - Outage (spreadAfterOutage()): after an outage with the heading unknown, the dead-reckoned
+  //    velocity and position get the spread that the heading implies.
   // A lever of exactly zero is updatePosition(), with identical arithmetic.
   void updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vector3d& lever,
                            const Eigen::Matrix3d& R);
@@ -81,25 +71,29 @@ class Eskf {
   double headingSigma() const;
   // The heading of the state just given to initialize() is a guess (no /initialpose, no lidar): hold its spread at
   // EskfParams::lever_start_sigma in the shadow, so that the first lever updates align the heading from the motion or run blind and do
-  // not trust the start covariance. Does nothing if lever_start_sigma, lever_restore or lever_align_sigma is 0. Touches neither x nor P.
+  // not trust the start covariance. Does nothing if lever_start_sigma or lever_align_sigma is 0. Touches neither x nor P.
   // Returns true if it marked the shadow.
   bool markHeadingUnknown();
   // Median of the last 15 intervals between lever-arm fixes (s), 0 until 3 fixes have come. The alignment scales its span, window and gap
   // limit with it (EskfParams::lever_align_span).
   double fixPeriod() const;
-  // True once the filter has seen enough fixes to know that their period is over EskfParams::lever_align_period_max (a rate under about
-  // 0.8 Hz): the heading alignment does not run, and a start marked by markHeadingUnknown() has been taken back. Stays true until initialize().
+  // True once the filter has seen enough fixes to know that their period is over EskfParams::lever_align_period_max (a rate under
+  // 0.8 Hz): the heading alignment does not run, and a start marked by markHeadingUnknown() has been taken back. Stays true until
+  // initialize().
   bool leverUnsupportedRate() const { return rate_unsupported_; }
+  // True once the period is over EskfParams::lever_align_period_ok (1 Hz) and not over lever_align_period_max: the alignment runs and
+  // finds the heading less often.
+  bool leverDegradedRate() const { return rate_degraded_; }
   // Heading standard deviation (rad) without the bound: the larger of headingSigma() and the
-  // shadow of the heading variance that predict() carries while the bound holds the heading back
-  // (lever_restore). The same as headingSigma() when nothing is held back.
+  // shadow of the heading variance that predict() carries while the bound holds the heading back.
+  // The same as headingSigma() when nothing is held back.
   double headingSigmaHonest() const;
   // True if the last updatePositionLever() restored the honest heading variance (the first
   // update after a release that follows a held-back stretch), and if it re-acquired the heading
   // from the motion first (lever_align_sigma).
   bool leverRestored() const { return lever_restored_; }
   bool leverAligned() const { return lever_aligned_; }
-  // True if the last updatePositionLever() took the heading as unknown (lever_blind): held back, over
+  // True if the last updatePositionLever() took the heading as unknown: held back, over
   // lever_align_sigma, and not alignable from the motion.
   bool leverBlind() const { return lever_blind_; }
   // True if the last updatePositionLever() had to scale the heading down to
@@ -114,7 +108,7 @@ class Eskf {
   // The covariance to publish for a filter with a GNSS antenna at `lever`: P, with the heading variance the bound has held back
   // put back (the shadow, headingSigmaHonest()) and the position of the body origin made as uncertain as that heading makes it
   // (up to the circle of radius |lever_xy| around the antenna: |lever_xy|^2 times the heading variance, at most 1, on each
-  // horizontal axis). Equal to covariance() when nothing is held back or lever_restore is off.
+  // horizontal axis). Equal to covariance() when nothing is held back.
   Mat15 covarianceHonest(const Eigen::Vector3d& lever) const;
  private:
   void inject(const Vec15& dx);
@@ -125,17 +119,20 @@ class Eskf {
   double dv_acc_{0.0};       // see lever_release_dv; touches neither x nor P
   bool lever_capped_{false};
   bool lever_restored_{false}, lever_aligned_{false}, lever_blind_{false};
-  // Shadow of the heading (lever_restore): covariance of (heading, vertical gyro bias), valid
-  // from the first lever update after a reset; see EskfParams::lever_restore.
+  // Shadow of the heading: covariance of (heading, vertical gyro bias), valid from the first
+  // lever update after a reset; see EskfParams (the honest heading).
   bool shadow_valid_{false};
   bool shadow_held_{false};   // the bound has cut the heading variance since the shadow was last set from P
   double s_hh_{0.0}, s_hb_{0.0}, s_bb_{0.0};
   void syncShadow(const Eigen::Vector3d& up);
   void setHeadingVariance(const Eigen::Vector3d& up, double var);
+  struct Span { double span, window, gap, history; };   // seconds, see alignSpans()
+  Span alignSpans(double fix_period) const;
+  void trimFixes();
   bool alignHeading(const Eigen::Vector3d& lever, const Eigen::Vector3d& up);
   void spreadAfterOutage();
   bool unknown_pending_{false};     // markHeadingUnknown() has marked the start and the fix rate is not yet known to be supported
-  bool rate_unsupported_{false};
+  bool rate_unsupported_{false}, rate_degraded_{false};
   struct Fix { double t; Eigen::Vector2d s, p; double rate_max; Eigen::Vector2d d; };   // clock_, cum_a_, the antenna fix, the largest body rate since the previous fix and cum_p_, of one lever update
   std::deque<Fix> fixes_;
   double clock_{0.0};
