@@ -360,7 +360,7 @@ def quoted(rows, zero):
               f'{max(num(r, "max_z") for r in rs):.2f} m; phase 0: tz {n(p0, tz)}; the worst phase has tz {worst}.')
 
 
-def frozen_cells(rows):
+def frozen_cells(rows, prefixes=()):
     """The counts that README.md and experiments/README.md quote about the retired schemes (and the S8u rows of earlier cores), read from the
     committed rows. The counts of the removed switches (the iterated update, the rate gates, the consider masks, the cells of E of the release
     study, the slope reseed) are not here: they are in HISTORY.md, and in the report at commit 0ef1add (git show 0ef1add:experiments/results/eskf_lever/report.md)."""
@@ -415,6 +415,17 @@ def frozen_cells(rows):
             if a9 and a10:
                 print(f'- Round 10 against round 9, the tight circle (hgap, sgdrive, noise off-1), antenna {ant}: head {n(a9, head)} of {len(a9)} to {n(a10, head)} of {len(a10)}, '
                       f'xy>1.5 {n(a9, xy15)} to {n(a10, xy15)}, tz {n(a9, tz)} to {n(a10, tz)}.')
+    # The fraction of NEES samples with the heading above the band, h300, mean over the A, B and M configurations (the h300_agg rows)
+    h3 = [p for p in prefixes if os.path.basename(p) == 'h300']
+    if h3 and have('h300', OLD9):
+        fr = {}
+        for sc in (OLD9, 'S8u'):
+            f = open(h3[0] + '_agg.csv') if os.path.exists(h3[0] + '_agg.csv') else gzip.open(h3[0] + '_agg.csv.gz', 'rt')
+            v = [float(a['frac_head_above']) for a in csv.DictReader(f) if a['scheme'] == sc and a['antenna'] in ABM]
+            fr[sc] = (sum(v) / len(v), len(v)) if v else None
+        if all(fr.values()):
+            print(f'- Round 10 against round 9, h300, antennas A, B and M, mean of `frac_head_above` over the {fr["S8u"][1]} configurations of `h300_agg`, {OLD9} to S8u: '
+                  f'{fr[OLD9][0]:.4f} to {fr["S8u"][0]:.4f} (the combined effect of both cuts of round 10, the fast-turn guard and the variance restore).')
     # The reseed on a slope: /initialpose takes roll and pitch from the accelerometer (S7n kept the level attitude of the message)
     for sc in ('S7n', 'S8u'):
         rs = S('hslope', sc, ABM, lambda r: r['slope'] == '0.1')
@@ -484,7 +495,7 @@ def main():
     phases(live, zero)
     rounds(rows)
     quoted(live, zero)
-    frozen_cells(rows)
+    frozen_cells(rows, prefixes)
     mast_summary()
     frozen(rows)
     return 0
