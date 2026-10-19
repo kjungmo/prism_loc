@@ -1497,6 +1497,52 @@ TEST(EskfLever, AlignmentSeatsThePositionAtTheNewestFix) {
   EXPECT_GE(seen, 18);
 }
 
+// A successful alignment makes the body origin as uncertain as the new heading is: P_xx and P_yy gain |t_xy|^2 sigma_max^2 (the position of the
+// body origin is known only up to the circle of the lever around the antenna). A covariance statement, checked with a position noise so large
+// that the update which follows the alignment cannot take it back out: the growth is the term itself, to one part in a thousand.
+TEST(EskfLever, AlignmentAddsTheLeverCircleToThePositionVariance) {
+  const Eigen::Vector3d lever(0.5, 0.0, 1.0);
+  int seen = 0;
+  for (unsigned seed = 1; seed <= 5; ++seed) {
+    Rng rng(seed);
+    EskfParams ep;
+    ep.sigma_acc = 0.02;
+    ep.sigma_gyro = 0.002;
+    Eskf f(ep);
+    Eskf::Mat15 P0 = Eskf::Mat15::Identity();
+    P0.block<3, 3>(6, 6) = Eigen::Vector3d(1e-4, 1e-4, 0.5).asDiagonal();
+    P0.block<3, 3>(9, 9) *= 1e-2;
+    P0.block<3, 3>(12, 12) *= 1e-4;
+    NominalState x0;
+    x0.q = so3Exp(Eigen::Vector3d(0, 0, 2.0));
+    x0.p = lever - x0.q * lever;
+    f.initialize(x0, P0);
+    ASSERT_TRUE(f.markHeadingUnknown());
+    const Eigen::Matrix3d R = Eigen::Vector3d(1e16, 1e16, 1e16).asDiagonal();
+    for (int k = 1; k <= 3800; ++k) {
+      const double t = k * 0.01 - 20.0;
+      const double a = t > 0.0 ? 1.0 : 0.0, x = t > 0.0 ? 0.5 * t * t : 0.0;
+      f.predict(Eigen::Vector3d(a, 0, 9.81) + Eigen::Vector3d(rng.gaussian(0, 0.02), rng.gaussian(0, 0.02), rng.gaussian(0, 0.02)),
+                Eigen::Vector3d(0, 0, 0.0017) + Eigen::Vector3d(rng.gaussian(0, 0.002), rng.gaussian(0, 0.002), rng.gaussian(0, 0.002)), 0.01);
+      if (k % 100 == 0) {   // 1 Hz
+        const Eigen::Vector3d fix = Eigen::Vector3d(x, 0, 0) + lever + Eigen::Vector3d(rng.gaussian(0, 0.02), rng.gaussian(0, 0.02), rng.gaussian(0, 0.02));
+        const double pxx = f.covariance()(0, 0), pyy = f.covariance()(1, 1);
+        f.updatePositionLever(fix, lever, R);
+        if (f.leverAligned()) {
+          ++seen;
+          const double sig = EskfParams().lever_heading_sigma_max;
+          const double var_p = (f.state().q.toRotationMatrix() * lever).head<2>().squaredNorm() * sig * sig;
+          ASSERT_GT(var_p, 0.01);
+          EXPECT_NEAR(f.covariance()(0, 0) - pxx, var_p, 1e-3 * var_p) << "seed " << seed;
+          EXPECT_NEAR(f.covariance()(1, 1) - pyy, var_p, 1e-3 * var_p) << "seed " << seed;
+          break;
+        }
+      }
+    }
+  }
+  EXPECT_GE(seen, 4);
+}
+
 // The covariance the node publishes: P with the heading variance that the bound holds back put in, and the position of the body origin
 // as uncertain as that heading makes it. Nothing held back: P itself, bit for bit.
 TEST(EskfLever, CovarianceHonestPutsTheHeldBackHeadingSpreadIntoThePublishedCovariance) {

@@ -396,7 +396,7 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
   }
   // Keep the heading uncertainty this update sees inside the range where -R[t]x is a fair
   // linear model of the lever term (lever_heading_sigma_max). The bound is not applied while the
-  // release is open: the heading is then estimated with its honest variance.
+  // release is open: the heading is then estimated with the variance P holds (the bounded one, if the bound held it back).
   lever_capped_ = false;
   if (params_.lever_heading_sigma_max > 0.0 && !open) {
     const double var_h = up.dot(P_.block<3, 3>(6, 6) * up);
@@ -432,7 +432,7 @@ void Eskf::updatePositionLever(const Eigen::Vector3d& p_meas, const Eigen::Vecto
   const Mat15 A = Mat15::Identity() - K * H;
   P_ = A * P_ * A.transpose() + K * R_eff * K.transpose();
   inject(dx);
-  if (open) syncShadow(up);   // the heading was estimated: the filter's covariance is the honest one again
+  if (open) syncShadow(up);   // the heading was estimated: the shadow is re-seeded from P, which may hold the bounded variance; the honest spread (0.35 to 1 rad) is dropped
 }
 
 void Eskf::updatePose(const Eigen::Vector3d& p_meas, const Eigen::Quaterniond& q_meas,

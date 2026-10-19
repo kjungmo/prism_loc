@@ -88,8 +88,8 @@ within 3 sigma, and the heading values and the WARN on `/diagnostics` (see
 [Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build
 of the two fusion packages; the whole script takes about 24 minutes (36 scenarios, 249 checks). `--long` adds 600 s of
 standing (`gnss_stand_long`, 10 more minutes, not in CI), the same followed by a start and a stop (`gnss_stand_go`, `_b`) and the outage across a start (`gnss_gap_across_start`, `_b`, 8 minutes each).
-GoogleTest cases: 50 in `prism_loc_core`, 54 in `prism_loc_fusion`, 29 in
-`prism_loc`, 24 in `prism_loc_fusion_ros` (157 in total).
+GoogleTest cases: 50 in `prism_loc_core`, 55 in `prism_loc_fusion`, 29 in
+`prism_loc`, 24 in `prism_loc_fusion_ros` (158 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -537,7 +537,7 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
     with an accelerometer bias of 0.3 m/s². The mast has the same kind of runs: 300 of 1,400 with `tz`, 32 of them without one in the
     zero-lever run. The counts are printed in the `excess` column of `report.md`, tables "Suite h300" to "Suite h1800".
   - **An alignment right after an outage can be wrong by a radian** under a spread of 0.35 rad; the next release can turn the heading
-    the wrong way (the replica of `gnss_gap_across_start`: 1 of 300 seeds fails with the shipped spread, 0 without, 5 with the whole).
+    the wrong way (the replica of `gnss_gap_across_start`: 0 of 300 seeds fail with the shipped spread of 0.1, 1 without, 5 with the whole).
   - **A known good heading is still doubted at a start.** With a right `initial_yaw` and no `/initialpose`, the filter marks the heading
     unknown and the first start aligns it from the motion. `hsg` (right heading, 1,152 runs) has `tz` in 1 and the heading off by over 0.5 rad in 0 of the
     start and drive runs. Set `initial_yaw_known: true` or send `/initialpose` to skip the doubt.

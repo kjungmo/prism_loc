@@ -1,9 +1,9 @@
 gnss_gap_across_start on the core, antenna A, 300 seeds: runs with tilt > 0.05 rad or height error > 0.5 m after the fixes return
 outage spread    bad  worst z (m)   worst tilt
-0                  0        0.329       0.0371
-0.02               1        0.521       0.0828
-0.05               0        0.485       0.0413
-0.1                1        0.513       0.0486
-0.25               1        0.290       0.0723
-0.5                4        0.722       0.0734
+0                  1        0.945       0.0831
+0.02               1        0.774       0.0904
+0.05               0        0.287       0.0351
+0.1                0        0.282       0.0386
+0.25               2        0.662       0.0790
+0.5                5        0.733       0.0692
 1                  5        1.428       0.0908
