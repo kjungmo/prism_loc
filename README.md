@@ -82,8 +82,8 @@ within 3 sigma, and the heading values and the WARN on `/diagnostics` (see
 [Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build
 of the two fusion packages; the whole script takes about 24 minutes (36 scenarios, 249 checks). `--long` adds 600 s of
 standing (`gnss_stand_long`, 10 more minutes, not in CI), the same followed by a start and a stop (`gnss_stand_go`, `_b`) and the outage across a start (`gnss_gap_across_start`, `_b`, 8 minutes each).
-GoogleTest cases: 45 in `prism_loc_core`, 51 in `prism_loc_fusion`, 18 in
-`prism_loc`, 24 in `prism_loc_fusion_ros` (138 in total).
+GoogleTest cases: 45 in `prism_loc_core`, 54 in `prism_loc_fusion`, 18 in
+`prism_loc`, 24 in `prism_loc_fusion_ros` (141 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -379,7 +379,7 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   [`SPEC_fusion.md`](SPEC_fusion.md)).
   1. **Consider states.** Heading and vertical gyro bias enter the innovation covariance and are not corrected. Roll, pitch, the
      horizontal gyro biases, accelerometer bias, velocity and position are corrected. A plain update everywhere has `tz` in 408 of
-     1,152 runs of suite `hsg` (all rules: 49).
+     1,152 runs of suite `hsg` (all rules: 1).
   2. **Bound.** The heading standard deviation that one update sees is at most 0.35 rad (`lever_heading_sigma_max`). Without it
      the heading variance of a standing robot grows without limit, and tilt and height diverge after minutes: 192 of 192 runs of
      900 s and 1,800 s standing, 0 of 192 with the bound.
@@ -391,20 +391,21 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   5. **Alignment.** While the shadow is over 1 rad, a start or a stop of 0.25 m/s or more gives the heading: it rotates by the angle
      between the change of velocity of the IMU and that of the antenna fixes (`heading_source: motion`, any error up to ±π).
      Velocities use spans of seconds, scaled by the measured fix period. The alignment refuses a window with a gap in the fixes
-     (after an outage across a start: `tz` 68 to 11 of 288 runs) and a fast turn. Without the shadow and the alignment, 375 of
-     1,152 runs of `hsg` have `tz`; with them and rule 6, 26 (49 with rule 7, see the limits).
+     (after an outage across a start: `tz` 68 to 11 of 288 runs) and a fast turn. After the alignment the position is seated at the newest fix: the position that was dead-reckoned
+     through the blind stretch with the wrong heading is not handed to the update that follows. Without the shadow and the alignment, 375 of
+     1,152 runs of `hsg` have `tz` (core of round 6); with all rules, 1.
   6. **Blind.** While the heading is not known and not alignable (standing, turning on the spot), the update leaves roll and pitch
      out of the lever term and counts the circle of the lever as noise. Without it, 81 runs of `hsg` have `tz`; with it, 26.
   7. **Unknown start.** With a lever arm and no heading source (no `/initialpose`, no lidar yet, `initial_yaw_known: false`) the
-     heading is a guess, and the filter starts it with the spread of π/√3 rad. `tz` in `hboot` falls from 219 to 77 of 576 runs.
+     heading is a guess, and the filter starts it with the spread of π/√3 rad. `tz` in `hboot` falls from 219 to 0 of 576 runs (core of round 6 without the rule; 77 with the rule before the position was seated at the alignment).
      `/initialpose`, the lidar or `initial_yaw_known: true` start with the filter's own spread.
   8. **Outage spread.** After an outage with the heading unknown, the first update adds a tenth of the spread that the dead-reckoned
      velocity and position have (`lever_outage_spread`). Short outages at the first start: the mast diverges in 16 of 640 runs
-     without it, 0 with it; antennas A and B have `tz` in 83 of 1,280 runs without it, 32 with it.
+     without it, 0 with it; antennas A and B have `tz` in 83 of 1,280 runs without it, 31 with it.
 
   **Supported GNSS fix rate: 1 to 100 Hz** for the alignment (rules 5 and 7). The fixes are kept by time, so the rate does not
-  matter above 1 Hz. Antennas A and B, 272 boot and stand-then-go runs per rate, the fixes on the second on which the motion starts: `tz` is 0 at 1, 5, 10, 20, 50 and
-  100 Hz and 1 at 2 Hz (other phases of the fix period: see the 1 Hz limit below). From 0.8 to 1 Hz (a fix every 1.05 to 1.25 s) the alignment runs and finds the heading less often (`tz` 5 and 4 of 272 at
+  matter above 1 Hz. Antennas A and B, 272 boot and stand-then-go runs per rate, the fixes on the second on which the motion starts: `tz` is 0 at 1, 5, 10, 20 and 50 Hz, 1 at 100 Hz and 2 at 2 Hz (other phases of the fix period: see the 1 Hz
+  limit below). From 0.8 to 1 Hz (a fix every 1.05 to 1.25 s) the alignment runs and finds the heading less often (`tz` 2 and 0 of 272 at
   0.83 and 0.91 Hz, over 1.5 m horizontal in 35 and 19); `/diagnostics` reads `degraded` and WARNs. Under 0.8 Hz the alignment does
   nothing, the start is not marked unknown, and `/diagnostics` reads `unsupported` and WARNs (0.5 Hz: `tz` 105 of 272).
 
@@ -422,7 +423,7 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
   | lidar corrections accepted | `lidar` | about 0.03 | `false` | `closed`; `open` while accelerating | OK |
   | fixes stop for more than 2 s | unchanged | unchanged | `false` | unchanged | the heading WARN clears; its 30 s start again with the first fix |
   | fixes every 1.05 to 1.25 s | as without the alignment | 1.8 while unknown | as before | as before | **WARN** `GNSS fixes come every N s (slower than 1 Hz) ...`; `heading_align_rate` `degraded` |
-  | fixes slower than 0.8 Hz | as without the alignment | the filter's own | as before | as before | **WARN** `GNSS fixes come every N s (slower than 0.80 Hz) ...`; `heading_align_rate` `unsupported` |
+  | fixes slower than 0.8 Hz | as without the alignment | the filter's own | as before | as before | **WARN** `GNSS fixes come every N s (slower than 0.8 Hz) ...`; `heading_align_rate` `unsupported` |
 
   `gnss_fix_period_s` is the median interval of the last lever-arm fixes (`n/a` before the third). `heading_align_rate` is `supported`,
   `degraded` or `unsupported` (`n/a` before the sixth fix and for a zero lever). `covariance_trace_position` is the position trace of
@@ -434,18 +435,24 @@ input is taken to be measured in the frame its `header.frame_id` names; `points_
     gyro bias (0.1 rad per minute for each 0.1 deg/s). The position of `base_link` can be wrong by up to `2·|t_xy|` (1.0 m for a 0.5 m
     arm). After a turn on the spot the heading is off by over 0.5 rad in 269 of 384 runs of `hsg` (268 in `hsgv`; zero lever: 106 and 97
     of 128), and `base_link` is over 1 m from the truth in 34 of 384. Read `heading_sigma_rad`, not `heading_sigma_used_rad`.
-  - **The 1.5 m mast (no horizontal arm) gains little.** It ends at the level of the zero-lever filter. In 640 short outages at the
-    first start it has `tz` in 132 runs (zero lever: 226). In the hardest cell (stand 900 s, 0.2 deg/s) it has `tz` in 123 of 160 runs
-    against 61 for the zero lever, 73 of them with no `tz` in the zero-lever run. In the long outages: 17 of 192 against 29. In `hboot`: 76 of 192.
+  - **The 1.5 m mast (no horizontal arm) is better than the zero-lever filter at a start, not in every motion.** In 640 short outages at
+    the first start it has `tz` in 35 runs (zero lever: 226). In the hardest cell (stand 900 s, 0.2 deg/s) it has `tz` in 26 of 160 runs
+    against 61 for the zero lever, 13 of them with no `tz` in the zero-lever run. In the long outages: 10 of 192 against 29. In `hboot`: 0 of 192
+    against 112. In the observability grid it has more runs with `tz` than the zero lever in `h300` drive (39 against 33) and turn (33 against
+    24), and at 0.5 Hz, which is outside the supported rate.
   - **A tight circle that starts during an outage.** Antenna A (0.5 m arm) on a circle of 6 m radius: 32 of 128 runs are over 1.5 m and
-    64 of 128 have the heading off by over 0.5 rad; antenna B (0.36 m): 0 and 11 of 128. The alignment refuses a body rate over `0.125 m/s / |t_xy|`.
+    64 of 128 have the heading off by over 0.5 rad; antenna B (0.36 m): 0 and 8 of 128. The alignment refuses a body rate over `0.125 m/s / |t_xy|`.
   - **An alignment right after an outage can be wrong by a radian** under a spread of 0.35 rad; the next release can turn the heading
-    the wrong way (the replica of `gnss_gap_across_start`: 1 of 300 seeds fails with the shipped spread, 0 without, 4 with the whole).
-  - **A known good heading costs something when the filter is told to doubt it.** With a right `initial_yaw`, the alignment adds its own
-    error: `hsg` `tz` 49 against 26 without the unknown start. Set `initial_yaw_known: true` or send `/initialpose`.
-  - **1 Hz is the edge of the supported rate, and it has a tail.** With the fixes 0.1 to 0.9 s after the second on which the motion starts,
-    26 of 2,720 runs have `tz` and the largest height error is 1.45 m (phase 0, which the rate table above uses: 0 of 272). The node scenario
-    `gnss_boot_wrong_yaw_1hz` shows it: of 30 runs, 27 end 0.06 to 0.11 m high and 3 end 2.7 to 3.3 m high (heading off by up to 0.5 rad).
+    the wrong way (the replica of `gnss_gap_across_start`: 1 of 300 seeds fails with the shipped spread, 0 without, 5 with the whole).
+  - **A known good heading is still doubted at a start.** With a right `initial_yaw` and no `/initialpose`, the filter marks the heading
+    unknown and the first start aligns it from the motion. `hsg` (right heading, 1,152 runs) has `tz` in 1 and the heading off by over 0.5 rad in 0 of the
+    start and drive runs. Set `initial_yaw_known: true` or send `/initialpose` to skip the doubt.
+  - **1 Hz and 2 Hz have a small tail.** With the fixes 0.1 to 0.9 s after the second on which the motion starts, 10 of 2,720 runs at 1 Hz and 3 of
+    2,720 at 2 Hz have `tz` (phase 0, which the rate table above uses: 0 at 1 Hz); the largest height error at 1 Hz is 1.42 m and 2 of the 10 runs pass 1 m. The node scenario `gnss_boot_wrong_yaw_1hz` ends 0.056 to 0.087 m high in 30 of 30 runs; before the
+    alignment seated the position at the newest fix and allowed for the stamp jitter of a 1 Hz stream, 3 of 30 runs ended 2.7 to 3.3 m high.
+  - **One node run at 50 Hz is unexplained.** Of 54 runs of `gnss_boot_wrong_yaw_50hz` (three to six node runs on the machine at a time), one ended
+    with the heading 0.99 rad off after the cycle while the rig counted an IMU gap status; 53 ended 0.049 to 0.068 m high with the heading within 0.023 rad. The
+    build before round 9 has 0 of 24 under the same load. It was not reproduced and not diagnosed.
   - **A vibrating platform** with over 0.15 m/s² of accelerometer noise per axis opens the release without acceleration; raise
     `lever_release_dv` (a compile-time default, not a node parameter).
   - **Confidence.** The heading and horizontal covariance of an update are optimistic once the true heading error is over the bound

@@ -13,7 +13,8 @@
 // (Eskf::tiltVarianceFromAccel, about 1e-4 rad^2) instead of 0.5 rad^2. A reseed takes roll and pitch from the accelerometer.
 // The schemes of the earlier passes (S0, S4s to S8o, S8k, S8t, S8n, S8v, S8w, S8x), which differ from S8u by switches that the
 // core no longer has, were run with this file and the core at commit 2011666. Their rows stay in the committed CSVs; the S1s,
-// S2s and S8u rows of the committed CSVs are reproduced bit for bit by this file (experiments/README.md, "Reproducing").
+// S2s and S8u rows of the committed CSVs are reproduced bit for bit by this file (experiments/README.md, "Reproducing"). The S8u
+// rows of the core before round 9 (0ef1add) are kept in the CSVs as S8u@0ef1add where round 9 changed any row.
 //
 // Run = one (configuration, seed) pair. A run has DIVERGED if at any 1 s epoch from t = 10 s on: tilt error > 0.05 rad, or
 // |z error| > 0.5 m, or horizontal error > 1.0 m, or heading error > 0.5 rad. Epochs from the start of a GNSS dropout to 5 s

@@ -40,7 +40,7 @@ prior maps.
 |---|---|---|---|
 | IMU | `sensor_msgs/Imu` (`/imu`) | 100–400 Hz | **predict**: nominal integration + `P = F P Fᵀ + Q` |
 | 3D LiDAR | `sensor_msgs/PointCloud2` (`/points`) | ~10 Hz | **updatePose**: PCL NDT registers live cloud → PCD map (init = current ESKF pose) → 6-DoF pose measurement |
-| RTK-GNSS | `sensor_msgs/NavSatFix` (`/gnss`) | 1–10 Hz (the lever-arm alignment, §8.1, is supported at 1–20 Hz) | **updatePosition** (**updatePositionLever** when the antenna is off `base_frame`, §8.1): lat/lon/alt → ENU (datum) → 3-DoF position, gated by fix status/covariance |
+| RTK-GNSS | `sensor_msgs/NavSatFix` (`/gnss`) | 1–10 Hz (the lever-arm alignment, §8.1, is supported at 1–100 Hz) | **updatePosition** (**updatePositionLever** when the antenna is off `base_frame`, §8.1): lat/lon/alt → ENU (datum) → 3-DoF position, gated by fix status/covariance |
 | `/initialpose` | `PoseWithCovarianceStamped` | — | optional manual seed (else auto-init, §6) |
 
 ## 4. ESKF math
@@ -79,8 +79,8 @@ is not above it.
 *Release* (`lever_release_dv` 1.0 m/s, `lever_release_tau` 4 s, 0 = off). `predict` keeps
 `dv ← dv·e^(−dt/τ) + |(R(f − b_a) + g)_xy|·dt` (the horizontal part of the specific force in the
 world frame, a step with `dt ≤ 0` or a non-finite value adds nothing). It reads the sensor and the
-estimated attitude and changes neither `x` nor `P`. While `dv > lever_release_dv` the update uses
-`lever_consider_moving` (default 0: the full update, heading and vertical gyro bias included). The
+estimated attitude and changes neither `x` nor `P`. While `dv > lever_release_dv` the update is
+the full one (heading and vertical gyro bias included). The
 bound is not applied while the release is open (the honest heading below). The release reads the IMU, not the filter's speed estimate.
 
 *Why the bound.* The vertical gyro bias is not corrected while the robot stands, so the
@@ -109,8 +109,8 @@ release that trusts the bounded 0.35 rad turns the heading the wrong way and til
    is rotated by the angle between them (`atan2`, any error up to ±π), about the antenna so that the antenna does not move; the
    horizontal velocity is set to the antenna's, carried to now by the IMU sum (`lever_align_vel_std` 0.15 m/s); the heading
    variance is `lever_heading_sigma_max²`, independent of every other state (`P ← D P Dᵀ`, `D = I − uuᵀ` on the attitude block, so `P`
-   stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`. It does nothing with a gap of more than `lever_align_gap` (1 s; 2.5 fix periods if that is more) between two fixes anywhere from the first fix of the older velocity to now,
-   a window of more than `lever_align_window` + 1 s between the two velocities (after an outage across a start the change of velocity would be taken over the whole outage), or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
+   stays positive); `P_xx`, `P_yy` gain `|t_xy|²σ²`; the horizontal position is seated at the newest fix (`x_xy ← fix_xy − (R t)_xy`), because the position that `predict` dead-reckoned through the blind stretch is not the antenna's, and the update that follows would spend the whole difference on the heading and the vertical gyro bias. It does nothing with a gap of more than `lever_align_gap` (1 s; 2.5 fix periods if that is more) between two fixes anywhere from the first fix of the older velocity to now,
+   a window of more than `lever_align_window` + `max(1 s, 1.5 T)` between the two velocities (after an outage across a start the change of velocity would be taken over the whole outage; the allowance is over one fix period `T` so that the stamp jitter of a 1 Hz stream does not decide the check), or a body rate over `0.5 lever_align_dv/|t_xy|` in the window (a fast turn moves the antenna without the body). `leverAligned()` is true for that update.
 3. *Release.* If the release is open and the variance was held back but the shadow is under `lever_align_sigma`, the shadow is put
    back (`P ← D P Dᵀ` as above, then the shadow variance) and the bound is not applied while the release is open.
 4. *Blind.* If the variance was held back, the shadow is over `lever_align_sigma` and the alignment finds nothing, the
@@ -246,7 +246,9 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
 `lever_blind` (`true`, `false`, `n/a`),
 `heading_capped` (`true` while the stretch of lever updates that ended now was bounded, only with
 fixes younger than 2 s), `lever_release` (`open`, `closed`, `n/a` without a lever arm) and
-`gnss_only_s` (seconds since the last heading source or since the start). With a lever arm, the bound
+`gnss_only_s` (seconds since the last heading source or since the start), `gnss_fix_period_s` (the median interval of the last lever-arm
+fixes, `n/a` before the third) and `heading_align_rate` (`supported`, `degraded`, `unsupported`; `n/a` before the sixth fix and for a zero
+lever). With a lever arm, the bound
 active for 30 s and no heading source for 30 s the status is WARN `heading not observed: ...`
 (README, "What you see on /diagnostics").
 
