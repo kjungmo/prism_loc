@@ -1,4 +1,4 @@
-Node runs of scripts/fusion_extrinsic_check.py for the GNSS lever-arm update (study 6): the blocks "Round 7" at the end are the runs of the seventh round (sixth pass), the blocks before them are those of the round before.
+Node runs of scripts/fusion_extrinsic_check.py for the GNSS lever-arm update (study 6): the blocks "Final head" at the end are the runs of the final head (default run, long scenarios, repeated runs with one ROS domain per run); the blocks "Round 7" before them are the runs of the round before, those before that are older. The older blocks are history: the rig of the script ran its IMU at about 85 Hz then.
 Raw output of the script (PASS/FAIL lines), the synthetic rig of the script, ROS 2 Humble, Release build of the four packages,
 several runs at once on one 12-core machine. Each block is one run; the numbers of a node run vary from run to run (timing of the 100 Hz loop, noise draws).
 
@@ -733,3 +733,453 @@ r7_idtf: 1284 poses
 dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25  r7_base.txt
 dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25  r7_idtf.txt
 main (reference): dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25
+
+=== Final head: default run (all scenarios but the long ones), --tolerate-imu-gaps, the build of the commit 98949c2: 36 scenarios, 249 checks PASS, 0 FAIL, rc 0 (Mon Oct 19 09:59:09 KST 2026 to Mon Oct 19 10:23:25 KST 2026; the run shared the machine with 3 to 7 other node runs and 4 harness jobs) ===
+[lidar]
+  PASS: lidar mounted at (0.2, 0.1, 0.5), rpy (0, 0.2, 1.0): base_link pose error x -0.002 y +0.002 z +0.001 m, roll -0.0002 pitch -0.0001 yaw +0.0003 rad over 303 poses (checked "xyzrpw": need <= 0.05 m, <= 0.02 rad)
+  PASS: lidar mounted: /diagnostics level 0 ("localizing"; need OK, or a WARN about IMU gaps only)
+  PASS: points_mount reported: "base_link -> lidar xyz 0.200 0.100 0.500 rpy 0.000 0.200 1.000"
+  PASS: NDT corrections accepted (seconds_since_ndt_correction 0.98, ndt_rejected_total 0; need a number and 0)
+  PASS: imu_mount reported: "identity (frame base_link)"
+[imu]
+  PASS: IMU mounted: the robot turned 0.901 rad (need 0.8 .. 1.0)
+  PASS: IMU mounted with rpy (0.3, -0.2, 1.2), after the turn: base_link pose error x +0.000 y +0.000 z -0.000 m, roll -0.0000 pitch +0.0000 yaw +0.0000 rad over 315 poses (checked "xyzrpw": need <= 0.05 m, <= 0.02 rad)
+  PASS: IMU mounted: /diagnostics level 0 ("localizing"; need OK, or a WARN about IMU gaps only)
+  PASS: imu_mount reported: "base_link -> imu xyz 0.100 0.000 0.200 rpy 0.300 -0.200 1.200"
+[gnss]
+  PASS: antenna mounted: first pose (from the first fix) off base_link by x +0.000 y -0.000 z -0.000 m (need <= 0.05)
+  PASS: antenna mounted: the robot turned 0.901 rad (need 0.8 .. 1.0)
+  PASS: antenna mounted at (-0.3, 0.2, 1.0), after the turn: base_link pose error x -0.000 y +0.000 z -0.000 m, roll +0.0000 pitch +0.0000 yaw +0.0000 rad over 315 poses (checked "xyzrpw": need <= 0.05 m, <= 0.02 rad)
+  PASS: antenna mounted: /diagnostics level 0 ("localizing"; need OK, or a WARN about IMU gaps only)
+  PASS: gnss_mount reported: "base_link -> gnss xyz -0.300 0.200 1.000 rpy 0.000 0.000 0.000"
+  PASS: GNSS corrections applied (seconds_since_gnss_correction 0.18)
+[missing]
+  PASS: no transform for the cloud frame: 3 of 3 statuses WARN "point clouds not used: no transform base_link -> lidar ..." ("point clouds not used: no transform base_link -> lidar (frame of /points): publish it on TF, or set points_frame ["lidar" passed to lookupTransform argument source_frame does not exist. ]")
+  PASS: no transform: points_mount "missing (frame lidar)", seconds_since_ndt_correction never (need "missing (frame lidar)" and never)
+  PASS: after the transform is published: 0 of 3 statuses not clean from 3 s on ("localizing")
+  PASS: after the transform is published: base_link pose error x +0.000 y +0.001 z -0.001 m, roll +0.0001 pitch +0.0002 yaw +0.0002 rad over 303 poses (checked "xyzrpw": need <= 0.05 m, <= 0.02 rad)
+[empty_frame]
+  PASS: empty frame_id: 2 of 2 statuses WARN "point clouds not used: empty header.frame_id" ("point clouds not used: empty header.frame_id on /points: set points_frame to the sensor's frame (to 'base_link' if the data is already expressed in it)")
+  PASS: empty frame_id: points_mount "missing (empty frame_id)", seconds_since_ndt_correction never
+[override]
+  PASS: *_frame:=base_link, inputs expressed in base_link: base_link pose error x -0.000 y -0.000 z -0.002 m, roll -0.0000 pitch -0.0002 yaw -0.0001 rad over 318 poses (checked "xyzrpw": need <= 0.05 m, <= 0.02 rad)
+  PASS: *_frame:=base_link: /diagnostics level 0 ("localizing"; need OK, or a WARN about IMU gaps only)
+  PASS: *_frame:=base_link: points_mount, imu_mount, gnss_mount ['identity (frame base_link)', 'identity (frame base_link)', 'identity (frame base_link)'], ndt_rejected_total 0, seconds_since_gnss_correction 0.18
+  PASS: *_frame:=base_link: heading_capped "false" (need false), lever_release "n/a" (need n/a), heading_source "lidar" (need lidar), heading_sigma_rad "0.033"
+[imu_missing]
+  PASS: IMU frame without a transform, within the startup grace: 3 statuses name it, levels [1] (need WARN = 1)
+  PASS: after the startup grace: 2 of 2 statuses ERROR "IMU not used: no transform base_link -> imu ..." ("not initialized: need IMU attitude and a position fix (GNSS on /gnss or /initialpose); IMU not used: no transform base_link -> imu (frame of /imu): publish it on TF, or set imu_frame ["base_link" passed to lookupTransform argument target_frame does not exist. ]")
+  PASS: poses published while the IMU is not used: 0 (need 0)
+  PASS: after the IMU transform is published: 0 of 2 statuses still ERROR or "IMU not used" from 3 s on ("no accepted NDT correction for 18.0 s (0 rejected; points on /points never received)")
+  PASS: after the IMU transform is published: pose holds at the initial pose, error x +0.040 y -0.030 z +0.000 m, roll +0.0000 pitch +0.0000 rad (need +0.04, -0.03, 0 within 0.05 m; 0 within 0.02 rad)
+  PASS: IMU switches to a frame without a transform: 2 of 2 statuses ERROR starting "IMU not used: no transform base_link -> imu_b" ("IMU not used: no transform base_link -> imu_b (frame of /imu): publish it on TF, or set imu_frame ["imu_b" passed to lookupTransform argument source_frame does not exist. ]; no accepted NDT correction for 22.0 s (0 rejected; points on /points never received)")
+  PASS: poses published while the IMU is on that frame (after 1 s): 0 (need 0)
+  PASS: back on the first frame: 0 of 2 statuses still ERROR or "IMU not used"; imu_mount "base_link -> imu xyz 0.100 0.000 0.200 rpy 0.300 -0.200 1.200"
+[gnss_missing]
+  PASS: no transform for the antenna frame: 3 of 3 statuses WARN "GNSS not used: no transform base_link -> gnss ..." ("GNSS not used: no transform base_link -> gnss (frame of /gnss): publish it on TF, or set gnss_frame ["gnss" passed to lookupTransform argument source_frame does not exist. ]")
+  PASS: no transform: gnss_mount "missing (frame gnss)", seconds_since_gnss_correction never (need "missing (frame gnss)" and never)
+  PASS: no transform: the pose stays at /initialpose, error x +0.040 y -0.030 z +0.000 m (need +0.04, -0.03, 0 within 0.05 m; the antenna is 0.36 m and 1 m away)
+[slash]
+  PASS: frame_id "/base_link" (IMU, fix) and "/lidar" (cloud): base_link pose error x -0.000 y +0.000 z +0.001 m, roll -0.0001 pitch +0.0001 yaw +0.0006 rad over 318 poses (checked "xyzrpw": need <= 0.05 m, <= 0.02 rad)
+  PASS: leading slashes: /diagnostics level 0 ("localizing"; need OK, or a WARN about IMU gaps only)
+  PASS: leading slashes: points_mount, imu_mount, gnss_mount ['base_link -> lidar xyz 0.200 0.100 0.500 rpy 0.000 0.200 1.000', 'identity (frame base_link)', 'identity (frame base_link)'], ndt_rejected_total 0
+[gnss_stand_a]
+  PASS: antenna (0.5, 0.0, 1.0), standing, 30 s with noise: checkpoints with a pose and a covariance: 5 (need 5)
+  PASS: antenna (0.5, 0.0, 1.0), standing, 30 s with noise: largest height error 0.015 m (need <= 0.15)
+  PASS: antenna (0.5, 0.0, 1.0), standing, 30 s with noise: largest tilt error 0.0018 rad (need <= 0.03)
+  PASS: antenna (0.5, 0.0, 1.0), standing, 30 s with noise: largest heading error 0.0016 rad (need <= 0.05)
+  PASS: antenna (0.5, 0.0, 1.0), standing, 30 s with noise: largest horizontal error 0.053 m, at most 0.07 x the sigma the node reports (need <= 2; the heading is not observed, the horizontal lever arm is 0.50 m)
+  PASS: antenna (0.5, 0.0, 1.0), standing, 30 s with noise: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+[gnss_stand_b]
+  PASS: antenna (-0.3, 0.2, 1.0), standing, 30 s with noise: checkpoints with a pose and a covariance: 5 (need 5)
+  PASS: antenna (-0.3, 0.2, 1.0), standing, 30 s with noise: largest height error 0.014 m (need <= 0.15)
+  PASS: antenna (-0.3, 0.2, 1.0), standing, 30 s with noise: largest tilt error 0.0020 rad (need <= 0.03)
+  PASS: antenna (-0.3, 0.2, 1.0), standing, 30 s with noise: largest heading error 0.0020 rad (need <= 0.05)
+  PASS: antenna (-0.3, 0.2, 1.0), standing, 30 s with noise: largest horizontal error 0.050 m, at most 0.09 x the sigma the node reports (need <= 2; the heading is not observed, the horizontal lever arm is 0.36 m)
+  PASS: antenna (-0.3, 0.2, 1.0), standing, 30 s with noise: gnss_mount "base_link -> gnss xyz -0.300 0.200 1.000 rpy 0.000 0.000 0.000"
+[gnss_turn_a]
+  PASS: antenna (0.5, 0.0, 1.0), turning, 30 s with noise: checkpoints with a pose and a covariance: 5 (need 5)
+  PASS: antenna (0.5, 0.0, 1.0), turning, 30 s with noise: largest height error 0.013 m (need <= 0.15)
+  PASS: antenna (0.5, 0.0, 1.0), turning, 30 s with noise: largest tilt error 0.0034 rad (need <= 0.03)
+  PASS: antenna (0.5, 0.0, 1.0), turning, 30 s with noise: largest heading error 0.0019 rad (need <= 0.05)
+  PASS: antenna (0.5, 0.0, 1.0), turning, 30 s with noise: largest horizontal error 0.079 m, at most 0.11 x the sigma the node reports (need <= 2; the heading is not observed, the horizontal lever arm is 0.50 m)
+  PASS: antenna (0.5, 0.0, 1.0), turning, 30 s with noise: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+[gnss_turn_b]
+  PASS: antenna (-0.3, 0.2, 1.0), turning, 30 s with noise: checkpoints with a pose and a covariance: 5 (need 5)
+  PASS: antenna (-0.3, 0.2, 1.0), turning, 30 s with noise: largest height error 0.015 m (need <= 0.15)
+  PASS: antenna (-0.3, 0.2, 1.0), turning, 30 s with noise: largest tilt error 0.0038 rad (need <= 0.03)
+  PASS: antenna (-0.3, 0.2, 1.0), turning, 30 s with noise: largest heading error 0.0016 rad (need <= 0.05)
+  PASS: antenna (-0.3, 0.2, 1.0), turning, 30 s with noise: largest horizontal error 0.071 m, at most 0.12 x the sigma the node reports (need <= 2; the heading is not observed, the horizontal lever arm is 0.36 m)
+  PASS: antenna (-0.3, 0.2, 1.0), turning, 30 s with noise: gnss_mount "base_link -> gnss xyz -0.300 0.200 1.000 rpy 0.000 0.000 0.000"
+[gnss_bias_stand_a]
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.41e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest tilt error 0.25 to 0.6 s after a start: 0.0042 rad over 36 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: heading variance 0.25 to 0.6 s after a start: first start 3.290 to 3.290 rad^2 (need 3.0 to 3.6, the unknown heading of pi^2/3)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest height error 0.006 m (need <= 0.15)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest tilt error 0.0017 rad (need <= 0.03)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest heading error 0.0919 rad, at most -0.0481 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest horizontal error 0.083 m, at most 0.12 x the sigma the node reports (need <= 3)
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: /diagnostics heading_source "none" (need none), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "45.0"
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+  PASS: antenna A, standing, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: status WARN with "heading not observed" after 45 s (need WARN with; "no accepted NDT correction for 45.0 s (0 rejected; points on /points never received); heading not observed: GNSS and IMU only for 45 s, heading spread 1.9 rad, base_link can be off by up to the lever arm (0.50 m) either way; a start or a stop of 0.25 m/s or more finds the heading
+[gnss_bias_turn_b]
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.41e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest tilt error 0.25 to 0.6 s after a start: 0.0041 rad over 36 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: heading variance 0.25 to 0.6 s after a start: first start 3.290 to 3.290 rad^2 (need 3.0 to 3.6, the unknown heading of pi^2/3)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest height error 0.006 m (need <= 0.15)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest tilt error 0.0026 rad (need <= 0.03)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest heading error 0.0921 rad, at most -0.0479 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: largest horizontal error 0.090 m, at most 0.16 x the sigma the node reports (need <= 3)
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: gnss_mount "base_link -> gnss xyz -0.300 0.200 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: /diagnostics heading_source "none" (need none), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "45.0"
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+  PASS: antenna B, turning, gyro bias 0.003 -0.002 0.002 rad/s, 45 s: status WARN with "heading not observed" after 45 s (need WARN with; "no accepted NDT correction for 45.0 s (0 rejected; points on /points never received); heading not observed: GNSS and IMU only for 45 s, heading spread 1.9 rad, base_link can be off by up to the lever arm (0.36 m) either way; a start or a stop of 0.25 m/s or more finds the heading 
+[gnss_bias_big_turn_a]
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.40e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: largest tilt error 0.25 to 0.6 s after a start: 0.0092 rad over 36 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: heading variance 0.25 to 0.6 s after a start: first start 3.290 to 3.290 rad^2 (need 3.0 to 3.6, the unknown heading of pi^2/3)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: largest height error 0.013 m (need <= 0.15)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: largest tilt error 0.0048 rad (need <= 0.03)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: largest heading error 0.3965 rad, at most -0.0462 rad over the allowed 0.05 rad + 0.0087 rad/s x time (need <= 0)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: largest horizontal error 0.237 m, at most 0.32 x the sigma the node reports (need <= 3)
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: /diagnostics heading_source "none" (need none), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "44.9"
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+  PASS: antenna A, turning, gyro bias 0.5 deg/s per axis, 45 s: status WARN with "heading not observed" after 45 s (need WARN with; "no accepted NDT correction for 45.0 s (0 rejected; points on /points never received); heading not observed: GNSS and IMU only for 45 s, heading spread 1.9 rad, base_link can be off by up to the lever arm (0.50 m) either way; a start or a stop of 0.25 m/s or more finds the heading (GNSS 
+[gnss_reseed]
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: checkpoints with a pose and a covariance: 2 (need 2)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.40e-04 rad^2 over 71 poses (need <= 2e-3)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: largest tilt error 0.25 to 0.6 s after a start: 0.0042 rad over 71 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: heading variance 0.25 to 0.6 s after a start: first start 3.290 to 3.290 rad^2 (need 3.0 to 3.6, the unknown heading of pi^2/3), after a reseed 0.500 to 0.500 (need 0.1 to 0.7)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: largest height error 0.001 m (need <= 0.15)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: largest tilt error 0.0021 rad (need <= 0.03)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: largest heading error 0.0686 rad, at most -0.0514 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: largest horizontal error 0.040 m, at most 0.07 x the sigma the node reports (need <= 3)
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "30.0"
+  PASS: antenna A, standing, gyro bias, /initialpose at 15 s: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_after_ndt]
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: checkpoints with a pose and a covariance: 2 (need 2)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: largest roll/pitch variance 0.25 to 0.6 s after a start: 9.48e-05 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: largest tilt error 0.25 to 0.6 s after a start: 0.0023 rad over 36 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: heading variance 0.25 to 0.6 s after a start: 0.0009 rad^2 (need <= 0.05)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: position covariance trace 0.25 to 0.6 s after a start: 0.0124 m^2 (need <= 0.06)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: largest height error 0.014 m (need <= 0.15)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: largest tilt error 0.0014 rad (need <= 0.03)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: largest heading error 0.0016 rad, at most -0.0984 rad over the allowed 0.1 rad (need <= 0)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: largest horizontal error 0.019 m, at most 0.27 x the sigma the node reports (need <= 3)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: largest position covariance trace 0.0048 m^2 (need <= 0.06)
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: /diagnostics heading_source "lidar" (need lidar), heading_sigma_used_rad "0.016" (need 0.0 to 0.3), heading_capped "false" (need false), lever_release "closed", gnss_only_s "1.0"
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+  PASS: antenna A, standing, gyro bias, lidar before the first fix: status without "heading not observed" after 30 s (need without; "localizing")
+[gnss_reseed_before_fix]
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.41e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: largest tilt error 0.25 to 0.6 s after a start: 0.0026 rad over 36 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: heading variance 0.25 to 0.6 s after a start: first start 0.500 to 0.500 rad^2 (need 0.1 to 0.7)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: largest height error 0.009 m (need <= 0.15)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: largest tilt error 0.0014 rad (need <= 0.03)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: largest heading error 0.0987 rad, at most -0.0390 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: largest horizontal error 0.054 m, at most 0.09 x the sigma the node reports (need <= 3)
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.352" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "45.9"
+  PASS: antenna A, standing, gyro bias, /initialpose twice before the first fix: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_pose_first]
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.39e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: largest tilt error 0.25 to 0.6 s after a start: 0.0043 rad over 36 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: heading variance 0.25 to 0.6 s after a start: first start 0.500 to 0.500 rad^2 (need 0.1 to 0.7)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: largest height error 0.013 m (need <= 0.15)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: largest tilt error 0.0013 rad (need <= 0.03)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: largest heading error 0.1030 rad, at most -0.0370 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: largest horizontal error 0.047 m, at most 0.08 x the sigma the node reports (need <= 3)
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "45.9"
+  PASS: antenna A, standing, gyro bias, /initialpose and fixes before the first IMU sample: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_pose_first_wait]
+  PASS: antenna A, /initialpose and fixes before the first IMU sample: 0 poses in 1 s (need 0)
+  PASS: ... and 104 poses in the next second with the IMU (need >= 50)
+[gnss_pose_first_base]
+  PASS: antenna at base_link, /initialpose and fixes before the first IMU sample: 4 poses in 1 s (need >= 3)
+[gnss_late_pose]
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.41e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: largest tilt error 0.25 to 0.6 s after a start: 0.0041 rad over 36 poses (need <= 0.03; the body is tilted by roll +0.00 pitch +0.00 rad)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: heading variance 0.25 to 0.6 s after a start: first start 0.500 to 0.500 rad^2 (need 0.1 to 0.7)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: largest height error 0.010 m (need <= 0.15)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: largest tilt error 0.0015 rad (need <= 0.03)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: largest heading error 0.1003 rad, at most -0.0394 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: largest horizontal error 0.076 m, at most 0.13 x the sigma the node reports (need <= 3)
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "46.0"
+  PASS: antenna A, standing, gyro bias, /initialpose before the first fix: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_reseed_slope_a]
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: checkpoints with a pose and a covariance: 2 (need 2)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.42e-04 rad^2 over 73 poses (need <= 2e-3)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: largest tilt error 0.25 to 0.6 s after a start: 0.0041 rad over 73 poses (need <= 0.03; the body is tilted by roll -0.05 pitch +0.10 rad)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: heading variance 0.25 to 0.6 s after a start: first start 3.290 to 3.290 rad^2 (need 3.0 to 3.6, the unknown heading of pi^2/3), after a reseed 0.500 to 0.500 (need 0.1 to 0.7)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: largest height error 0.002 m (need <= 0.15)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: largest tilt error 0.0014 rad (need <= 0.03)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: largest heading error 0.0621 rad, at most -0.0549 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: largest horizontal error 0.047 m, at most 0.08 x the sigma the node reports (need <= 3)
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "29.9"
+  PASS: antenna A, on a slope (roll -0.05, pitch 0.1), /initialpose with a level attitude at 15 s: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_reseed_slope_b]
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: checkpoints with a pose and a covariance: 2 (need 2)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.41e-04 rad^2 over 72 poses (need <= 2e-3)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: largest tilt error 0.25 to 0.6 s after a start: 0.0043 rad over 72 poses (need <= 0.03; the body is tilted by roll +0.08 pitch -0.04 rad)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: heading variance 0.25 to 0.6 s after a start: first start 3.290 to 3.290 rad^2 (need 3.0 to 3.6, the unknown heading of pi^2/3), after a reseed 0.500 to 0.500 (need 0.1 to 0.7)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: largest height error 0.005 m (need <= 0.15)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: largest tilt error 0.0043 rad (need <= 0.03)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: largest heading error 0.0681 rad, at most -0.0517 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: largest horizontal error 0.017 m, at most 0.04 x the sigma the node reports (need <= 3)
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: gnss_mount "base_link -> gnss xyz -0.300 0.200 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "30.0"
+  PASS: antenna B, on a slope (roll 0.08, pitch -0.04), /initialpose with a level attitude at 15 s: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_late_pose_slope]
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.41e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: largest tilt error 0.25 to 0.6 s after a start: 0.0042 rad over 36 poses (need <= 0.03; the body is tilted by roll -0.05 pitch +0.10 rad)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: heading variance 0.25 to 0.6 s after a start: first start 0.500 to 0.500 rad^2 (need 0.1 to 0.7)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: largest height error 0.011 m (need <= 0.15)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: largest tilt error 0.0031 rad (need <= 0.03)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: largest heading error 0.0906 rad, at most -0.0429 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: largest horizontal error 0.145 m, at most 0.24 x the sigma the node reports (need <= 3)
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "46.0"
+  PASS: antenna A, on a slope, /initialpose with a level attitude before the first fix: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_pose_first_slope]
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: checkpoints with a pose and a covariance: 3 (need 3)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: largest roll/pitch variance 0.25 to 0.6 s after a start: 1.39e-04 rad^2 over 36 poses (need <= 2e-3)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: largest tilt error 0.25 to 0.6 s after a start: 0.0044 rad over 36 poses (need <= 0.03; the body is tilted by roll -0.05 pitch +0.10 rad)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: heading variance 0.25 to 0.6 s after a start: first start 0.500 to 0.500 rad^2 (need 0.1 to 0.7)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: largest height error 0.016 m (need <= 0.15)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: largest tilt error 0.0013 rad (need <= 0.03)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: largest heading error 0.0936 rad, at most -0.0427 rad over the allowed 0.05 rad + 0.0020 rad/s x time (need <= 0)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: largest horizontal error 0.048 m, at most 0.08 x the sigma the node reports (need <= 3)
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: gnss_mount "base_link -> gnss xyz 0.500 0.000 1.000 rpy 0.000 0.000 0.000"
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: /diagnostics heading_source "initialpose" (need initialpose), heading_sigma_used_rad "0.351" (need 0.3 to 0.4), heading_capped "true" (need true), lever_release "closed", gnss_only_s "45.9"
+  PASS: antenna A, on a slope, /initialpose and fixes before the first IMU sample: no WARN "heading not observed" up to 20 s (30 s are needed); reported at []
+[gnss_start_stop]
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: standing: lever_release closed, heading_capped true (need closed, true)
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: lever_release during the start (2.0 to 3.0 s): ['open', 'open', 'open'] (need open at least once)
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: lever_release after 4 to 5 s of constant speed (6.5 to 7.5 s): ['closed', 'closed', 'closed'] (need closed at least once)
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: lever_release during the stop (9.0 to 10.0 s): ['open', 'open', 'open'] (need open at least once)
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: heading error after the stop +0.067 rad (need within 0.15 from 0.3)
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: largest height error 0.013 m (need <= 0.15), tilt error 0.0127 rad (need <= 0.03)
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: horizontal error after the stop 0.029 m (need <= 0.3)
+  PASS: antenna A, GNSS and IMU only, heading 0.3 rad off at the start, a start (1 m/s^2, 2 s) and a stop: after the stop heading_sigma_rad 0.068 (need < 0.33, under the bound 0.35), heading_capped false (need false), status without "heading not observed"
+[gnss_gap]
+  PASS: antenna A, standing, gyro bias, fixes stop for 5 s after 35 s: at 35 s WARN with "heading not observed": True, heading_capped true
+  PASS: antenna A, standing, gyro bias, fixes stop for 5 s after 35 s: after 5 s without fixes: heading_capped false (need false), status "no accepted NDT correction for 40.0 s (0 rejected; points on /points never received)" (need no "heading not observed")
+  PASS: antenna A, standing, gyro bias, fixes stop for 5 s after 35 s: 3 s after the fixes resume: status "no accepted NDT correction for 43.0 s (0 rejected; points on /points never received)" (need no "heading not observed": the 30 s start again)
+  PASS: antenna A, standing, gyro bias, fixes stop for 5 s after 35 s: 34 s after the fixes resume: status "no accepted NDT correction for 74.0 s (0 rejected; points on /points never received); heading not observed: GNSS and IMU only for 74 s, heading spread 2.0 rad, base_link can be off by up to the lever arm (0.50 m) either way; a start or a stop of 0.25 m/s or more finds the heading (GNSS fixes at 1 Hz or faster),
+[gnss_boot_wrong_yaw]
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: before the start heading_source none (need none), heading_sigma_rad 1.825 (need >= 1.5)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: heading_align_rate supported (need supported), gnss_fix_period_s 0.20 (need 0.2 +- 20 %)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: heading_source "motion" first seen 8.0 s after the start (need within 10 s)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: largest height error 0.113 m (need <= 1.0), tilt error 0.0103 rad (need <= 0.1) in the 80 s from the start (the largest height error at 80 s; 0 statuses with IMU gaps)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: heading error after the cycle +0.154 rad (need within 0.5; one run)
+[gnss_boot_wrong_yaw_b]
+  PASS: antenna (-0.3, 0.2, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: before the start heading_source none (need none), heading_sigma_rad 1.825 (need >= 1.5)
+  PASS: antenna (-0.3, 0.2, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: heading_align_rate supported (need supported), gnss_fix_period_s 0.20 (need 0.2 +- 20 %)
+  PASS: antenna (-0.3, 0.2, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: heading_source "motion" first seen 8.0 s after the start (need within 10 s)
+  PASS: antenna (-0.3, 0.2, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: largest height error 0.088 m (need <= 1.0), tilt error 0.0076 rad (need <= 0.1) in the 80 s from the start (the largest height error at 80 s; 1 statuses with IMU gaps)
+  PASS: antenna (-0.3, 0.2, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 5 Hz, standing 20 s, then the start-stop cycle: heading error after the cycle +0.043 rad (need within 0.5; one run)
+[gnss_boot_wrong_yaw_1hz]
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 1 Hz, standing 20 s, then the start-stop cycle: before the start heading_source none (need none), heading_sigma_rad 1.825 (need >= 1.5)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 1 Hz, standing 20 s, then the start-stop cycle: heading_align_rate supported (need supported), gnss_fix_period_s 1.00 (need 1 +- 20 %)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 1 Hz, standing 20 s, then the start-stop cycle: heading_source "motion" first seen 10.0 s after the start (need within 14 s)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 1 Hz, standing 20 s, then the start-stop cycle: largest height error 0.075 m (need <= 5.0), tilt error 0.0088 rad (need <= 0.3) in the 80 s from the start (the largest height error at 64 s; 0 statuses with IMU gaps)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 1 Hz, standing 20 s, then the start-stop cycle: heading error after the cycle +0.007 rad (need within 1.0; one run)
+[gnss_boot_wrong_yaw_10hz]
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 10 Hz, standing 20 s, then the start-stop cycle: before the start heading_source none (need none), heading_sigma_rad 1.825 (need >= 1.5)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 10 Hz, standing 20 s, then the start-stop cycle: heading_align_rate supported (need supported), gnss_fix_period_s 0.10 (need 0.1 +- 20 %)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 10 Hz, standing 20 s, then the start-stop cycle: heading_source "motion" first seen 8.0 s after the start (need within 10 s)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 10 Hz, standing 20 s, then the start-stop cycle: largest height error 0.064 m (need <= 1.0), tilt error 0.0126 rad (need <= 0.1) in the 80 s from the start (the largest height error at 56 s; 1 statuses with IMU gaps)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 10 Hz, standing 20 s, then the start-stop cycle: heading error after the cycle -0.108 rad (need within 0.5; one run)
+[gnss_boot_wrong_yaw_50hz]
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 50 Hz, standing 20 s, then the start-stop cycle: before the start heading_source none (need none), heading_sigma_rad 1.825 (need >= 1.5)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 50 Hz, standing 20 s, then the start-stop cycle: heading_align_rate supported (need supported), gnss_fix_period_s 0.02 (need 0.02 +- 20 %)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 50 Hz, standing 20 s, then the start-stop cycle: heading_source "motion" first seen 8.0 s after the start (need within 10 s)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 50 Hz, standing 20 s, then the start-stop cycle: largest height error 0.053 m (need <= 1.0), tilt error 0.0102 rad (need <= 0.1) in the 80 s from the start (the largest height error at 76 s; 1 statuses with IMU gaps)
+  PASS: antenna (0.5, 0.0, 1.0), initial_yaw 2.0 rad off, no /initialpose, fixes at 50 Hz, standing 20 s, then the start-stop cycle: heading error after the cycle -0.008 rad (need within 0.5; one run)
+[gnss_slow_rate]
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 2.5 s, no /initialpose: after 40 s status WARN with "GNSS fixes come every ... slower than 0.8 Hz" (need WARN with it)
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 2.5 s, no /initialpose: heading_align_rate unsupported (need unsupported), gnss_fix_period_s 2.50 (need 2.5 +- 0.5)
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 2.5 s, no /initialpose: heading_sigma_rad 0.512 (need under 1.0: the start is not marked as unknown)
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 2.5 s, no /initialpose: before 6 fixes heading_align_rate supported (need n/a or supported: the rate is not yet known)
+[gnss_degraded_rate]
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 1.2 s, no /initialpose: after 40 s status WARN with "GNSS fixes come every ... slower than 1 Hz" (need WARN with it)
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 1.2 s, no /initialpose: heading_align_rate degraded (need degraded), gnss_fix_period_s 1.20 (need 1.2 +- 0.5)
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 1.2 s, no /initialpose: heading_sigma_rad 1.857 (need at least 1.5: the start stays marked as unknown)
+  PASS: antenna (0.5, 0.0, 1.0), GNSS and IMU only, a fix every 1.2 s, no /initialpose: before 6 fixes heading_align_rate supported (need n/a or supported: the rate is not yet known)
+PASS: fusion3d sensor mounts
+rc=0
+
+
+=== Final head: --scenario gnss_gap_across_start (first run of the final build) ===
+[gnss_gap_across_start]
+  PASS: antenna (0.5, 0.0, 1.0), standing 300 s with the 0.5 deg/s gyro bias, fixes out for 120 s from 10 s before the start: heading_source "motion" within 3.4 s after the fixes return: None (need none)
+  PASS: antenna (0.5, 0.0, 1.0), standing 300 s with the 0.5 deg/s gyro bias, fixes out for 120 s from 10 s before the start: largest height error 0.209 m (need <= 0.5), tilt error 0.0240 rad (need <= 0.05) in the 60 s after the fixes return
+PASS: fusion3d sensor mounts
+rc=0
+
+=== Final head: --scenario gnss_gap_across_start_b (first run of the final build) ===
+[gnss_gap_across_start_b]
+  PASS: antenna (-0.3, 0.2, 1.0), standing 300 s with the 0.5 deg/s gyro bias, fixes out for 120 s from 10 s before the start: heading_source "motion" within 3.4 s after the fixes return: None (need none)
+  PASS: antenna (-0.3, 0.2, 1.0), standing 300 s with the 0.5 deg/s gyro bias, fixes out for 120 s from 10 s before the start: largest height error 0.163 m (need <= 0.5), tilt error 0.0212 rad (need <= 0.05) in the 60 s after the fixes return
+PASS: fusion3d sensor mounts
+rc=0
+
+=== Final head: --scenario gnss_stand_go (first run of the final build) ===
+[gnss_stand_go]
+  PASS: antenna (0.5, 0.0, 1.0), standing 600 s with the gyro bias, then a start and a stop: before the start: height error 0.013 m (need <= 0.25), tilt 0.0019 rad (need <= 0.03)
+  PASS: antenna (0.5, 0.0, 1.0), standing 600 s with the gyro bias, then a start and a stop: before the start: WARN True (status "no accepted NDT correction for 600.0 s (0 rejected; points on /points never received); heading not o"), heading_source none, heading_sigma_rad 6.268 (need >= 2), heading_sigma_used_rad 0.351 (need <= 0.4), lever_blind true (need true)
+  PASS: antenna (0.5, 0.0, 1.0), standing 600 s with the gyro bias, then a start and a stop: largest height error 0.011 m (need <= 0.25), tilt error 0.0054 rad (need <= 0.03) in the 30 s from the start
+  PASS: antenna (0.5, 0.0, 1.0), standing 600 s with the gyro bias, then a start and a stop: heading_source "motion" first seen 1.0 s after the start (need within 5 s), now "motion"
+  PASS: antenna (0.5, 0.0, 1.0), standing 600 s with the gyro bias, then a start and a stop: after the stop heading error +0.026 rad (need within 0.25), horizontal error 0.007 m (need <= 0.5)
+  PASS: antenna (0.5, 0.0, 1.0), standing 600 s with the gyro bias, then a start and a stop: after the stop heading_sigma_rad 0.140 (need <= 0.4), heading_capped false (need false), status without "heading not observed"
+PASS: fusion3d sensor mounts
+rc=0
+
+=== Final head: --scenario gnss_stand_go_b (first run of the final build) ===
+error    libmamba Could not set lock (Resource temporarily unavailable)
+warning  libmamba Cannot lock '/home/cona/.cache/mamba/proc'
+    Waiting for other mamba process to finish
+[gnss_stand_go_b]
+  PASS: antenna (-0.3, 0.2, 1.0), standing 600 s with the gyro bias, then a start and a stop: before the start: height error 0.027 m (need <= 0.25), tilt 0.0022 rad (need <= 0.03)
+  PASS: antenna (-0.3, 0.2, 1.0), standing 600 s with the gyro bias, then a start and a stop: before the start: WARN True (status "no accepted NDT correction for 600.0 s (0 rejected; points on /points never received); heading not o"), heading_source none, heading_sigma_rad 6.269 (need >= 2), heading_sigma_used_rad 0.351 (need <= 0.4), lever_blind true (need true)
+  PASS: antenna (-0.3, 0.2, 1.0), standing 600 s with the gyro bias, then a start and a stop: largest height error 0.055 m (need <= 0.25), tilt error 0.0097 rad (need <= 0.03) in the 30 s from the start
+  PASS: antenna (-0.3, 0.2, 1.0), standing 600 s with the gyro bias, then a start and a stop: heading_source "motion" first seen 1.0 s after the start (need within 5 s), now "motion"
+  PASS: antenna (-0.3, 0.2, 1.0), standing 600 s with the gyro bias, then a start and a stop: after the stop heading error -0.113 rad (need within 0.25), horizontal error 0.030 m (need <= 0.5)
+  PASS: antenna (-0.3, 0.2, 1.0), standing 600 s with the gyro bias, then a start and a stop: after the stop heading_sigma_rad 0.111 (need <= 0.4), heading_capped false (need false), status without "heading not observed"
+PASS: fusion3d sensor mounts
+rc=0
+
+=== Final head: --scenario gnss_stand_long (first run of the final build) ===
+[gnss_stand_long]
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: at 20 s the status is OK ("localizing") and heading_capped is true
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: checkpoints with a pose: 30 (need 30)
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: largest height error 0.146 m (need <= 0.25)
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: largest tilt error 0.0023 rad (need <= 0.03)
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: heading error at most -0.0482 rad over 0.05 rad + 0.002 rad/s x t (need <= 0)
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: horizontal error at most -0.403 m beyond the circle of the heading error around the antenna plus 0.6 m (need <= 0)
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: heading_sigma_used_rad from 60 s on: 0.350 to 0.352 at 28 of 28 checkpoints (need 0.30 to 0.40, the bound 0.35)
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: heading_sigma_rad (the spread held) from 60 s on: 1.91 to 6.27 (need it at least the bounded one at every checkpoint, and 3.0 rad at the last)
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: heading_source none, heading_capped true, lever_release closed at 28 of 28 checkpoints from 60 s on
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: WARN "heading not observed" at 28 of 28 checkpoints from 60 s on; last gnss_only_s "600.0"
+  PASS: antenna (0.5, 0.0, 1.0), standing, gyro bias, 600 s: covariance_trace_position within 5 % of the trace of the published pose covariance at 28 of 28 checkpoints from 60 s on
+PASS: fusion3d sensor mounts
+rc=0
+
+=== Final head, repeated runs, one ROS domain per run, 4 runs at a time (the ranges quoted in scripts/fusion_extrinsic_check.py, README.md and experiments/README.md) ===
+
+[gnss_boot_wrong_yaw] 6 runs
+  domain 22: height 0.121 m, tilt 0.0127 rad, heading error +0.140 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 23: height 0.122 m, tilt 0.0107 rad, heading error +0.150 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 24: height 0.128 m, tilt 0.0125 rad, heading error +0.129 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 25: height 0.107 m, tilt 0.0105 rad, heading error +0.154 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 26: height 0.109 m, tilt 0.0106 rad, heading error +0.150 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 27: height 0.115 m, tilt 0.0099 rad, heading error +0.151 rad, motion 8.0 s, 0 FAIL, rc 0
+
+[gnss_boot_wrong_yaw_10hz] 6 runs
+  domain 34: height 0.063 m, tilt 0.0133 rad, heading error -0.111 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 35: height 0.068 m, tilt 0.0132 rad, heading error -0.110 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 36: height 0.067 m, tilt 0.0137 rad, heading error -0.113 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 37: height 0.081 m, tilt 0.0138 rad, heading error -0.114 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 38: height 0.059 m, tilt 0.0133 rad, heading error -0.115 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 39: height 0.060 m, tilt 0.0162 rad, heading error -0.117 rad, motion 8.0 s, 0 FAIL, rc 0
+
+[gnss_boot_wrong_yaw_1hz] 30 runs
+  domain 10: height 0.074 m, tilt 0.0088 rad, heading error +0.006 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 11: height 0.071 m, tilt 0.0087 rad, heading error -0.037 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 12: height 0.080 m, tilt 0.0087 rad, heading error +0.009 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 13: height 0.059 m, tilt 0.0089 rad, heading error -0.045 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 14: height 0.066 m, tilt 0.0089 rad, heading error -0.047 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 15: height 0.079 m, tilt 0.0088 rad, heading error +0.006 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 16: height 0.069 m, tilt 0.0088 rad, heading error +0.013 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 17: height 0.073 m, tilt 0.0088 rad, heading error +0.014 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 18: height 0.073 m, tilt 0.0091 rad, heading error -0.037 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 19: height 0.079 m, tilt 0.0088 rad, heading error +0.019 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 20: height 0.071 m, tilt 0.0089 rad, heading error +0.005 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 21: height 3.175 m, tilt 0.0772 rad, heading error +0.517 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 80: height 0.071 m, tilt 0.0087 rad, heading error -0.029 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 81: height 0.065 m, tilt 0.0089 rad, heading error +0.043 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 82: height 0.092 m, tilt 0.0167 rad, heading error -0.058 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 83: height 0.067 m, tilt 0.0088 rad, heading error -0.044 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 84: height 0.079 m, tilt 0.0090 rad, heading error -0.044 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 85: height 3.290 m, tilt 0.0809 rad, heading error +0.484 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 86: height 0.083 m, tilt 0.0088 rad, heading error -0.039 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 87: height 2.718 m, tilt 0.0781 rad, heading error -0.131 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 88: height 0.074 m, tilt 0.0087 rad, heading error +0.012 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 89: height 0.112 m, tilt 0.0126 rad, heading error -0.053 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 90: height 0.070 m, tilt 0.0072 rad, heading error +0.003 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 91: height 0.084 m, tilt 0.0087 rad, heading error +0.010 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 92: height 0.081 m, tilt 0.0072 rad, heading error +0.017 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 93: height 0.071 m, tilt 0.0087 rad, heading error +0.024 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 94: height 0.071 m, tilt 0.0088 rad, heading error +0.021 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 95: height 0.070 m, tilt 0.0088 rad, heading error +0.012 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 96: height 0.080 m, tilt 0.0089 rad, heading error -0.044 rad, motion 10.0 s, 0 FAIL, rc 0
+  domain 97: height 0.073 m, tilt 0.0089 rad, heading error +0.013 rad, motion 10.0 s, 0 FAIL, rc 0
+
+[gnss_boot_wrong_yaw_50hz] 6 runs
+  domain 40: height 0.054 m, tilt 0.0128 rad, heading error -0.003 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 41: height 0.055 m, tilt 0.0119 rad, heading error -0.018 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 42: height 0.051 m, tilt 0.0119 rad, heading error -0.009 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 43: height 0.051 m, tilt 0.0102 rad, heading error -0.012 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 44: height 0.045 m, tilt 0.0133 rad, heading error -0.008 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 45: height 0.052 m, tilt 0.0110 rad, heading error -0.021 rad, motion 8.0 s, 0 FAIL, rc 0
+
+[gnss_boot_wrong_yaw_b] 6 runs
+  domain 28: height 0.085 m, tilt 0.0076 rad, heading error +0.043 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 29: height 0.101 m, tilt 0.0072 rad, heading error +0.043 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 30: height 0.099 m, tilt 0.0040 rad, heading error +0.047 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 31: height 0.095 m, tilt 0.0053 rad, heading error +0.041 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 32: height 0.093 m, tilt 0.0069 rad, heading error +0.054 rad, motion 8.0 s, 0 FAIL, rc 0
+  domain 33: height 0.084 m, tilt 0.0081 rad, heading error +0.062 rad, motion 8.0 s, 0 FAIL, rc 0
+
+[gnss_gap_across_start] 1 runs
+  domain 53: height 0.209 m, tilt 0.0240 rad, heading error  rad, motion  s, 0 FAIL, rc 0
+
+[gnss_gap_across_start_b] 1 runs
+  domain 54: height 0.163 m, tilt 0.0212 rad, heading error  rad, motion  s, 0 FAIL, rc 0
+
+[gnss_stand_go] 6 runs
+  domain 51: height 0.011 m, tilt 0.0054 rad, heading error +0.026 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 60: height 0.011 m, tilt 0.0055 rad, heading error +0.030 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 61: height 0.020 m, tilt 0.0055 rad, heading error +0.028 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 62: height 0.013 m, tilt 0.0052 rad, heading error +0.030 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 63: height 0.019 m, tilt 0.0056 rad, heading error +0.021 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 64: height 0.015 m, tilt 0.0059 rad, heading error +0.005 rad, motion 1.0 s, 0 FAIL, rc 0
+
+[gnss_stand_go_b] 6 runs
+  domain 52: height 0.055 m, tilt 0.0097 rad, heading error -0.113 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 65: height 0.038 m, tilt 0.0068 rad, heading error -0.114 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 66: height 0.030 m, tilt 0.0095 rad, heading error -0.110 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 67: height 0.036 m, tilt 0.0073 rad, heading error -0.096 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 68: height 0.045 m, tilt 0.0105 rad, heading error -0.114 rad, motion 1.0 s, 0 FAIL, rc 0
+  domain 69: height 0.040 m, tilt 0.0089 rad, heading error -0.090 rad, motion 1.0 s, 0 FAIL, rc 0
+
+[gnss_stand_long] 1 runs
+  domain 55: height 0.146 m, tilt 0.0023 rad, heading error  rad, motion  s, 0 FAIL, rc 0
+
+=== Final head: zero-lever lockstep feed (1,284 poses, base_link frames and identity static TFs), the build of the commit 98949c2 ===
+r9_base: 1284 poses
+r9_idtf: 1284 poses
+dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25  r9_base.txt
+dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25  r9_idtf.txt
+main (reference, two runs of main): dbe91c302ba7e5e43d025519cdc09d0314d4d6b862cfa15c7c6c9d0d25d82f25
+
+=== Final head: the paper's five experiment CSVs rebuilt from main and from this tree (columns named time_ms blanked): every hash equal ===
+docs/paper/data/bbs_relocalization.csv rows 101 sha 4313e0a212a75a3b
+docs/paper/data/eskf_nees.csv rows 122 sha bead7fef137d70af
+docs/paper/data/eskf_track.csv rows 122 sha 9abba38a27e7d5ef
+docs/paper/data/mcl_particles.csv rows 131 sha d41e9effee934f60
+docs/paper/data/mcl_tracking.csv rows 131 sha 52f2a930eddc5598

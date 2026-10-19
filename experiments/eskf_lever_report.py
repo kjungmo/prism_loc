@@ -26,8 +26,10 @@ SCHEMES = ['ignore', 'S0', 'S0s', 'S1', 'S1s', 'S2', 'S2s', 'S3s', 'S4s', 'S5s',
 FIRST_SUITES = ('g60', 'g300')
 SG_SUITES = ('hsg', 'hsgv')    # third pass: standing, then moving (reported apart; not part of the second-pass pools)
 FIFTH_SUITES = ('hgap', 'hboot')    # fifth pass: an outage across the start, and the default boot with a guessed heading (reported apart)
-SIXTH_SUITES = ('hrate',)           # sixth pass: the fix rate (hrate), and the short outages of hgap (the cells whose noise column reads off<s>)
-APART = FIRST_SUITES + SG_SUITES + FIFTH_SUITES + SIXTH_SUITES
+SIXTH_SUITES = ('hrate', 'hratex')  # the fix rate (hrate: 0.5 to 20 Hz, hratex: 0.83, 0.91, 50 and 100 Hz), and the short outages of hgap (the cells whose noise column reads off<s>)
+SWEEP_SUITE = 'hgapsweep'           # the sweep of lever_outage_spread on the cells of hgap (scheme S8x_spread<value>)
+PHASE_SUITE = 'hphase'              # the cells of hrate at 1, 2, 5 and 10 Hz with the fixes at ten phases of the fix period to the start of the motion
+APART = FIRST_SUITES + SG_SUITES + FIFTH_SUITES + SIXTH_SUITES + (SWEEP_SUITE, PHASE_SUITE)
 
 
 def load(prefixes):
@@ -841,26 +843,26 @@ def fifth_pass(rows):
                     row(m, sc, lambda r, m=m: r['motion'] == m)
 
 
-def sixth_pass(rows):
+def sixth_pass(rows, rows_all=()):
     """Sixth review round: the fix rate (suite hrate) and the short outages across the first start (the cells of hgap whose noise column reads off<s>)."""
     print('\n\n# Lever-arm study, sixth pass: the fix rate, and a short outage at the first start\n')
     xy15 = lambda r: f(r, 'max_xy') > 1.5
     z1 = lambda r: f(r, 'max_z') > 1.0
     head5 = lambda r: f(r, 'end_head') > 0.5
     div = lambda r: f(r, 'max_z') > 100.0 or f(r, 'max_tilt') > 1.5
-    rate = [r for r in rows if r['suite'] == 'hrate']
+    rate = [r for r in rows if r['suite'] in ('hrate', 'hratex')]
     if rate:
-        print('## Suite hrate: the same boot and stand-then-go cells at fix rates of 0.5, 1, 2, 5, 10 and 20 Hz\n')
+        print('## Suites hrate and hratex: the same boot and stand-then-go cells at fix rates of 0.5 to 100 Hz\n')
         print('Cells (GNSS and IMU only, no /initialpose, 4 seeds, the IMU data of a cell is the same at every rate): *boot* = gyro bias 0.1 deg/s and accelerometer bias 0.1 m/s^2, a stand of 6, 30 or 300 s, '
               '`initial_yaw` 0.1, 0.3 or 2.0 rad off, then the start-stop cycle or the circle; *stand-then-go* = stand 300 or 900 s, gyro bias 0 or 0.2 deg/s, accelerometer bias 0 or 0.1 m/s^2, `initial_yaw` 0.1 rad off. '
               'Schemes: S8k = the alignment of the fifth and sixth rounds (span of 4 fixes); S8t = spans in seconds only; S8n = the test of the norms only (the sixth review\'s proposal, 30 %); '
               'S8v = S8u + the test of the norms; S8u = spans in seconds, the fix-rate limit and the spread after an outage (what the code ships; the spread acts only after an outage, none in this suite); '
-              'S8 = no unknown start; S2s, S6vb = the comparators. tz = tilt > 0.05 rad or abs z > 0.5 m; z>1 = abs z > 1 m; heading>0.5 = heading error over 0.5 rad at the end; xy>1.5 = largest horizontal error over 1.5 m. '
+              'S8 = no unknown start; S2s, S6vb = the comparators; S8u@2011666 = the S8u of commit 2011666 (hratex only: the same harness built against the core before the fix of the history and the fix-rate limit). hratex has no S8k, S8t, S8n, S8v rows. tz = tilt > 0.05 rad or abs z > 0.5 m; z>1 = abs z > 1 m; heading>0.5 = heading error over 0.5 rad at the end; xy>1.5 = largest horizontal error over 1.5 m. '
               'Antennas A and B (a horizontal arm) and, apart, the mast M (no horizontal arm).\n')
         per = lambda n: float(n[3:-1]) if n.startswith('fix') else 0.2   # the noise column reads fix<period>s; "matched" is the 5 Hz of every earlier suite
         periods = sorted({r['noise'] for r in rate}, key=lambda n: -per(n))
-        hz = lambda n: '%g Hz' % (1.0 / per(n))
-        schemes = [sc for sc in ('S2s', 'S6vb', 'S8', 'S8k', 'S8t', 'S8n', 'S8v', 'S8u') if any(r['scheme'] == sc for r in rate)]
+        hz = lambda n: '%.3g Hz' % (1.0 / per(n))
+        schemes = [sc for sc in ('S2s', 'S6vb', 'S8', 'S8k', 'S8t', 'S8n', 'S8v', 'S8u@2011666', 'S8u') if any(r['scheme'] == sc for r in rate)]
 
         def kind(r):
             st = int(r['dur']) - 160
@@ -880,22 +882,39 @@ def sixth_pass(rows):
         block('Antennas A and B, boot, by `initial_yaw` error', ('A', 'B'), lambda r: 'boot, yaw %s' % r['yaw0'] if kind(r) == 'boot' else 'other', ['boot, yaw 0.1', 'boot, yaw 0.3', 'boot, yaw 2'])
         block('Mast M, by cell', ('M',), kind, ['boot', 'stand-then-go'])
         block('Zero lever Z (the same data; it does not depend on the scheme, one scheme shown), by cell', ('Z',), kind, ['boot', 'stand-then-go'], only=['S8u'])
-        print('\n### Numbers quoted in README.md and experiments/README.md: hrate\n')
+        print('\n### Numbers quoted in README.md and experiments/README.md: hrate and hratex\n')
         for n in periods:
-            for sc in ('S8k', 'S8u'):
+            for sc in ('S8k', 'S8u@2011666', 'S8u'):
                 rs = [r for r in rate if r['noise'] == n and r['scheme'] == sc and r['antenna'] in ('A', 'B')]
                 if rs:
                     print(f'- {hz(n)} (a fix every {per(n):g} s), {sc}, antennas A and B, {len(rs)} runs: tz {sum(tz(r) for r in rs)}, z>1 {sum(z1(r) for r in rs)}, heading>0.5 at the end {sum(head5(r) for r in rs)}, xy>1.5 {sum(xy15(r) for r in rs)}.')
         for n in periods:
-            for sc in ('S8k', 'S8u'):
+            for sc in ('S8k', 'S8u@2011666', 'S8u'):
                 rs = [r for r in rate if r['noise'] == n and r['scheme'] == sc and r['antenna'] in ('A', 'B') and kind(r) == 'boot' and r['yaw0'] == '2']
                 if rs:
                     print(f'- {hz(n)}, {sc}, boot with `initial_yaw` 2 rad off, antennas A and B, {len(rs)} runs: tz {sum(tz(r) for r in rs)}, heading>0.5 at the end {sum(head5(r) for r in rs)}.')
         for n in periods:
-            for sc in ('S8k', 'S8u'):
+            for sc in ('S8k', 'S8u@2011666', 'S8u'):
                 rs = [r for r in rate if r['noise'] == n and r['scheme'] == sc and r['antenna'] in ('A', 'B') and kind(r) == 'stand-then-go']
                 if rs:
                     print(f'- {hz(n)}, {sc}, stand-then-go, antennas A and B, {len(rs)} runs: tz {sum(tz(r) for r in rs)}, heading>0.5 at the end {sum(head5(r) for r in rs)}.')
+        print('\nThe test of the norms of the two changes of velocity (`lever_align_norm` 0.3; the core of commit 2011666 had it). A row is one run of one antenna; two rows differ if any column of the runs file differs.\n')
+        for n in periods:
+            for a, b in (('S8v', 'S8u'), ('S8n', 'S8k')):
+                ra = {(r['cfg'], r['antenna'], r['seed']): r for r in rate if r['noise'] == n and r['scheme'] == a}
+                rb = {(r['cfg'], r['antenna'], r['seed']): r for r in rate if r['noise'] == n and r['scheme'] == b}
+                keys = sorted(ra.keys() & rb.keys())
+                if not keys:
+                    continue
+                cols = [c for c in ra[keys[0]] if c not in ('scheme', 'suite', 'noise')]
+                print(f'- {hz(n)}: {a} differs from {b} in {sum(1 for k in keys if any(ra[k][c] != rb[k][c] for c in cols))} of {len(keys)} rows.')
+        for n in periods:
+            for sc in ('S8v', 'S8u'):
+                rs = [r for r in rate if r['noise'] == n and r['scheme'] == sc and r['antenna'] in ('A', 'B') and kind(r) == 'boot']
+                if rs and sc == 'S8v':
+                    bad = [r for r in rs if head5(r)]
+                    print(f'- {hz(n)}, boot, antennas A and B ({len(rs)} runs): {sc} heading>0.5 at the end in {len(bad)} ({", ".join("cfg " + r["cfg"].split("-")[1] + " seed " + r["seed"] for r in bad[:3])}), '
+                          f'S8u in {sum(head5(r) for r in rate if r["noise"] == n and r["scheme"] == "S8u" and r["antenna"] in ("A", "B") and kind(r) == "boot")}.')
     gap = [r for r in rows if r['suite'] == 'hgap' and r['noise'].startswith('off')]
     if gap:
         print('\n## Suite hgap, the short outages: the fixes stop just before or in the middle of the first acceleration after a stand\n')
@@ -937,12 +956,97 @@ def sixth_pass(rows):
             print(f'- {sc}, antennas A and B, outages that end before the circle starts or that do not cover its start ({len(rs)} runs): tz {sum(tz(r) for r in rs)}, xy>1.5 {sum(xy15(r) for r in rs)}.')
             print(f'- {sc}, antennas A and B, the outage begins 1 s before the circle (sgdrive, off-1; {len(ca)} runs): tz {sum(tz(r) for r in ca)}, xy>1.5 {sum(xy15(r) for r in ca)}; antenna A alone {sum(xy15(r) for r in ca if r["antenna"] == "A")} of {sum(1 for r in ca if r["antenna"] == "A")}.')
         for sc in ('S8k', 'S8u'):
+            for ant in ('A', 'B'):
+                ca1 = [r for r in gap if r['scheme'] == sc and r['antenna'] == ant and r['motion'] == 'sgdrive' and r['noise'] == 'off-1']
+                print(f'- {sc}, antenna {ant}, the outage begins 1 s before the circle ({len(ca1)} runs): heading>0.5 at the end {sum(head5(r) for r in ca1)}, xy>1.5 {sum(xy15(r) for r in ca1)}.')
+        long_rows = [r for r in rows_all if r['suite'] == 'hgap' and not r['noise'].startswith('off')]
+        for sc in ('S8k', 'S8u'):
+            lm = [r for r in long_rows if r['scheme'] == sc and r['antenna'] == 'M']
+            print(f'- {sc}, mast M, the long outages (30 s and 120 s, the cells of the fifth pass; {len(lm)} runs): tz {sum(tz(r) for r in lm)}.')
+        lz = [r for r in long_rows if r['scheme'] == 'S8u' and r['antenna'] == 'Z']
+        print(f'- zero lever, the long outages ({len(lz)} runs): tz {sum(tz(r) for r in lz)}.')
+        for sc in ('S8k', 'S8u'):
             rs = [r for r in gap if r['scheme'] == sc and r['antenna'] == 'M' and r['gyro_bias_dps'] == '0.2' and int(r['dur']) - 160 == 900]
-            print(f'- {sc}, mast M, stand 900 s at 0.2 deg/s ({len(rs)} runs): tz {sum(tz(r) for r in rs)}, z>1 {sum(z1(r) for r in rs)}, diverged {sum(div(r) for r in rs)}.')
+            zs = {(int(r['cfg'].split('-')[1]) // 4, r['seed']): r for r in gap if r['scheme'] == sc and r['antenna'] == 'Z' and r['gyro_bias_dps'] == '0.2' and int(r['dur']) - 160 == 900}
+            ex = sum(tz(r) and not tz(zs[(int(r['cfg'].split('-')[1]) // 4, r['seed'])]) for r in rs)
+            print(f'- {sc}, mast M, stand 900 s at 0.2 deg/s ({len(rs)} runs): tz {sum(tz(r) for r in rs)}, z>1 {sum(z1(r) for r in rs)}, diverged {sum(div(r) for r in rs)}; '
+                  f'the zero lever on the same data has tz in {sum(tz(r) for r in zs.values())} of {len(zs)}; tz where the zero-lever run has none (excess) {ex}.')
+
+
+def phase_pass(rows):
+    """Suite hphase: the boot and stand-then-go cells at 1, 2, 5 and 10 Hz with the fixes at ten phases of the fix period (noise column p<period>i<tenths>)."""
+    head5 = lambda r: f(r, 'end_head') > 0.5
+    print('\n\n# Lever-arm study: the phase of the fixes\n')
+    print('Suite hphase: the cells of hrate (GNSS and IMU only, no /initialpose, 4 seeds, antennas A and B) at fix periods of 1, 0.5, 0.2 and 0.1 s, with the fixes 0, 1/10, ..., 9/10 of a fix period after the whole seconds on which the motion starts '
+          '(hrate has phase 0 only). Scheme S8u. tz = tilt > 0.05 rad or abs z > 0.5 m; z>1 = abs z > 1 m; heading>0.5 = heading error over 0.5 rad at the end; the same IMU data at every phase of a cell. '
+          'Boot = 144 runs per phase, stand-then-go = 128.\n')
+    def kind(r):
+        st = int(r['dur']) - 160
+        return 'boot' if st in (6, 30, 300) and r['gyro_bias_dps'] == '0.1' and r['acc_bias'] == '0.1' else 'stand-then-go'
+    rs_all = [r for r in rows if r['scheme'] == 'S8u' and r['antenna'] in ('A', 'B')]
+    periods = sorted({r['noise'].split('i')[0][1:] for r in rs_all}, key=lambda x: -float(x))
+    print('| fix period | phase (tenths) | boot: tz / heading>0.5 / z>1 | stand-then-go: tz / heading>0.5 / z>1 | largest height error m |')
+    print('|---|---|---|---|---|')
+    for per in periods:
+        for idx in range(10):
+            cells, zmax = [], 0.0
+            for kd in ('boot', 'stand-then-go'):
+                rs = [r for r in rs_all if r['noise'] == f'p{per}i{idx}' and kind(r) == kd]
+                cells.append(f'{sum(tz(r) for r in rs)} / {sum(head5(r) for r in rs)} / {sum(f(r, "max_z") > 1.0 for r in rs)} ({len(rs)})')
+                zmax = max([zmax] + [f(r, 'max_z') for r in rs])
+            print(f'| {per} s | {idx} | {cells[0]} | {cells[1]} | {zmax:.2f} |')
+    print('\n### Numbers quoted in README.md and experiments/README.md: hphase\n')
+    for per in periods:
+        for kd in ('boot', 'stand-then-go'):
+            rs = [r for r in rs_all if r['noise'].startswith(f'p{per}i') and kind(r) == kd]
+            by = defaultdict(list)
+            for r in rs:
+                by[r['noise']].append(r)
+            worst = max(by.values(), key=lambda v: sum(tz(r) for r in v))
+            if kd == 'stand-then-go':
+                al = [r for r in rs_all if r['noise'].startswith(f'p{per}i')]
+                print(f'- {per} s, both kinds: {len(al)} runs over 10 phases, tz {sum(tz(r) for r in al)}, heading>0.5 at the end {sum(head5(r) for r in al)}, z>1 {sum(f(r, "max_z") > 1.0 for r in al)}.')
+            print(f'- {per} s, {kd}: {len(rs)} runs over 10 phases, tz {sum(tz(r) for r in rs)}, heading>0.5 at the end {sum(head5(r) for r in rs)}, z>1 {sum(f(r, "max_z") > 1.0 for r in rs)}, '
+                  f'largest height error {max(f(r, "max_z") for r in rs):.2f} m; phase 0: tz {sum(tz(r) for r in by[f"p{per}i0"])}; the worst phase has tz {sum(tz(r) for r in worst)} of {len(worst)}.')
+
+
+def sweep_pass(rows, gap_text):
+    """The sweep of lever_outage_spread on the cells of hgap (scheme S8x_spread<value>, no test of the norms), run with the harness and the core of commit 2011666."""
+    print('\n\n# Lever-arm study: the sweep of `lever_outage_spread`\n')
+    print('Suite hgap (all 832 configurations, 4 seeds) with the S8u of commit 2011666 and `lever_outage_spread` set to the value in the scheme name (`LEVER_ONLY=S8x LEVER_SPREAD=<value> LEVER_NORM=0`); '
+          'antennas A and B (lever arm with a horizontal part), M (mast). *Short* = the cells whose noise column reads off<s> (outages of 1.5 to 12 s at the first start), *long* = the outages of 30 s and 120 s of the fifth pass. '
+          'tz, xy>1.5, z>1 and diverged as in the sixth pass.\n')
+    xy15 = lambda r: f(r, 'max_xy') > 1.5
+    z1 = lambda r: f(r, 'max_z') > 1.0
+    div = lambda r: f(r, 'max_z') > 100.0 or f(r, 'max_tilt') > 1.5
+    spreads = sorted({r['scheme'].split('spread')[1] for r in rows}, key=float)
+    print('| `lever_outage_spread` | short, A and B: tz / xy>1.5 (of 1,280) | short, mast: tz / z>1 / diverged (of 640) | long, A and B: tz (30 s, 120 s; of 192 each) | long, mast: tz (30 s, 120 s; of 96 each) |')
+    print('|---|---|---|---|---|')
+    for sp in spreads:
+        rs = [r for r in rows if r['scheme'] == 'S8x_spread' + sp]
+        short = lambda r: r['noise'].startswith('off')
+        ab = [r for r in rs if r['antenna'] in ('A', 'B') and short(r)]
+        m = [r for r in rs if r['antenna'] == 'M' and short(r)]
+        lab = [[r for r in rs if r['antenna'] in ('A', 'B') and not short(r) and r['drop_s'] == d] for d in ('30', '120')]
+        lm = [[r for r in rs if r['antenna'] == 'M' and not short(r) and r['drop_s'] == d] for d in ('30', '120')]
+        print(f'| {sp} | {sum(tz(r) for r in ab)} / {sum(xy15(r) for r in ab)} ({len(ab)}) | {sum(tz(r) for r in m)} / {sum(z1(r) for r in m)} / {sum(div(r) for r in m)} ({len(m)}) | '
+              f'{", ".join(str(sum(tz(r) for r in x)) for x in lab)} ({", ".join(str(len(x)) for x in lab)}) | {", ".join(str(sum(tz(r) for r in x)) for x in lm)} ({", ".join(str(len(x)) for x in lm)}) |')
+    if gap_text:
+        print('\nThe node scenario `gnss_gap_across_start` on the core (`experiments/eskf_gap_across_start.cpp`, NSEED=300): `gap_across_start.txt` is the output of the core of the PR (the spread only), `gap_across_start_2011666.txt` that of the core of 2011666, which also had the test of the norms of the two changes of velocity (`lever_align_norm`, the column "norm test"):\n')
+        print('```')
+        print(gap_text.rstrip())
+        print('```')
 
 
 def main():
-    runs, agg = load(sys.argv[1:])
+    gap_text = ''
+    args = []
+    for a in sys.argv[1:]:
+        if a.endswith('.txt'):
+            gap_text += ('\n' if gap_text else '') + '# ' + os.path.basename(a) + '\n' + open(a).read()
+        else:
+            args.append(a)
+    runs, agg = load(args)
     first_r = [r for r in runs if r['suite'] in FIRST_SUITES]
     first_a = [a for a in agg if a['suite'] in FIRST_SUITES]
     if first_r:
@@ -970,7 +1074,13 @@ def main():
         fifth_pass(fifth_r)
     sixth_r = [r for r in runs if r['suite'] in SIXTH_SUITES or (r['suite'] == 'hgap' and r['noise'].startswith('off'))]
     if sixth_r:
-        sixth_pass(sixth_r)
+        sixth_pass(sixth_r, [r for r in runs if r['suite'] == 'hgap'])
+    phase_r = [r for r in runs if r['suite'] == PHASE_SUITE]
+    if phase_r:
+        phase_pass(phase_r)
+    sweep_r = [r for r in runs if r['suite'] == SWEEP_SUITE]
+    if sweep_r:
+        sweep_pass(sweep_r, gap_text)
 
 if __name__ == '__main__':
     main()

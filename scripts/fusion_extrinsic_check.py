@@ -1223,17 +1223,17 @@ SCENARIOS = {'lidar': scenario_lidar, 'imu': scenario_imu, 'gnss': scenario_gnss
 # 1 m^2 the height estimate has a noise of about 0.1 m, and the largest of 30 samples over 600 s reaches 0.15 to 0.17 m. 0.25 m is above
 # that and far below the failure the scenario is for (metres, from about 190 s on).
 LONG_HEIGHT_TOL = 0.25
-# Bounds of the boot scenarios and of gnss_stand_go, set from the spread over repeated runs on the final head (every run is in
-# experiments/results/eskf_lever/node_checks.txt, "Round 8"). One run does not give a figure: the alignment at the first start leaves a transient.
-#   gnss_boot_wrong_yaw (antenna A) and _b (B), 5 Hz, 6 runs each: largest height error 0.106 to 0.126 m (A), 0.085 to 0.098 m (B), tilt 0.010 to 0.012
-#     rad (A), 0.007 to 0.009 rad (B); _10hz (6 runs): 0.059 to 0.073 m, 0.013 to 0.014 rad; _50hz (6 runs): 0.050 to 0.061 m, 0.010 to 0.014 rad.
-#     Earlier rigs under load (other node runs at once) reached 0.70 m. Bounds: 1.0 m and 0.1 rad; the failure the scenario is for is 8 to 26 m and 0.5
-#     to 0.9 rad (a first start that runs a full update on a heading 2 rad off).
-#   gnss_boot_wrong_yaw_1hz, 18 runs: 0.066 to 0.087 m and 0.009 rad in 16 runs; 2.49 m and 2.64 m (tilt 0.075 and 0.076 rad, heading error after the
-#     cycle +0.44 and +0.46 rad) in two. The core shows the same tail at 1 Hz (experiments/README.md, suite hphase). Bounds: 5.0 m, 0.3 rad, 1.0 rad;
-#     the failure the scenario is for (the alignment never works) ends the cycle with the heading 2 rad off.
-#   gnss_stand_go, antenna A, 5 runs: 0.010 to 0.033 m; _b, 5 runs: 0.043 to 0.064 m (tilt 0.005 to 0.011 rad); the runs of the earlier rig were
-#     0.038 to 0.162 m. The bound is LONG_HEIGHT_TOL, above all of them and far below the failure (1.3 to 2.5 m).
+# Bounds of the boot scenarios and of gnss_stand_go, set from the spread over repeated runs on the final head, one ROS domain per run (every run is in
+# experiments/results/eskf_lever/node_checks.txt, "Final head, repeated runs"). One run does not give a figure: the alignment at the first start leaves a transient.
+#   gnss_boot_wrong_yaw (antenna A) and _b (B), 5 Hz, 6 runs each: largest height error 0.107 to 0.128 m (A), 0.084 to 0.101 m (B), tilt 0.0099 to 0.0127
+#     rad (A), 0.0040 to 0.0081 rad (B); _10hz (6 runs): 0.059 to 0.081 m, 0.013 to 0.016 rad; _50hz (6 runs): 0.045 to 0.055 m, 0.010 to 0.013 rad.
+#     Bounds: 1.0 m and 0.1 rad; the failure the scenario is for is 8 to 26 m and 0.5 to 0.9 rad (a first start that runs a full update on a heading 2 rad off).
+#   gnss_boot_wrong_yaw_1hz, 30 runs: 27 end 0.059 to 0.112 m high (tilt 0.007 to 0.017 rad); 3 end 2.72, 3.18 and 3.29 m high (tilt 0.077 to 0.081 rad, heading error
+#     after the cycle -0.13, +0.52 and +0.48 rad). The fixes of the rig come at whole seconds from the start of its stream, the motion starts at 20 s, and the phase of the two
+#     streams differs from run to run; the core has a smaller tail at some phases of 1 Hz (up to 1.45 m, experiments/README.md, suite hphase). Bounds: 5.0 m, 0.3 rad, 1.0 rad;
+#     the failure the scenario is for (the alignment never works) ends the cycle with the heading 2 rad off and the height 8 m or more.
+#   gnss_stand_go, antenna A, 6 runs: 0.011 to 0.020 m (tilt 0.005 to 0.006 rad); _b, 6 runs: 0.030 to 0.055 m (tilt 0.007 to 0.011 rad). The rig before round 8 ran its IMU at
+#     about 85 Hz and its fixes every 1.18 s; its runs reached 0.038 to 0.162 m. The bound is LONG_HEIGHT_TOL, above all of them and far below the failure (1.3 to 2.5 m).
 BOOT_Z_TOL, BOOT_TILT_TOL, BOOT_HEAD_TOL = 1.0, 0.1, 0.5
 BOOT_Z_TOL_1HZ, BOOT_TILT_TOL_1HZ, BOOT_HEAD_TOL_1HZ = 5.0, 0.3, 1.0
 STAND_GO_Z_TOL = LONG_HEIGHT_TOL
