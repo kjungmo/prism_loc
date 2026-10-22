@@ -3,6 +3,9 @@
     global_frame: "map"               # str: fixed map frame that the fused pose is expressed in
     odom_frame: "odom"                # str: odometry frame (child of map in the TF tree)
     base_frame: "base_link"           # str: robot body frame the pose estimate refers to
+    points_frame: ""                  # str: frame of the clouds; "" = header.frame_id. Not base_frame: base_frame -> this frame must be on TF
+    imu_frame: ""                     # str: frame of the IMU; "" = header.frame_id. Only the rotation of base_frame -> this frame is applied
+    gnss_frame: ""                    # str: frame of the GNSS antenna; "" = header.frame_id. Only the translation of base_frame -> this frame is applied
     imu_topic: "/imu"                 # str: sensor_msgs/Imu input topic (subscribed BEST_EFFORT)
     points_topic: "/points"           # str: PointCloud2 input topic (subscribed BEST_EFFORT)
     gnss_topic: "/gnss"               # str: sensor_msgs/NavSatFix input topic (subscribed BEST_EFFORT)
@@ -27,6 +30,7 @@
     gnss_min_status: 0                # enum: min NavSatFix.status.status accepted (>= this value)
     gnss_max_pos_cov: 25.0            # m^2: reject GNSS fixes whose x position variance exceeds this
     initial_yaw: 0.0                  # rad: assumed initial heading when seeding attitude from accel
+    initial_yaw_known: false          # true: initial_yaw is the true heading (about 0.3 rad); false: with a GNSS lever arm and no /initialpose the first start finds the heading
     transform_tolerance: 0.1          # s: future-dating added to the map->odom TF stamp
     map_to_base_fallback: true        # bool: publish map->base_link while odom->base_link is missing (false if an EKF/odometry owns odom->base_link)
     imu_queue_depth: 5                # count: IMU subscription queue (best effort, SensorDataQoS depth); raise to ~200 if /diagnostics reports IMU gaps

@@ -69,8 +69,21 @@ It also asserts poses at a 0.1x simulated clock and with a coarse (10 Hz,
 0.5x) simulated clock, with scans stamped ahead of odometry, no low-n_eff warning after `/initialpose` on a standing robot, and the
 `/diagnostics` status for stopped scans, missing odometry, zero-stamped scans and a
 stuck ROS clock. This is a ROS-path check on synthetic data, not a field result.
-GoogleTest cases: 45 in `prism_loc_core`, 15 in `prism_loc_fusion`, 18 in
-`prism_loc`, 5 in `prism_loc_fusion_ros` (83 in total).
+[`scripts/fusion_extrinsic_check.py`](scripts/fusion_extrinsic_check.py) feeds `fusion3d`
+a robot that stands, or turns on the spot, with its lidar, IMU and GNSS antenna mounted
+off `base_link`, and asserts the pose of `base_link` within 0.05 m and 0.02 rad, the
+`/diagnostics` status when a mount is missing from TF, and, on GNSS and IMU alone with
+sensor noise, height, tilt and heading within 0.15 m, 0.03 rad and 0.05 rad and a
+horizontal error within twice the reported sigma; with a constant gyro bias (45 s), across a
+reseed (also with the body on a slope), from a start before the antenna mount is known, over a
+start and a stop, through a gap in the fixes, and from a boot with `initial_yaw` 2 rad off (also with the fixes at 1, 10 and 50 Hz, and with fixes slower than 1 Hz), height and tilt within the same
+bounds, heading within 0.05 rad plus the vertical bias times the time, and a horizontal error
+within 3 sigma, and the heading values and the WARN on `/diagnostics` (see
+[Sensor frames](#sensor-frames-fusion3d)). CI runs it on an optimized build
+of the two fusion packages; the whole script takes about 24 minutes (36 scenarios, 249 checks). `--long` adds 600 s of
+standing (`gnss_stand_long`, 10 more minutes, not in CI), the same followed by a start and a stop (`gnss_stand_go`, `_b`) and the outage across a start (`gnss_gap_across_start`, `_b`, 8 minutes each).
+GoogleTest cases: 45 in `prism_loc_core`, 55 in `prism_loc_fusion`, 18 in
+`prism_loc`, 24 in `prism_loc_fusion_ros` (142 in total).
 
 Run the same checks locally from a built workspace (`rosdep install` as below,
 plus `sudo apt-get install python3-numpy python3-yaml`):
@@ -78,6 +91,7 @@ plus `sudo apt-get install python3-numpy python3-yaml`):
 source install/setup.bash
 bash src/prism_loc/scripts/launch_checks.sh laser2d ndt3d fusion3d
 python3 src/prism_loc/scripts/synthetic_e2e.py install/prism_loc/share/prism_loc/params/laser2d.yaml
+python3 src/prism_loc/scripts/fusion_extrinsic_check.py install/prism_loc_fusion_ros/share/prism_loc_fusion_ros/params/fusion3d.yaml
 ```
 
 **TF waits.** A lookup of `odom→base_link` at a scan's stamp waits for odometry to
@@ -104,7 +118,10 @@ PDF under [`docs/paper/`](docs/paper/)):
 The paper describes commit cdb81bf; later commits add tests and the `/diagnostics`
 status, and with default parameters leave the estimates unchanged except that scans
 and clouds with a zero header stamp are now dropped; fusion3d's `~/odometry` linear
-twist is now expressed in `base_link` (it was the world frame).
+twist is now expressed in `base_link` (it was the world frame); and fusion3d now applies
+the mount of a sensor whose frame is not `base_link` (it used every input as if it were
+measured at `base_link`; inputs already in `base_link` give the same values as before, see
+[Sensor frames](#sensor-frames-fusion3d)).
 
 If `prism_loc` is useful in your research, please cite it
 (see also [`CITATION.cff`](CITATION.cff)):
@@ -210,16 +227,18 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 
 | Level | `prism_loc` (laser2d / ndt3d) | `prism_loc_fusion` (fusion3d) |
 |---|---|---|
-| ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped |
-| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time` |
+| ERROR | no map, no scans/clouds, or no pose seed after `startup_timeout_s` (30 s); scans/clouds stopped for `max(input_timeout_s, input_timeout_periods x observed period)` | no IMU or no initialization after `startup_timeout_s`; IMU stopped; IMU not used after `startup_timeout_s` because its mount is unknown (empty `frame_id`, or no transform `base_link -> <imu frame>`) |
+| WARN | odom or sensor TF lookups failing; relocalization pending, ambiguous or without candidate; effective particle count below `min_neff_fraction`; zero-stamped scans dropped; `use_sim_time` on while the ROS clock does not advance | no accepted NDT correction for `correction_timeout_s`; `odom->base_link` lost after being seen, or appearing while the map->base_link fallback was broadcast (two parents); fallback off and no odometry (no TF); IMU gaps; ROS clock not advancing under `use_sim_time`; point clouds or GNSS fixes not used because their mount is unknown (the IMU likewise, within `startup_timeout_s`) |
 
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
 `relocalization_scans_skipped` (laser2d/ndt3d); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
-`ndt_rejected_total`, `covariance_trace_position`, `tf_child_frame`,
-`map_to_base_fallback_active` (fusion3d). A fusion3d robot without odometry that
+`ndt_rejected_total`, `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
+`map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
+mount reads `identity (frame base_link)`, `base_link -> lidar xyz ... rpy ...`,
+`missing (frame lidar)`, `missing (empty frame_id)` or `no message yet`). A fusion3d robot without odometry that
 runs on the `map→base_link` fallback by design reports OK with
 `map_to_base_fallback_active=true`; it WARNs only when `odom→base_link` was seen and
 then lost, or when odometry appears while the fallback was being broadcast (two
@@ -313,7 +332,7 @@ the default.
 |---|---|---|---|
 | **laser2d** | `prism_loc` | `/scan`, `/map`, `/initialpose`, TF `odom→base` | `/tf` `map→odom`, `~/pose`, `~/particle_cloud` |
 | **ndt3d** | `prism_loc` | `/points`, `map.pcd`, `/initialpose`, TF `odom→base` | same |
-| **fusion3d** | `prism_loc_fusion_ros` | `/points`, `/imu`, `/gnss` (NavSatFix), `map.pcd`, `/initialpose` | `/tf` `map→odom`, `~/pose`, `~/odometry` |
+| **fusion3d** | `prism_loc_fusion_ros` | `/points`, `/imu`, `/gnss` (NavSatFix), `map.pcd`, `/initialpose`, TF `base→sensor` for every input not in `base_link` | `/tf` `map→odom`, `~/pose`, `~/odometry` |
 
 All backends also publish `/diagnostics` (see [Runtime status](#runtime-status-diagnostics)).
 `fusion3d` broadcasts `map→base_link` instead of `map→odom` while no
@@ -323,6 +342,150 @@ odometry or an EKF publishes `odom→base_link` and may start after `fusion3d`, 
 TF tree. `~/odometry` (`nav_msgs/Odometry`, `frame_id` = `map`, `child_frame_id` =
 `base_link`) carries its linear twist in `base_link`, as the message definition
 specifies; the angular twist is not filled.
+
+### Sensor frames (`fusion3d`)
+
+The pose `fusion3d` estimates and publishes is that of `base_frame` (`base_link`). Each
+input is taken to be measured in the frame its `header.frame_id` names; `points_frame`,
+`imu_frame` and `gnss_frame` replace that name when set (for a driver that leaves
+`frame_id` empty or wrong).
+
+| Input | Frame is `base_frame` | Any other frame | What is applied |
+|---|---|---|---|
+| `/points` | used as it is, no TF needed | transform `base_frame → frame` must be on TF | all 6 DoF: registration starts from and returns the pose of the lidar, `T_map_base = T_map_lidar · T_base_lidar⁻¹` |
+| `/imu` | used as it is, no TF needed | transform must be on TF | rotation only: angular velocity and specific force are rotated into `base_frame` |
+| `/gnss` | used as it is, no TF needed | transform must be on TF | translation only (the lever arm `t`): the fix is fused as the position of the antenna, `p + R·t`; the attitude uncertainty enters its innovation covariance through `∂/∂θ = −R[t]×` |
+
+- **Not compensated.** The IMU's lever arm: the specific force is the one at the IMU, which
+  differs from the one at the `base_frame` origin by `α × r + ω × (ω × r)` (0.3 m/s² for
+  r = 0.3 m at 1 rad/s); put `base_frame` near the IMU if that matters. The lidar's
+  measurement noise (`pose_pos_std`) is used unchanged for the pose of `base_frame`: with
+  a lever arm `t`, an error `δ` in the registered attitude adds about `|t|·δ` of position
+  error that the filter does not model.
+- **GNSS antenna off `base_frame`.** The fix is the position of the antenna, `p + R·t`, fused with the full Jacobian. With the
+  antenna at `base_frame` nothing changes. With a lever arm, the roll and pitch variance at the start and at every reseed is the
+  accelerometer's (about 1e-4 rad²), and `/initialpose` takes roll and pitch from the accelerometer at the heading of the message
+  (RViz sends a level attitude; on a slope that is wrong by the slope). One antenna and an IMU observe this (‖t_xy‖ is the
+  horizontal part of the arm):
+
+  | The robot | position of `base_link` | roll, pitch | heading | vertical gyro bias |
+  |---|---|---|---|---|
+  | stands, creeps, or drives straight at constant speed | only to a circle of radius ‖t_xy‖ around the antenna | yes | **no** | no |
+  | accelerates, brakes, or turns at speed | yes | yes | yes, through the IMU | with the heading |
+  | spins on the spot | yes, through the sweep of the antenna | yes | weakly | weakly |
+
+  The filter follows the table with these rules. Each has a measured failure behind it (study 6, `experiments/README.md`; synthetic
+  runs on the real filter core; `tz` = tilt over 0.05 rad or height error over 0.5 m; the formulas are in
+  [`SPEC_fusion.md`](SPEC_fusion.md)).
+  1. **Consider states.** Heading and vertical gyro bias enter the innovation covariance and are not corrected. Roll, pitch, the
+     horizontal gyro biases, accelerometer bias, velocity and position are corrected. A plain update everywhere has `tz` in 408 of
+     1,152 runs of suite `hsg` (all rules: 1).
+  2. **Bound.** The heading standard deviation that one update sees is at most 0.35 rad (`lever_heading_sigma_max`). Without it
+     the heading variance of a standing robot grows without limit, and tilt and height diverge after minutes: 192 of 192 runs of
+     900 s and 1,800 s standing, 0 of 192 with the bound.
+  3. **Release.** While a decaying integral of the horizontal specific force exceeds 1.0 m/s (`lever_release_dv`), the update is the
+     full one and the bound is off. A straight drive at constant speed and a spin keep it closed. Against a speed gate, the release
+     cuts `tz` from 1,882 to 880 of 4,200 runs (`S6vb`, `S7a35`; the filter that ships, with the rules 4 to 8, has 929: see the limits).
+  4. **Shadow.** The filter keeps the unbounded spread of the heading and the vertical gyro bias (`heading_sigma_rad`; the pose
+     covariance carries it). `heading_sigma_used_rad` is the bounded one.
+  5. **Alignment.** While the shadow is over 1 rad, a start or a stop of 0.25 m/s or more gives the heading: it rotates by the angle
+     between the change of velocity of the IMU and that of the antenna fixes (`heading_source: motion`, any error up to ±π).
+     Velocities use spans of seconds, scaled by the measured fix period. The alignment refuses a window with a gap in the fixes
+     (after an outage across a start: `tz` 68 to 11 of 288 runs). After the alignment the position is seated at the newest fix: the position that was dead-reckoned
+     through the blind stretch with the wrong heading is not handed to the update that follows. Without the shadow and the alignment, 375 of
+     1,152 runs of `hsg` have `tz` (core of round 6); with all rules, 1.
+  6. **Blind.** While the heading is not known and not alignable (standing, turning on the spot), the update leaves roll and pitch
+     out of the lever term and counts the circle of the lever as noise. Without it, 81 runs of `hsg` have `tz`; with it, 26.
+  7. **Unknown start.** With a lever arm and no heading source (no `/initialpose`, no lidar yet, `initial_yaw_known: false`) the
+     heading is a guess, and the filter starts it with the spread of π/√3 rad. `tz` in `hboot` falls from 219 to 0 of 576 runs (core of round 6 without the rule; 77 with the rule before the position was seated at the alignment).
+     `/initialpose`, the lidar or `initial_yaw_known: true` start with the filter's own spread.
+  8. **Outage spread.** After an outage with the heading unknown, the first update adds a tenth of the spread that the dead-reckoned
+     velocity and position have (`lever_outage_spread`). Short outages at the first start (`S8k` against `S8u@0ef1add`, cores of the same
+     era): the mast diverges in 16 of 640 runs without it, 0 with it; antennas A and B have `tz` in 83 of 1,280 runs without it, 32 with it.
+
+  **Supported GNSS fix rate: 1 to 100 Hz** for the alignment (rules 5 and 7). The fixes are kept by time, so the rate does not
+  matter above 1 Hz. Antennas A and B, 272 boot and stand-then-go runs per rate, the fixes on the second on which the motion starts: `tz` is 0 at 1, 5, 10, 20 and 50 Hz, and 1 at 2 Hz and at 100 Hz (other phases of the fix period: see the 1 Hz
+  limit below). From 0.8 to 1 Hz (a fix every 1.05 to 1.25 s) the alignment runs and finds the heading less often (`tz` 1 and 0 of 272 at
+  0.83 and 0.91 Hz, over 1.5 m horizontal in 35 and 19); `/diagnostics` reads `degraded` and WARNs. Under 0.8 Hz the alignment does
+  nothing, the start is not marked unknown, and `/diagnostics` reads `unsupported` and WARNs (0.5 Hz: `tz` 99 of 272).
+
+  **What you see on `/diagnostics`** (new values; none changes an existing one):
+
+  | State | `heading_source` | `heading_sigma_rad` | `heading_capped` | `lever_release` | Status |
+  |---|---|---|---|---|---|
+  | filter not initialized | `none` | `n/a` | `false` | `n/a` | as before |
+  | antenna at `base_frame` | the last source | the filter's | `false` | `n/a` | as before, never the heading WARN |
+  | lever arm, under 30 s since the start, no `/initialpose`, `initial_yaw_known` false | `none` | 1.8 and growing; `heading_sigma_used_rad` 0.35 | `true` | `closed` | OK; `lever_blind` `true` |
+  | lever arm, under 30 s since the last `/initialpose`, or `initial_yaw_known` true | `initialpose` or `none` | 0.71 and growing; used 0.35 | `true` | `closed` | OK |
+  | lever arm, 30 s or more with no heading source | the last source | grows (6 rad after 600 s); used 0.35 | `true` | `closed` | **WARN** `heading not observed: GNSS and IMU only for N s ...` |
+  | start or stop of 0.25 m/s or more | `motion` | falls to 0.35 and below | `false` | `closed` or `open` | no heading WARN |
+  | turn at speed | unchanged | falls below 0.35 | `false` | `open` | no heading WARN |
+  | lidar corrections accepted | `lidar` | about 0.03 | `false` | `closed`; `open` while accelerating | OK |
+  | fixes stop for more than 2 s | unchanged | unchanged | `false` | unchanged | the heading WARN clears; its 30 s start again with the first fix |
+  | fixes every 1.05 to 1.25 s | as without the alignment | 1.8 while unknown | as before | as before | **WARN** `GNSS fixes come every N s (slower than 1 Hz) ...`; `heading_align_rate` `degraded` |
+  | fixes slower than 0.8 Hz | as without the alignment | the filter's own | as before | as before | **WARN** `GNSS fixes come every N s (slower than 0.8 Hz) ...`; `heading_align_rate` `unsupported` |
+
+  `gnss_fix_period_s` is the median interval of the last lever-arm fixes (`n/a` before the third). `heading_align_rate` is `supported`,
+  `degraded` or `unsupported` (`n/a` before the sixth fix and for a zero lever). `covariance_trace_position` is the position trace of
+  the covariance that the published pose carries, the heading spread included. `lever_blind` is `true` while rule 6 applies.
+  `gnss_only_s` counts the seconds since the last heading source.
+
+  **Limits, with counts** (synthetic runs; no real robot):
+  - **The heading is not estimated while the robot stands, drives at constant speed or turns on the spot.** It drifts with the vertical
+    gyro bias (0.1 rad per minute for each 0.1 deg/s). The position of `base_link` can be wrong by up to `2·|t_xy|` (1.0 m for a 0.5 m
+    arm). After a turn on the spot the heading is off by over 0.5 rad in 270 of 384 runs of `hsg` (268 in `hsgv`; zero lever: 106 and 97
+    of 128), and `base_link` is over 1 m from the truth in 36 of 384. Read `heading_sigma_rad`, not `heading_sigma_used_rad`.
+  - **The 1.5 m mast (no horizontal arm) is better than the zero-lever filter at a start, not in every motion.** In 640 short outages at
+    the first start it has `tz` in 34 runs (zero lever: 226). In the hardest cell (stand 900 s, 0.2 deg/s) it has `tz` in 26 of 160 runs
+    against 61 for the zero lever, 14 of them with no `tz` in the zero-lever run. In the long outages: 8 of 192 against 29. In `hboot`: 0 of 192
+    against 112. In the observability grid it has more runs with `tz` than the zero lever in `h300` drive (39 against 33) and turn (33 against
+    24), and at 0.5 Hz, which is outside the supported rate.
+  - **A tight circle that starts during an outage.** Antenna B (0.36 m arm) on a circle of 6 m radius, the outage beginning 1 s before
+    the circle: 8 of 128 runs have the heading off by over 0.5 rad and none is over 1.5 m; antenna A (0.5 m): 0 of 128 on both.
+  - **With a horizontal arm and an accelerometer bias, `tz` is not rare.** In the observability grid (`h300` to `h1800`, GNSS and IMU only,
+    4,200 runs of the antennas A, B and M), 929 runs have `tz`; in 140 of them the zero-lever run of the same data has none. The scheme of round 6 (`S7a35`, which has no alignment and no blind update) had 880 and 98. Antennas A and B in
+    `h300`: drive 75 of 360 runs (23 with no `tz` in the zero-lever run), start and stop 148 (43), turn 74 (29). 92 of the 140 are in cells
+    with an accelerometer bias of 0.3 m/s². The mast has the same kind of runs: 300 of 1,400 with `tz`, 32 of them without one in the
+    zero-lever run. The counts are printed in the `excess` column of `report.md`, tables "Suite h300" to "Suite h1800".
+  - **An alignment right after an outage can be wrong by a radian** under a spread of 0.35 rad; the next release can turn the heading
+    the wrong way (the replica of `gnss_gap_across_start`: 0 of 300 seeds fail with the shipped spread of 0.1, 1 without, 5 with the whole).
+  - **A known good heading is still doubted at a start.** With a right `initial_yaw` and no `/initialpose`, the filter marks the heading
+    unknown and the first start aligns it from the motion. `hsg` (right heading, 1,152 runs) has `tz` in 1 and the heading off by over 0.5 rad in 0 of the
+    start and drive runs. Set `initial_yaw_known: true` or send `/initialpose` to skip the doubt.
+  - **1 Hz and 2 Hz have a small tail.** With the fixes 0.1 to 0.9 s after the second on which the motion starts, 11 of 2,720 runs at 1 Hz and 5 of
+    2,720 at 2 Hz have `tz` (phase 0, which the rate table above uses: 0 at 1 Hz and 1 at 2 Hz); the largest height error at 1 Hz is 2.31 m and 3 of the 11 runs pass 1 m. The node scenario `gnss_boot_wrong_yaw_1hz` ends 0.053 to 0.079 m high in 30 of 30 runs; before the
+    alignment seated the position at the newest fix and allowed for the stamp jitter of a 1 Hz stream, 3 of 30 runs ended 2.7 to 3.3 m high.
+  - **One node run at 50 Hz is unexplained.** Of 54 runs of `gnss_boot_wrong_yaw_50hz` on the build of round 9 (three to six node runs on the machine at a time), one ended
+    with the heading 0.99 rad off after the cycle while the rig counted an IMU gap status; 53 ended 0.049 to 0.068 m high with the heading within 0.023 rad. The
+    build before round 9 has 0 of 24 under the same load, and this build 0 of 30 (0.052 to 0.068 m high, heading within 0.016 rad). It was not reproduced and not diagnosed.
+  - **A vibrating platform** with over 0.15 m/s² of accelerometer noise per axis opens the release without acceleration; raise
+    `lever_release_dv` (a compile-time default, not a node parameter).
+  - **Confidence.** The heading and horizontal covariance of an update are optimistic once the true heading error is over the bound
+    (by construction); the published pose covariance uses the honest spread.
+  - Not measured: a real robot, slopes under motion, GNSS multipath or jumps, driving under 1 m/s, a bound under 0.35 rad.
+
+  The node check `scripts/fusion_extrinsic_check.py` runs the scenarios of this section on real ROS topics: a constant gyro bias, a
+  reseed (also on a slope), a start before the mount is known, a start and a stop, a gap in the fixes, a boot with `initial_yaw` 2 rad
+  off at 1, 5, 10 and 50 Hz, fixes slower than 1 Hz, and (not in the default run) 600 s of standing, the same followed by a start
+  and a stop, and an outage across a start. The bound of each scenario comes from repeated runs, stated in the script. The raw output
+  is [`experiments/results/eskf_lever/node_checks.txt`](experiments/results/eskf_lever/node_checks.txt); all tables, every run:
+  [`report.md`](experiments/results/eskf_lever/report.md).
+- **Missing mount.** With an empty frame name or no transform, that input is not used
+  (nothing is assumed): the log says so every 5 s and `/diagnostics` reports
+  `point clouds not used: ...`, `GNSS not used: ...` (WARN) or `IMU not used: ...` (WARN
+  within `startup_timeout_s`, ERROR after: without the IMU there is no pose). The status
+  clears with the first message after the transform appears.
+- **Lookup.** The latest available transform is used (a mount is rigid; nothing is waited
+  for), read again once per second, and kept if TF later loses it. A sensor on a moving
+  joint is not supported.
+- **Unchanged case.** Data already in `base_frame` (the frame name equals `base_frame`, or
+  the transform on TF is exactly the identity) goes through no arithmetic at all; the
+  values are bit-identical to those of earlier versions
+  (`prism_loc_fusion_ros/test/test_extrinsic.cpp`).
+- **Changed case.** Earlier versions ignored `frame_id` and used every input as if it were
+  measured at `base_frame`. A robot whose frames differ from `base_frame` and that relied
+  on that gets the old behaviour with `points_frame`, `imu_frame`, `gnss_frame` set to
+  the value of `base_frame`.
 
 ## 📚 Documentation
 

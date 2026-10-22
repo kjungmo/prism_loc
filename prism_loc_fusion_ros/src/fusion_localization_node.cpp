@@ -14,6 +14,8 @@
 #include <tf2/time.h>
 namespace prism_loc_fusion_ros {
 using prism_loc_fusion::NominalState;
+// /diagnostics: seconds of a bounded heading with no heading source before the status turns WARN.
+static constexpr double kHeadingWarnS = 30.0;
 using Mat15 = prism_loc_fusion::Eskf::Mat15;
 
 static Eigen::Quaterniond attitudeFromAccel(const Eigen::Vector3d& f, double yaw) {
@@ -22,6 +24,12 @@ static Eigen::Quaterniond attitudeFromAccel(const Eigen::Vector3d& f, double yaw
   return (Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
           Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
           Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())).normalized();
+}
+
+// Heading of the body about the world vertical (ZYX convention: q = Rz(yaw) Ry(pitch) Rx(roll)).
+static double yawOf(const Eigen::Quaterniond& q) {
+  const Eigen::Matrix3d R = q.toRotationMatrix();
+  return std::atan2(R(1, 0), R(0, 0));
 }
 
 FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& options)
@@ -37,6 +45,13 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   gnss_min_status_ = declare_parameter<int>("gnss_min_status", 0);
   gnss_max_pos_cov_ = declare_parameter<double>("gnss_max_pos_cov", 25.0);
   initial_yaw_ = declare_parameter<double>("initial_yaw", 0.0);
+  initial_yaw_known_ = declare_parameter<bool>("initial_yaw_known", false);
+  // Sensor frames. Empty (default): use each message's header.frame_id. A frame other
+  // than base_frame needs the transform base_frame -> frame on TF; set a parameter to
+  // base_frame's value to declare that sensor's data as already expressed in base_frame.
+  points_mount_.override_frame = declare_parameter<std::string>("points_frame", "");
+  imu_mount_.override_frame = declare_parameter<std::string>("imu_frame", "");
+  gnss_mount_.override_frame = declare_parameter<std::string>("gnss_frame", "");
 
   prism_loc_fusion::EskfParams ep;
   ep.sigma_acc = declare_parameter<double>("sigma_acc", 1e-2);
@@ -44,6 +59,7 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   ep.sigma_acc_bias = declare_parameter<double>("sigma_acc_bias", 1e-4);
   ep.sigma_gyro_bias = declare_parameter<double>("sigma_gyro_bias", 1e-5);
   ep.reset_jacobian = declare_parameter<bool>("reset_jacobian", false);
+  eskf_params_ = ep;
   eskf_ = std::make_unique<prism_loc_fusion::Eskf>(ep);
 
   // datum_* are declared unconditionally so YAML values always bind; used only when
@@ -107,6 +123,22 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+  // A mount is rigid: take the latest transform, never wait for one at a stamp.
+  mount_lookup_ = [this](const std::string& frame, Eigen::Isometry3d& T, std::string& error) {
+    try {
+      const auto t = tf_buffer_->lookupTransform(base_frame_, frame, tf2::TimePointZero);
+      T = Eigen::Isometry3d::Identity();
+      T.translation() = Eigen::Vector3d(t.transform.translation.x, t.transform.translation.y,
+                                        t.transform.translation.z);
+      T.linear() = Eigen::Quaterniond(t.transform.rotation.w, t.transform.rotation.x,
+                                      t.transform.rotation.y, t.transform.rotation.z)
+                       .normalized().toRotationMatrix();
+      return true;
+    } catch (const std::exception& e) {
+      error = e.what();
+      return false;
+    }
+  };
   pose_pub_ = create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("~/pose", 10);
   odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("~/odometry", 10);
 
@@ -181,6 +213,17 @@ void FusionLocalizationNode::onTfWatch(const tf2_msgs::msg::TFMessage::SharedPtr
   }
 }
 
+bool FusionLocalizationNode::resolveMount(Mount& m, const std::string& msg_frame,
+                                          const std::string& topic) {
+  bool changed = false;
+  const double now_s = std::chrono::duration<double>(Steady::now().time_since_epoch()).count();
+  const bool ok = m.resolve(msg_frame, base_frame_, now_s, mount_lookup_, &changed);
+  if (changed)
+    RCLCPP_INFO(get_logger(), "fusion3d: %s uses the mount %s", topic.c_str(),
+                m.describe(base_frame_).c_str());
+  return ok;
+}
+
 // 1 Hz wall timer. Only reads state under the mutex; no TF lookups or registration here.
 void FusionLocalizationNode::onDiagnostics() {
   std::lock_guard<std::mutex> lk(mutex_);
@@ -191,7 +234,7 @@ void FusionLocalizationNode::onDiagnostics() {
   };
   const double since_start = secs(start_wall_);
   const double since_imu = secs(last_imu_wall_);
-  char buf[320];
+  char buf[384];
   std::vector<std::string> errors, warnings;
 
   // Errors: the fused pose cannot be propagated or was never initialized.
@@ -209,6 +252,17 @@ void FusionLocalizationNode::onDiagnostics() {
                   "(GNSS on %s or /initialpose)", gnss_topic_.c_str());
     errors.emplace_back(buf);
   }
+  // A sensor whose mount on base_frame is unknown is not used. Without the IMU nothing
+  // propagates the pose: an ERROR once the startup grace is over, a WARN before.
+  if (imu_mount_.seen() && !imu_mount_.resolved())
+    (since_start > startup_timeout_s_ ? errors : warnings)
+        .emplace_back("IMU not used: " + imu_mount_.problem(base_frame_, imu_topic_, "imu_frame"));
+  if (points_mount_.seen() && !points_mount_.resolved())
+    warnings.emplace_back("point clouds not used: " +
+                          points_mount_.problem(base_frame_, points_topic_, "points_frame"));
+  if (gnss_mount_.seen() && !gnss_mount_.resolved())
+    warnings.emplace_back("GNSS not used: " +
+                          gnss_mount_.problem(base_frame_, gnss_topic_, "gnss_frame"));
 
   // Warnings: the pose is dead-reckoning on the IMU or the TF tree is incomplete.
   if (filter_init_) {
@@ -239,6 +293,30 @@ void FusionLocalizationNode::onDiagnostics() {
                   "two parents; set map_to_base_fallback false when another node owns %s->%s",
                   odom_frame_.c_str(), base_frame_.c_str(), base_frame_.c_str(),
                   base_frame_.c_str(), odom_frame_.c_str(), base_frame_.c_str());
+    warnings.emplace_back(buf);
+  }
+  // A lever arm with GNSS and IMU alone: the heading is not observed while the robot stands or travels without
+  // accelerating, and the filter holds its uncertainty at the bound (EskfParams::lever_heading_sigma_max). Say so.
+  const bool lever_arm = gnss_mount_.resolved() && !gnss_mount_.ext().T.translation().isZero(0.0);
+  const bool capped_now = filter_init_ && lever_arm && capped_active_ && any_gnss_fix_ && secs(last_gnss_wall_) < 2.0;
+  const double since_heading = heading_source_ == HeadingSource::kNone ? secs(init_wall_) : secs(heading_source_wall_);
+  if (capped_now && secs(capped_since_wall_) >= kHeadingWarnS && since_heading >= kHeadingWarnS) {
+    std::snprintf(buf, sizeof(buf), "heading not observed: GNSS and IMU only for %.0f s, heading spread %.1f rad, base_link can be off by up to the lever arm "
+                  "(%.2f m) either way; a start or a stop of %.2f m/s or more finds the heading (GNSS fixes at 1 Hz or faster), a constant speed or a turn on the spot does not; "
+                  "or use the lidar or /initialpose", since_heading, eskf_->headingSigmaHonest(),
+                  gnss_mount_.ext().T.translation().head<2>().norm(), eskf_params_.lever_align_dv);
+    warnings.emplace_back(buf);
+  }
+  // The kinematic alignment measures the fixes over seconds. It is supported up to a fix period of lever_align_period_ok (1 Hz and a margin for
+  // the jitter of the stamps), runs but finds the heading less often up to lever_align_period_max (0.8 Hz), and does nothing beyond; in the last
+  // case the start is not marked as unknown.
+  if (filter_init_ && lever_arm && eskf_->leverUnsupportedRate()) {
+    std::snprintf(buf, sizeof(buf), "GNSS fixes come every %.2f s (slower than 0.8 Hz): a start or a stop cannot find the heading and the heading is a guess "
+                  "until the lidar or /initialpose gives it; use GNSS fixes at 1 Hz or faster", eskf_->fixPeriod());
+    warnings.emplace_back(buf);
+  } else if (filter_init_ && lever_arm && eskf_->leverDegradedRate()) {
+    std::snprintf(buf, sizeof(buf), "GNSS fixes come every %.2f s (slower than 1 Hz): a start or a stop finds the heading less often; "
+                  "use GNSS fixes at 1 Hz or faster", eskf_->fixPeriod());
     warnings.emplace_back(buf);
   }
   if (imu_gaps_ > imu_gaps_reported_) {
@@ -285,17 +363,36 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("seconds_since_ndt_correction", any_ndt_ ? num(secs(last_ndt_wall_), "%.2f") : "never");
   kv("seconds_since_gnss_correction", any_gnss_fix_ ? num(secs(last_gnss_wall_), "%.2f") : "never");
   kv("ndt_rejected_total", std::to_string(ndt_rejected_));
+  // The covariance of the published pose: with a lever arm it includes the heading spread that the bound holds back (covarianceHonest).
   kv("covariance_trace_position",
-     filter_init_ ? num(eskf_->covariance().block<3, 3>(0, 0).trace(), "%.6f") : "n/a");
+     filter_init_ ? num((gnss_mount_.resolved() ? eskf_->covarianceHonest(gnss_mount_.ext().T.translation()) : eskf_->covariance()).block<3, 3>(0, 0).trace(), "%.6f") : "n/a");
   kv("tf_child_frame", tf_child_);
   kv("map_to_base_fallback_active", fallback_active ? "true" : "false");
   kv("use_sim_time", sim_time ? "true" : "false");
+  kv("points_mount", points_mount_.describe(base_frame_));
+  kv("imu_mount", imu_mount_.describe(base_frame_));
+  kv("gnss_mount", gnss_mount_.describe(base_frame_));
+  kv("heading_source", heading_source_ == HeadingSource::kLidar ? "lidar" : heading_source_ == HeadingSource::kInitialPose ? "initialpose"
+                       : heading_source_ == HeadingSource::kMotion ? "motion" : "none");
+  kv("heading_sigma_rad", filter_init_ ? num(eskf_->headingSigmaHonest(), "%.3f") : "n/a");   // the spread the filter holds, not the bounded one the update uses
+  kv("heading_sigma_used_rad", filter_init_ ? num(eskf_->headingSigma(), "%.3f") : "n/a");
+  kv("heading_capped", capped_now ? "true" : "false");
+  kv("lever_release", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverReleaseOpen() ? "open" : "closed");
+  kv("lever_blind", !filter_init_ || !lever_arm ? "n/a" : eskf_->leverBlind() ? "true" : "false");
+  kv("gnss_only_s", !filter_init_ ? "n/a" : num(since_heading, "%.1f"));
+  kv("gnss_fix_period_s", !filter_init_ || !lever_arm || !(eskf_->fixPeriod() > 0.0) ? "n/a" : num(eskf_->fixPeriod(), "%.2f"));   // the median interval of the last lever-arm fixes
+  kv("heading_align_rate", !filter_init_ || !lever_arm || !(eskf_->fixPeriod() > 0.0) ? "n/a" : eskf_->leverUnsupportedRate() ? "unsupported" : eskf_->leverDegradedRate() ? "degraded" : "supported");
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;
   arr.status.push_back(st);
   diag_pub_->publish(arr);
   imu_gaps_reported_ = imu_gaps_;
   odom_tf_missing_ = 0;
+}
+
+void FusionLocalizationNode::seedTilt(Mat15& P0, const Eigen::Quaterniond& q) const {
+  P0.block<3, 3>(6, 6) = prism_loc_fusion::Eskf::attitudeCovariance(
+      q, prism_loc_fusion::Eskf::tiltVarianceFromAccel(last_acc_, 1e-2, eskf_params_), 0.5);
 }
 
 bool FusionLocalizationNode::tryInitialize() {
@@ -310,8 +407,36 @@ bool FusionLocalizationNode::tryInitialize() {
   P0.block<3, 3>(6, 6) *= 0.5;
   P0.block<3, 3>(9, 9) *= 1e-2;
   P0.block<3, 3>(12, 12) *= 1e-4;
+  // A GNSS antenna off the origin of base_frame (lever arm): the fix then depends on the
+  // attitude, and a roll and pitch variance of 0.5 rad^2 lets the first fixes after a start
+  // or a reseed tilt the filter. The accelerometer gives roll and pitch to about 0.01 rad.
+  // With the antenna at base_frame the covariance stays what it was (no change to the
+  // estimates of a user without a lever arm). The mount is known once a fix has been
+  // read; a start from /initialpose can come before that (tilt_seed_pending_).
+  tilt_seed_pending_ = false;
+  if (gnss_mount_.resolved() && !gnss_mount_.ext().T.translation().isZero(0.0)) {
+    if (last_acc_valid_) {
+      // A start from /initialpose carries the attitude of the message, level when it comes from RViz, which on a
+      // slope is wrong by the slope with a tilt variance that says 1e-4 rad^2: take roll and pitch from the
+      // accelerometer at the heading of the message.
+      if (attitude_from_pose_) x0.q = attitudeFromAccel(last_acc_, yawOf(x0.q));
+      seedTilt(P0, x0.q);
+    } else tilt_seed_pending_ = true;
+  } else if (!gnss_mount_.resolved()) {
+    tilt_seed_pending_ = true;
+  }
   eskf_->initialize(x0, P0);
+  // A lever arm and no heading source (no /initialpose: the heading is the initial_yaw parameter, a guess): the filter's start spread
+  // of 0.71 rad is far too narrow for it, and the first start would run a full update with a heading 1 to 3 rad off. Hold the
+  // spread of a heading that is not known; the first start or stop then finds it (Eskf::markHeadingUnknown). initial_yaw_known: the
+  // deployer says initial_yaw is the true heading to about 0.3 rad (a dock): the filter then starts as it did before.
+  if (heading_source_ == HeadingSource::kNone && !initial_yaw_known_ && gnss_mount_.resolved() && !gnss_mount_.ext().T.translation().isZero(0.0))
+    eskf_->markHeadingUnknown();
+  ndt_since_init_ = 0;
   filter_init_ = true;
+  attitude_from_pose_ = false;
+  init_wall_ = Steady::now();
+  capped_active_ = false;
   RCLCPP_INFO(get_logger(), "fusion3d: initialized at (%.2f, %.2f, %.2f)", x0.p.x(), x0.p.y(), x0.p.z());
   return true;
 }
@@ -320,8 +445,21 @@ void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
   std::lock_guard<std::mutex> lk(mutex_);
   imu_seen_ = true;
   last_imu_wall_ = Steady::now();
-  const Eigen::Vector3d acc(msg->linear_acceleration.x, msg->linear_acceleration.y, msg->linear_acceleration.z);
-  const Eigen::Vector3d gyro(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z);
+  if (!resolveMount(imu_mount_, msg->header.frame_id, imu_topic_)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onImu: sample not used - %s",
+                         imu_mount_.problem(base_frame_, imu_topic_, "imu_frame").c_str());
+    return;
+  }
+  // Specific force and angular velocity expressed in base_frame (rotation of the mount
+  // only; the lever arm between the IMU and the base_frame origin is not compensated).
+  const Eigen::Vector3d acc = vectorInBase(
+      imu_mount_.ext(), Eigen::Vector3d(msg->linear_acceleration.x, msg->linear_acceleration.y,
+                                        msg->linear_acceleration.z));
+  const Eigen::Vector3d gyro = vectorInBase(
+      imu_mount_.ext(),
+      Eigen::Vector3d(msg->angular_velocity.x, msg->angular_velocity.y, msg->angular_velocity.z));
+  last_acc_ = acc;
+  last_acc_valid_ = true;
   if (!have_attitude_) { init_attitude_ = attitudeFromAccel(acc, initial_yaw_); have_attitude_ = true; }
   const rclcpp::Time stamp(msg->header.stamp, get_clock()->get_clock_type());
   if (!last_imu_valid_) { last_imu_time_ = stamp; last_imu_valid_ = true; return; }
@@ -344,6 +482,11 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   std::lock_guard<std::mutex> lk(mutex_);
   points_seen_ = true;
   last_points_wall_ = Steady::now();
+  if (!resolveMount(points_mount_, msg->header.frame_id, points_topic_)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onPoints: cloud not used - %s",
+                         points_mount_.problem(base_frame_, points_topic_, "points_frame").c_str());
+    return;
+  }
   if (!ndt_ || !ndt_->hasTarget()) {
     RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
                          "onPoints: NDT target map not set - map_pcd_path failed to load; "
@@ -369,7 +512,9 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   Eigen::Isometry3d guess = Eigen::Isometry3d::Identity();
   guess.translation() = eskf_->state().p;
   guess.linear() = eskf_->state().q.toRotationMatrix();
-  NdtResult r = ndt_->align(src, guess);
+  // The cloud is in the sensor frame: registration starts from, and returns, the pose of
+  // the sensor in the map; the filter state is the pose of base_frame.
+  NdtResult r = ndt_->align(src, sensorPoseFromBasePose(points_mount_.ext(), guess));
   if (!r.converged || r.fitness > ndt_max_fitness_) {
     ++ndt_rejected_;
     RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 2000, "fusion3d: NDT rejected (conv=%d fit=%.3f)",
@@ -379,9 +524,13 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   Eigen::Matrix<double, 6, 6> R = Eigen::Matrix<double, 6, 6>::Identity();
   R.topLeftCorner<3, 3>() *= pose_pos_std_ * pose_pos_std_;
   R.bottomRightCorner<3, 3>() *= pose_rot_std_ * pose_rot_std_;
-  eskf_->updatePose(r.pose.translation(), Eigen::Quaterniond(r.pose.linear()), R);
+  const Eigen::Isometry3d base_pose = basePoseFromSensorPose(points_mount_.ext(), r.pose);
+  eskf_->updatePose(base_pose.translation(), Eigen::Quaterniond(base_pose.linear()), R);
+  ++ndt_since_init_;
   any_ndt_ = true;
   last_ndt_wall_ = Steady::now();
+  heading_source_ = HeadingSource::kLidar;
+  heading_source_wall_ = last_ndt_wall_;
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
 }
 
@@ -406,16 +555,60 @@ void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr
                          msg->position_covariance[0], gnss_max_pos_cov_);
     return;
   }
+  if (!resolveMount(gnss_mount_, msg->header.frame_id, gnss_topic_)) {
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onGnss: fix not used - %s",
+                         gnss_mount_.problem(base_frame_, gnss_topic_, "gnss_frame").c_str());
+    return;
+  }
   const prism_loc_fusion::GeoPoint gp{msg->latitude, msg->longitude, msg->altitude};
   if (!geo_.hasDatum()) geo_.setDatum(gp);
+  // The fix is the antenna's position. Seeding: move it to the base_frame origin with the
+  // attitude the filter will start from. (Identity mount: enu is returned untouched.)
   const Eigen::Vector3d enu = geo_.toEnu(gp);
-  if (!have_position_) { init_position_ = enu; have_position_ = true; }
+  if (!have_position_) {
+    const Eigen::Quaterniond q_init =
+        have_attitude_ ? init_attitude_
+                       : Eigen::Quaterniond(Eigen::AngleAxisd(initial_yaw_, Eigen::Vector3d::UnitZ()));
+    init_position_ = basePositionFromAntenna(gnss_mount_.ext(), q_init, enu);
+    have_position_ = true;
+  }
   if (!filter_init_) { tryInitialize(); return; }
   Eigen::Matrix3d R = Eigen::Matrix3d::Identity();
   R(0, 0) = std::max(msg->position_covariance[0], 1e-4);
   R(1, 1) = std::max(msg->position_covariance[4], 1e-4);
   R(2, 2) = std::max(msg->position_covariance[8], 1.0);
-  eskf_->updatePosition(enu, R);
+  // Updating: an antenna off the base_frame origin is fused as what it is, a point at the
+  // lever arm, so that the attitude it depends on is part of the update. With a zero lever
+  // arm (fix in base_frame) this is the plain position update.
+  const Eigen::Vector3d lever = gnss_mount_.ext().T.translation();
+  // Started from /initialpose before the first IMU sample (tilt_seed_pending_ is only set then
+  // for an antenna at a lever arm): the roll/pitch covariance cannot be set yet, and with the
+  // 0.5 rad^2 of the heading a fix at a lever arm would tilt the filter. The fix waits for the
+  // first IMU sample (a fraction of a second).
+  if (tilt_seed_pending_ && !last_acc_valid_) return;
+  if (tilt_seed_pending_ && last_acc_valid_) {
+    // The filter started before this antenna mount was known. If the lidar has not corrected
+    // it since, give the attitude the covariance a start with the mount would have had.
+    tilt_seed_pending_ = false;
+    if (!lever.isZero(0.0) && ndt_since_init_ == 0) {
+      // The state came from /initialpose (level when sent from RViz): roll and pitch from the accelerometer at its heading.
+      const Eigen::Quaterniond q = attitudeFromAccel(last_acc_, yawOf(eskf_->state().q));
+      Mat15 Pa = Mat15::Zero();
+      seedTilt(Pa, q);
+      eskf_->replaceAttitude(q, Pa.block<3, 3>(6, 6));
+    }
+  }
+  const auto now_w = Steady::now();
+  if (!any_gnss_fix_ || std::chrono::duration<double>(now_w - last_gnss_wall_).count() > 2.0) capped_active_ = false;   // a gap in the fixes ends the stretch
+  eskf_->updatePositionLever(enu, lever, R);
+  if (!lever.isZero(0.0) && eskf_->leverAligned()) {   // a start or a stop gave the heading
+    heading_source_ = HeadingSource::kMotion;
+    heading_source_wall_ = now_w;
+  }
+  if (!lever.isZero(0.0)) {
+    if (!eskf_->leverHeadingCapped()) capped_active_ = false;
+    else if (!capped_active_) { capped_active_ = true; capped_since_wall_ = now_w; }
+  }
   any_gnss_fix_ = true;
   last_gnss_wall_ = Steady::now();
   publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
@@ -428,8 +621,11 @@ void FusionLocalizationNode::onInitialPose(
   const auto& o = msg->pose.pose.orientation;
   init_attitude_ = Eigen::Quaterniond(o.w, o.x, o.y, o.z).normalized();
   have_position_ = have_attitude_ = true;
+  attitude_from_pose_ = true;
   initialpose_seen_ = true;
   filter_init_ = false;
+  heading_source_ = HeadingSource::kInitialPose;
+  heading_source_wall_ = Steady::now();
   RCLCPP_INFO(get_logger(), "fusion3d: initialpose set");
 }
 
@@ -502,7 +698,9 @@ void FusionLocalizationNode::publish(const rclcpp::Time& stamp) {
   ps.pose.pose.position.x = x.p.x(); ps.pose.pose.position.y = x.p.y(); ps.pose.pose.position.z = x.p.z();
   ps.pose.pose.orientation.x = x.q.x(); ps.pose.pose.orientation.y = x.q.y();
   ps.pose.pose.orientation.z = x.q.z(); ps.pose.pose.orientation.w = x.q.w();
-  const auto& P = eskf_->covariance();
+  // With a lever arm the covariance includes the heading spread the bound holds back (Eskf::covarianceHonest): the pose is
+  // not claimed to be better than it is.
+  const auto P = gnss_mount_.resolved() ? eskf_->covarianceHonest(gnss_mount_.ext().T.translation()) : eskf_->covariance();
   for (int i = 0; i < 3; ++i)
     for (int j = 0; j < 3; ++j) {
       ps.pose.covariance[i * 6 + j] = P(i, j);
