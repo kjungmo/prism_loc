@@ -160,7 +160,6 @@ python3 experiments/select_verify_params.py --check   # bbs_verify_selection.csv
 ```
 
 The second argument is the worker-thread count; it changes only `time_ms`.
-
 ## 6. `eskf_lever.cpp` — how to fuse a GNSS fix taken off the body origin
 
 `eskf_lever.cpp` drives the real `prism_loc_fusion::Eskf` (no copy, no ROS) with a simulated IMU, a simulated GNSS antenna at a lever arm, and
@@ -450,3 +449,41 @@ python3 experiments/eskf_lever_report.py experiments/results/eskf_lever/{g60,g30
 The committed `hgapsweep` rows, the `S8x` rows and the first-pass suites need the harness of commit `2011666` (`git show 2011666:experiments/eskf_lever.cpp`, built against the core of that commit). `results/eskf_lever/gap_across_start.txt` is the output of the replica command above on this core (300 seeds); `gap_across_start_2011666.txt` is that of the core with the test of the norms, and stays.
 
 Not done: a real robot; slopes under motion (the tilt is constant); a bound below 0.35 rad (the smallest tested); release thresholds between the three tested; a heading start error with a bound at 0.35 rad other than the three tested; an observability-constrained update or first-estimates Jacobians (Huang, Mourikis and Roumeliotis 2010), the usual remedy for an update that gains information along an unobservable direction, which was not tried.
+
+## 7. `ndt3d_replay.cpp` — rates of the ndt3d status rule
+
+Replays synthetic clouds through the update loop of `prism_loc::LocalizationNode::runUpdate`
+for the `ndt3d` backend and measures how often the `/diagnostics` status rule (`match_fraction`,
+the mean of the last 5, `min_match_fraction`, the "not verified" state) is right. The driver
+`ndt3d_replay.cpp` links the real `prism_loc_core` sources (`ParticleFilter`, `Ndt3DModel`,
+`NdtMap`, `OdometryMotionModel`) and the real `prism_loc::MatchMonitor` (`ndt_status.hpp`); only
+the order of the loop (skip an update until the robot has moved 0.2 m or 0.2 rad or a reseed
+forces one; predict; correct; resample; estimate; `matchStats`; `MatchMonitor::update`) is a copy
+of the node's, and the node-level counterpart is the `ndt3d_*` scenarios of
+`scripts/synthetic_e2e.py`. The inputs come from `ndt3d_replay_gen.py`, which imports the world,
+the trajectory and the odometry error model from `scripts/synthetic_e2e.py` (so it needs the
+ROS Python environment: that file imports `rclpy`) and adds the case's perturbation (map noise, moving
+columns, boxes added or removed, range noise, a kidnap, other initial poses, a pitched lidar, a
+cropped prior map). `ndt3d_replay_batch.py` holds the case list (52 cases) and the seeds (4 per
+case: generator seeds 7, 21, 22, 23 and filter seeds 42, 1, 2, 3, fixed in the file), and
+`ndt3d_replay_rates.py` turns the per-update CSVs into the tables of the README.
+
+```sh
+g++ -O2 -std=c++17 -I prism_loc_core/include -I prism_loc/include -I /usr/include/eigen3 \
+  prism_loc_core/src/*.cpp experiments/ndt3d_replay.cpp -o /tmp/ndt3d_replay
+python3 experiments/ndt3d_replay_batch.py /tmp/ndt3d_replay /tmp/replay_res '' --jobs 3   # 208 runs, about an hour
+python3 experiments/ndt3d_replay_rates.py /tmp/replay_res > /tmp/rates.md                 # threshold 0.65, 15 updates
+```
+
+The raw output of the committed pass (one CSV row per filter update, `.sens` files with the
+sensitivity probe) is `experiments/results/ndt3d_replay/replay_res.tar.gz` and its tables are
+`rates.md` next to it; the README table, `PARAMS.md` and the PR text are copied from there.
+The `time_ms` columns are wall-clock and machine dependent; every other column is deterministic
+for one compiler and standard library (this pass: GCC 14.3 / libstdc++, the `integ_humble`
+environment). The first pass of the replay (a scratch copy of the driver that produced the
+earlier table) and this one agree bit for bit on the healthy base case (4 runs) and within 2 percentage
+points on every group of the table; the changes are listed in the PR text.
+
+What the replay does not cover: real lidars and maps, slopes, the TF and clock handling of the
+node, and the `/diagnostics` table of the README ("Through `/diagnostics` on the node"), which
+came from an integration harness outside this repository.

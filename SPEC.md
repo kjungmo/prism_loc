@@ -82,10 +82,11 @@ where `T_odom_base` is read from tf2 at the scan stamp. Publishing
 ## 3. Algorithm
 
 ### 3.1 State & particle
-2D-planar pose is sufficient for both backends on a ground robot (`ndt3d` tracks
-`x,y,z` but the filter samples `x,y,yaw`; `z,roll,pitch` are taken from the TF
-height/attitude prior and held — documented limitation; full 6-DoF is future
-work). Each particle: `Pose2D{ x, y, yaw }` + `weight`.
+2D-planar pose is sufficient for both backends on a ground robot (`ndt3d` scores
+3D points but the filter samples `x,y,yaw`; the lidar is taken to be level at the
+height `base_height` in the map frame, and the `z`, roll and pitch of the TF
+`base_frame → cloud frame` are not used — documented limitation; full 6-DoF is
+future work). Each particle: `Pose2D{ x, y, yaw }` + `weight`.
 
 ### 3.2 Motion model — odometry sample model
 `sample_motion_model_odometry` (Probabilistic Robotics §5.4). Given previous and

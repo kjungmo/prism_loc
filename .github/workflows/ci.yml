@@ -139,3 +139,27 @@ jobs:
           timeout 900 python3 ../src/prism_loc/scripts/synthetic_e2e.py \
             ../install/prism_loc/share/prism_loc/params/laser2d.yaml \
             || { for f in e2e_*.log; do echo "--- $f"; tail -n 40 "$f"; done; exit 1; }
+
+      # ndt3d on the same world in 3D (16-ring lidar, prior map as PCD): tracking error,
+      # the "pose not verified" WARN after /initialpose and an OK status from then on in
+      # healthy tracking, the "low scan-to-map match" WARN after a kidnap, for a pose off
+      # the map and for a wrong base_height; that min_match_fraction and
+      # match_verify_updates drive the status; the startup WARN (tilt) and INFO (height)
+      # about the parts of the sensor transform that ndt3d ignores.
+      # The workspace above is built without optimization. ndt3d scores up to 500 points
+      # for each of 500 to 2000 particles per update; at -O0 one update takes over a
+      # second and the node cannot follow a 10 Hz lidar, so its packages are rebuilt
+      # optimized for this step (the steps above ran on the unoptimized build).
+      - name: synthetic end-to-end (ndt3d)
+        shell: bash
+        env:
+          ROS_DOMAIN_ID: "92"
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install --packages-select prism_loc_core prism_loc \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release
+          source install/setup.bash
+          mkdir -p ci_logs && cd ci_logs
+          timeout 600 python3 ../src/prism_loc/scripts/synthetic_e2e.py \
+            ../install/prism_loc/share/prism_loc/params/ndt3d.yaml \
+            || { for f in e2e_ndt3d_*.log; do echo "--- $f"; tail -n 40 "$f"; done; exit 1; }

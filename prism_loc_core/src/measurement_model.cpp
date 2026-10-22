@@ -53,4 +53,20 @@ double Ndt3DModel::logLikelihood(const Pose2D& base_in_map) const {
   return log_l;
 }
 
+NdtMatchStats Ndt3DModel::matchStats(const Pose2D& base_in_map) const {
+  NdtMatchStats st;
+  if (!map_ || pts_sensor_.empty()) return st;
+  const Eigen::Isometry3d T_map_base = toIsometry3(base_in_map, params_.base_height);
+  const Eigen::Isometry3d T_base_sensor = toIsometry3(sensor_in_base_, 0.0);
+  const Eigen::Isometry3d T = T_map_base * T_base_sensor;  // sensor in map
+  const int n = static_cast<int>(pts_sensor_.size());
+  const int step = std::max(1, n / std::max(1, params_.max_points));
+  const double min_score = std::exp(-0.5 * kNdtMatchSigma * kNdtMatchSigma);
+  for (int i = 0; i < n; i += step) {
+    ++st.points;
+    if (map_->score(T * pts_sensor_[i]) >= min_score) ++st.matched;
+  }
+  return st;
+}
+
 }  // namespace prism_loc_core

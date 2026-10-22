@@ -84,3 +84,17 @@ TEST(ParamValidation, NodeAndVerifierRangesRejected) {
                 "bbs_verify_min_translation");
   expectRejects([&] { validateNdtParams(0.0, 5, prism_loc_core::NdtParams{}); }, "ndt_resolution");
 }
+
+// min_match_fraction is a share: [0, 1], with 0 (check off) and 1 allowed.
+TEST(ParamValidation, MinMatchFractionRange) {
+  const prism_loc_core::NdtParams np;
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.0));
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 1.0));
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, prism_loc::kDefaultMinMatchFraction));
+  expectRejects([&] { validateNdtParams(1.0, 5, np, -0.01); }, "min_match_fraction");
+  expectRejects([&] { validateNdtParams(1.0, 5, np, 1.01); }, "min_match_fraction");
+  EXPECT_DOUBLE_EQ(prism_loc::kDefaultMinMatchFraction, 0.65);
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 0));
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 1000));
+  expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, -1); }, "match_verify_updates");
+}

@@ -65,6 +65,8 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_param_validation ${deps})
   ament_add_gtest(test_tf_wait test/test_tf_wait.cpp)
   target_include_directories(test_tf_wait PRIVATE include)
+  ament_add_gtest(test_ndt_status test/test_ndt_status.cpp)
+  target_include_directories(test_ndt_status PRIVATE include)
 endif()
 
 ament_package()
