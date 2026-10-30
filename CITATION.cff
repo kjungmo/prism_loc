@@ -8,11 +8,15 @@ authors:
 license: Apache-2.0
 repository-code: "https://github.com/kjungmo/prism_loc"
 preferred-citation:
-  type: unpublished
+  type: article
   title: "PRISM-Loc: Three LiDAR Localization Backends Behind One ROS 2 Contract, with Middleware-Free Estimator Cores"
   authors:
     - family-names: Kang
-      given-names: Jung Mo
+      given-names: Jungmo
       email: kangjmo91@gmail.com
+      orcid: "https://orcid.org/0009-0002-0394-1861"
+  journal: "Preprints"
   year: 2026
-  notes: "Draft manuscript; LaTeX sources and PDF under docs/paper/ in the repository"
+  doi: "10.20944/preprints202610.0391.v1"
+  url: "https://doi.org/10.20944/preprints202610.0391.v1"
+  notes: "Preprint, version 1, not peer reviewed. The repository manuscript (LaTeX sources and PDF under docs/paper/) remains a draft and may be ahead of the posted version; cite the exact source commit for reproducibility."
