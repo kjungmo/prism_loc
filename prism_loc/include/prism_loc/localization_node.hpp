@@ -21,12 +21,14 @@
 #include "prism_loc_core/measurement_model.hpp"
 #include "prism_loc_core/occupancy_grid.hpp"
 #include "prism_loc_core/ndt_map.hpp"
+#include "prism_loc_core/ground_height_map.hpp"
 #include <std_srvs/srv/empty.hpp>
 #include <diagnostic_msgs/msg/diagnostic_array.hpp>
 #include "prism_loc_core/bbs.hpp"
 #include "prism_loc_core/relocalization.hpp"
 #include "prism_loc/tf_wait_rule.hpp"
 #include "prism_loc/ndt_status.hpp"
+#include "prism_loc/cloud_level.hpp"
 
 namespace prism_loc {
 
@@ -58,6 +60,11 @@ class LocalizationNode : public rclcpp::Node {
   bool lookupSensor(const std::string& sensor_frame, prism_loc_core::Pose2D& sensor_in_base,
                     geometry_msgs::msg::Transform* full = nullptr);
   void publish(const rclcpp::Time& stamp, const prism_loc_core::Pose2D& odom_base);
+  // ndt3d with ground_height_from_map: initialise the ground height hint of the model at a
+  // reseed (z_guess selects the level on a multi-level map), and follow the estimate after
+  // an update. Both do nothing when the option is off. Called with mutex_ held.
+  void seedGroundHint(const prism_loc_core::Pose2D& at, double z_guess);
+  void followGroundHint(const prism_loc_core::Pose2D& base_in_map);
 
   std::string backend_, global_frame_, odom_frame_, base_frame_;
   std::string scan_topic_, map_topic_, points_topic_;
@@ -124,6 +131,14 @@ class LocalizationNode : public rclcpp::Node {
   double ndt_effective_points_{kDefaultNdtEffectivePoints};  // ndt3d parameters, reported in /diagnostics
   double ndt_min_sigma_{kDefaultNdtMinSigma};
   std::string sensor_tf_checked_;  // cloud frame whose transform has been checked
+  // ndt3d, optional (both default off; see PARAMS.md): the ground height under each particle
+  // from the map, and levelling of the cloud with the roll and pitch of base -> sensor.
+  bool ground_from_map_{false};
+  bool use_sensor_tilt_{false};
+  std::shared_ptr<const prism_loc_core::GroundHeightMap> ground_map_;
+  bool ground_est_ok_{false};   // the last estimate had a ground cell
+  double ground_est_{0.0};      // ground height (map z) under the estimate: the model's hint
+  double cloud_map_z_{0.0};     // map z the cloud frame had at the last estimate
   std::string reloc_state_{"idle"};
   rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};
   int ros_clock_stuck_ticks_{0};
