@@ -136,10 +136,11 @@ class LocalizationNode : public rclcpp::Node {
   bool ground_from_map_{false};
   bool use_sensor_tilt_{false};
   std::shared_ptr<const prism_loc_core::GroundHeightMap> ground_map_;
+  double ground_max_step_{0.5};   // ground_max_step: a re-anchor jump over it is logged as a WARN
   int ground_reanchor_after_{5};  // misses in a row before the hint re-anchors (core default)
   bool ground_est_ok_{false};   // the last estimate had a ground cell
   double ground_est_{0.0};      // ground height (map z) under the estimate: the model's hint
-  double cloud_map_z_{0.0};     // map z the cloud frame had at the last estimate
+  double cloud_map_z_{0.0};     // map z the cloud frame had at the estimate in the last update
   std::string reloc_state_{"idle"};
   rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};
   int ros_clock_stuck_ticks_{0};

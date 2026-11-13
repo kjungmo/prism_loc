@@ -15,7 +15,6 @@
     ground_layer_gap: 0.2             # m: smallest empty vertical gap that separates two surfaces in one cell (floor / ceiling underside, two floors; > 0)
     ground_max_step: 0.5              # m: a surface counts for a particle only within this of the ground height under the estimate (> 0)
     ground_min_points: 5              # count: map points a cell (and a surface inside it) needs for a ground height (>= 1)
-    ground_quantile: 0.05             # fraction in [0, 1]: where the low band of a surface starts (its points up to 0.3 m above are fitted by a plane; 0 = the lowest point)
     use_sensor_tilt: false            # bool: false = ignore the roll and pitch of base_frame -> cloud frame (WARN at startup). true = level each cloud with them (a static mount correction; the body's roll and pitch on a slope are not handled)
     ndt_effective_points: 0.0         # count: the scan counts as this many independent points in the likelihood (mean per-point log score x this value; 0 = off, plain sum over max_points, the previous behaviour; opt-in, try 5-10; at most max_points)
     ndt_min_sigma: 0.0                # m: absolute floor on the std deviation of every NDT cell along each axis (0 = off, relative floor only, the previous behaviour; opt-in, use together with ndt_effective_points, try 0.05-0.10 and re-measure min_match_fraction; the scoring of a pose for match_fraction ignores it, but the estimated pose can change; at most ndt_resolution)

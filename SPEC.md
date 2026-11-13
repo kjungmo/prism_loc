@@ -96,23 +96,32 @@ that is not part of the particle state:
   cell (`ground_resolution`): sort the points by z and split them into surfaces wherever
   two consecutive z differ by more than `ground_layer_gap` (an empty vertical gap: a
   floor and a ceiling underside, two floors). Per surface with at least
-  `ground_min_points` points: take its low band, the points from the `ground_quantile`
-  quantile of z up to 0.3 m above it (`GroundHeightParams::band`, core only); keep the
-  lowest point of each of 4 × 4 sub-columns of the cell (walls and pillars on the ground
-  are never the lowest); fit a plane to them and store its value at the cell centre (the
-  mean z of the kept points when the fit is ill-conditioned). A query looks at the four
-  cell centres around (x, y): in each it takes the surface nearest to a hint (the
-  ground height under the current estimate), keeps those within `ground_max_step` of the
-  hint, and interpolates bilinearly between them, so the height is continuous. With no
-  answer a particle keeps the height of the estimate. The hint is set at every reseed (the
-  level nearest to the initial pose z, no distance limit) and after each filter update to
-  the ground under the new estimate. When the estimate gets no answer for 5 updates in a
-  row the hint re-anchors to the nearest level instead of being held for ever; with
-  several levels over the same x, y that can pick the wrong one. Limits: it needs map
-  points on the ground under the robot's path; on a multi-level map the hint selects the
-  level, so a wrong level at a reseed stays until the next reseed or a re-anchor; the
-  remaining height error is the curvature of the ground inside a cell and non-ground
-  points that are the lowest in a part of a cell. The published pose stays planar.
+  `ground_min_points` points: split the cell into 4 × 4 sub-columns; each sub-column's
+  value is the median z of its points within 0.3 m above its lowest point
+  (`GroundHeightParams::band`, core only), at the centroid of those points. Fit a plane to
+  the values; drop the sub-columns more than max(0.05 m, 2.5 × MAD of the residuals) above
+  it (walls, pillars and objects only lift; the plane used to judge is refitted through
+  the lower half of the sub-columns first, so a strip of objects at the cell edge cannot
+  pull it); refit. Store the plane: its value at the cell centre and its slope (the mean
+  with slope 0 when fewer than 3 well-spread sub-columns remain). A query takes, in each of
+  the four cells around (x, y), the surface nearest to a hint (the ground height under the
+  current estimate) evaluated at (x, y), keeps those within `ground_max_step` of the
+  hint, drops those more than `ground_layer_gap` from the one nearest to the hint, and
+  blends the rest with bilinear weights. A constant slope is exact, also across missing
+  cells. With no answer a particle keeps the height of the estimate. The hint is set at
+  every reseed (the level nearest to the initial pose z in the cell of the seed, no
+  distance limit) and after each filter update to the ground under the new estimate. When
+  the estimate gets no answer for 5 updates in a row the hint re-anchors to the nearest
+  level if that lies within 1.5 m of it (core constants), so a hint on an upper floor does
+  not jump to the floor below a gap; after a seed that found no ground cell the first ground
+  met is accepted at any distance. With several levels over the same x, y a re-anchor can
+  pick the wrong level. Limits: it needs map points on the ground under the robot's path;
+  on a multi-level map the hint selects the level, so a wrong level at a reseed stays
+  until the next reseed or a re-anchor; the remaining height error is the curvature of the
+  ground inside a cell, objects that cover about half the sub-columns of a cell or more,
+  and, at the edge of the mapped ground (where the last cell's plane extends half a cell),
+  up to about slope × `ground_resolution` / 2 when that cell had too few well-spread
+  points for a plane. The published pose stays planar.
 - `use_sensor_tilt` (optional, off by default): the cloud is rotated by the roll and
   pitch of the static `base_frame → cloud frame` rotation before matching. With `R` the
   rotation of that transform and `yaw` the yaw the model uses for it, the points are

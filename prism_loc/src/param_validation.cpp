@@ -114,8 +114,6 @@ void validateGroundParams(const prism_loc_core::GroundHeightParams& gp) {
   require(gp.min_points >= 1, "ground_min_points", gp.min_points, ">= 1");
   require(finite(gp.layer_gap) && gp.layer_gap > 0.0, "ground_layer_gap", gp.layer_gap,
           "finite and > 0");
-  require(finite(gp.ground_quantile) && gp.ground_quantile >= 0.0 && gp.ground_quantile <= 1.0,
-          "ground_quantile", gp.ground_quantile, "in [0, 1]");
   require(finite(gp.max_step) && gp.max_step > 0.0, "ground_max_step", gp.max_step,
           "finite and > 0");
 }

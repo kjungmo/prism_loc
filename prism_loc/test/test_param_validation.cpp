@@ -152,7 +152,6 @@ TEST(ParamValidation, GroundHeightParams) {
   EXPECT_DOUBLE_EQ(gp.layer_gap, 0.2);
   EXPECT_DOUBLE_EQ(gp.max_step, 0.5);
   EXPECT_EQ(gp.min_points, 5);
-  EXPECT_DOUBLE_EQ(gp.ground_quantile, 0.05);
   const double nan = std::numeric_limits<double>::quiet_NaN();
   auto with = [&](auto setter) {
     prism_loc_core::GroundHeightParams p;
@@ -165,9 +164,5 @@ TEST(ParamValidation, GroundHeightParams) {
     expectRejects([&] { validateGroundParams(with([&](auto& p) { p.max_step = bad; })); }, "ground_max_step");
   }
   expectRejects([&] { validateGroundParams(with([](auto& p) { p.min_points = 0; })); }, "ground_min_points");
-  for (double bad : {-0.01, 1.01, nan})
-    expectRejects([&] { validateGroundParams(with([&](auto& p) { p.ground_quantile = bad; })); }, "ground_quantile");
-  EXPECT_NO_THROW(validateGroundParams(with([](auto& p) { p.ground_quantile = 0.0; })));
-  EXPECT_NO_THROW(validateGroundParams(with([](auto& p) { p.ground_quantile = 1.0; })));
   EXPECT_NO_THROW(validateGroundParams(with([](auto& p) { p.min_points = 1; })));
 }
