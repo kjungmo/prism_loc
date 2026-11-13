@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 #include <cmath>
+#include <random>
 #include <vector>
 #include <Eigen/Geometry>
 #include "prism_loc/cloud_level.hpp"
 using prism_loc::levelCloud;
 using prism_loc::tiltRotation;
+using prism_loc::tiltFromRotation;
+using prism_loc::rotationFromQuaternion;
 
 namespace {
 // tf2 getRPY convention: R = Rz(yaw) Ry(pitch) Rx(roll)
@@ -83,4 +86,69 @@ TEST(CloudLevel, EmptyCloudIsFine) {
   std::vector<Eigen::Vector3d> none;
   levelCloud(0.1, 0.2, none);
   EXPECT_TRUE(none.empty());
+}
+
+namespace {
+// the node's yaw: atan2(2(wz + xy), 1 - 2(y^2 + z^2)) of a unit quaternion
+double quatYaw(const Eigen::Quaterniond& q) {
+  return std::atan2(2.0 * (q.w() * q.z() + q.x() * q.y()), 1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z()));
+}
+}  // namespace
+
+// For any rotation, Rz(yaw) * R_tilt is the rotation itself, with the yaw the node uses.
+TEST(CloudLevel, TiltFromRotationComposesBackExactlyForRandomRotations) {
+  std::mt19937 rng(11);
+  std::normal_distribution<double> n(0.0, 1.0);
+  for (int i = 0; i < 500; ++i) {
+    Eigen::Quaterniond q(n(rng), n(rng), n(rng), n(rng));
+    q.normalize();
+    const Eigen::Matrix3d R = q.toRotationMatrix();
+    const double yaw = quatYaw(q);
+    const Eigen::Matrix3d T = tiltFromRotation(R, yaw);
+    EXPECT_TRUE((Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix() * T).isApprox(R, 1e-12));
+    EXPECT_TRUE((T * T.transpose()).isApprox(Eigen::Matrix3d::Identity(), 1e-12));
+  }
+}
+
+// A mount with only roll and pitch (yaw 0): the tilt is Ry(pitch) Rx(roll), as tiltRotation says.
+TEST(CloudLevel, TiltFromRotationAgreesWithRollPitchForOrdinaryMounts) {
+  for (double roll : {-0.3, 0.0, 0.2})
+    for (double pitch : {-0.5, 0.1, 0.9})
+      for (double yaw : {-2.0, 0.0, 1.3}) {
+        const Eigen::Quaterniond q = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
+                                     Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
+                                     Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());
+        EXPECT_TRUE(tiltFromRotation(q.toRotationMatrix(), quatYaw(q)).isApprox(tiltRotation(roll, pitch), 1e-12));
+      }
+}
+
+// Pitch within a hair of +-90 degrees (gimbal lock): the composition still holds exactly.
+TEST(CloudLevel, TiltFromRotationAtGimbalLock) {
+  const double half_pi = std::acos(-1.0) / 2.0;
+  for (double pitch : {half_pi - 1e-6, -half_pi + 1e-6, half_pi, -half_pi})
+    for (double roll : {0.0, 0.4})
+      for (double yaw : {0.0, 0.8}) {
+        Eigen::Quaterniond q = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
+                               Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
+                               Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());
+        q.normalize();
+        const Eigen::Matrix3d R = q.toRotationMatrix();
+        const double y = quatYaw(q);
+        const Eigen::Matrix3d T = tiltFromRotation(R, y);
+        EXPECT_TRUE(T.allFinite());
+        EXPECT_TRUE((Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()).toRotationMatrix() * T).isApprox(R, 1e-9));
+        std::vector<Eigen::Vector3d> v{{1, 2, 3}};
+        prism_loc::levelCloud(T, v);
+        EXPECT_NEAR(v[0].norm(), std::sqrt(14.0), 1e-12);
+      }
+}
+
+// A quaternion that is not of unit length (a drifting TF) is normalised; zero or NaN gives the identity.
+TEST(CloudLevel, RotationFromQuaternionNormalises) {
+  const Eigen::Quaterniond q = Eigen::AngleAxisd(0.3, Eigen::Vector3d(1, 2, 3).normalized()) * Eigen::Quaterniond::Identity();
+  const Eigen::Matrix3d R = rotationFromQuaternion(1.01 * q.x(), 1.01 * q.y(), 1.01 * q.z(), 1.01 * q.w());
+  EXPECT_TRUE(R.isApprox(q.toRotationMatrix(), 1e-12));
+  EXPECT_TRUE((R * R.transpose()).isApprox(Eigen::Matrix3d::Identity(), 1e-12));
+  EXPECT_TRUE(rotationFromQuaternion(0, 0, 0, 0).isApprox(Eigen::Matrix3d::Identity(), 0.0));
+  EXPECT_TRUE(rotationFromQuaternion(std::nan(""), 0, 0, 1).isApprox(Eigen::Matrix3d::Identity(), 0.0));
 }

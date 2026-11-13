@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <vector>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -21,6 +22,30 @@ inline Eigen::Matrix3d tiltRotation(double roll, double pitch) {
   return (Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
           Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX()))
       .toRotationMatrix();
+}
+
+// The same tilt from the full rotation and the yaw the model actually uses (the node takes
+// that yaw from the quaternion with atan2(2(wz + xy), 1 - 2(y^2 + z^2)), not from getRPY):
+//   R_tilt = Rz(-yaw) * R_base_sensor,
+// so that Rz(yaw) * R_tilt == R_base_sensor exactly, whatever the roll/pitch convention and
+// even at gimbal lock where the decomposition is not unique.
+inline Eigen::Matrix3d tiltFromRotation(const Eigen::Matrix3d& R_base_sensor, double yaw) {
+  return Eigen::AngleAxisd(-yaw, Eigen::Vector3d::UnitZ()).toRotationMatrix() * R_base_sensor;
+}
+
+// Rotation matrix of a quaternion (x, y, z, w), normalised first; the identity when the
+// quaternion is zero or not finite.
+inline Eigen::Matrix3d rotationFromQuaternion(double x, double y, double z, double w) {
+  Eigen::Quaterniond q(w, x, y, z);
+  const double n = q.norm();
+  if (!(n > 0.0) || !std::isfinite(n)) return Eigen::Matrix3d::Identity();
+  q.coeffs() /= n;
+  return q.toRotationMatrix();
+}
+
+// points[i] = R_tilt * points[i], in place (R_tilt from tiltFromRotation).
+inline void levelCloud(const Eigen::Matrix3d& R_tilt, std::vector<Eigen::Vector3d>& points) {
+  for (auto& p : points) p = R_tilt * p;
 }
 
 // points[i] = tiltRotation(roll, pitch) * points[i], in place. Zero roll and pitch leave
