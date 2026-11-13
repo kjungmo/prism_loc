@@ -92,22 +92,33 @@ that is not part of the particle state:
   `base_frame → cloud frame` are not used.
 - `ground_height_from_map` (optional, off by default): at map z = ground(x, y) +
   `base_height`, where `base_height` is then the height of the cloud frame above the
-  local ground. `ground(x, y)` comes from a grid built once from the map points: per xy
-  cell, the low quantile of each vertical group of points (groups split by gaps over
-  `ground_layer_gap`). A particle looks up the 3 × 3 cells around it, takes in each cell
-  the level nearest to a hint (the ground height under the current estimate), keeps those
-  within `ground_max_step` of the hint, and uses their median. With no answer it keeps
-  the height of the estimate. The hint is set at every reseed (the level nearest to the
-  initial pose z, no distance limit) and after each filter update. Limits: it needs map
+  local ground. `ground(x, y)` comes from a grid built once from the map points. Per xy
+  cell (`ground_resolution`): sort the points by z and split them into surfaces wherever
+  two consecutive z differ by more than `ground_layer_gap` (an empty vertical gap: a
+  floor and a ceiling underside, two floors). Per surface with at least
+  `ground_min_points` points: take its low band, the points from the `ground_quantile`
+  quantile of z up to 0.3 m above it (`GroundHeightParams::band`, core only); keep the
+  lowest point of each of 4 × 4 sub-columns of the cell (walls and pillars on the ground
+  are never the lowest); fit a plane to them and store its value at the cell centre (the
+  mean z of the kept points when the fit is ill-conditioned). A query looks at the four
+  cell centres around (x, y): in each it takes the surface nearest to a hint (the
+  ground height under the current estimate), keeps those within `ground_max_step` of the
+  hint, and interpolates bilinearly between them, so the height is continuous. With no
+  answer a particle keeps the height of the estimate. The hint is set at every reseed (the
+  level nearest to the initial pose z, no distance limit) and after each filter update to
+  the ground under the new estimate. When the estimate gets no answer for 5 updates in a
+  row the hint re-anchors to the nearest level instead of being held for ever; with
+  several levels over the same x, y that can pick the wrong one. Limits: it needs map
   points on the ground under the robot's path; on a multi-level map the hint selects the
-  level, so a wrong level at a reseed stays wrong until the next reseed; on a slope the
-  ground height of a cell is up to slope × `ground_resolution` below the surface at its
-  middle. The published pose stays planar.
+  level, so a wrong level at a reseed stays until the next reseed or a re-anchor; the
+  remaining height error is the curvature of the ground inside a cell and non-ground
+  points that are the lowest in a part of a cell. The published pose stays planar.
 - `use_sensor_tilt` (optional, off by default): the cloud is rotated by the roll and
-  pitch of the static `base_frame → cloud frame` rotation before matching. The rotation
-  is `Rz(yaw) · Ry(pitch) · Rx(roll)` (tf2 `getRPY`); the points are multiplied by
-  `Ry(pitch) · Rx(roll)`, and `yaw`, `x`, `y` go through the transform as without the
-  option. The z of the transform is still not used. It does not handle the roll and
+  pitch of the static `base_frame → cloud frame` rotation before matching. With `R` the
+  rotation of that transform and `yaw` the yaw the model uses for it, the points are
+  multiplied by `Rz(-yaw) · R` (`Ry(pitch) · Rx(roll)` for the tf2 `getRPY` convention
+  `R = Rz(yaw) · Ry(pitch) · Rx(roll)`), and `yaw`, `x`, `y` go through the transform as
+  without the option, so the model's rotation is `R` again. The z of the transform is still not used. It does not handle the roll and
   pitch of the robot body on a slope.
 
 Full 6-DoF is future work.

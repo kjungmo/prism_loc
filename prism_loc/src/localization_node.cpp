@@ -186,6 +186,7 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
           "' - check the file exists, is readable, and is a valid non-empty point cloud");
     }
     ndt_map_ = std::make_shared<prism_loc_core::NdtMap>(pts, res, minpts, ndt_min_sigma_);
+    ground_reanchor_after_ = np3.ground_reanchor_after;
     ndt_model_ = std::make_shared<prism_loc_core::Ndt3DModel>(ndt_map_, np3);
     map_ready_ = true;
     RCLCPP_INFO(get_logger(), "ndt3d: NDT map built (%zu voxels)", ndt_map_->numVoxels());
@@ -196,15 +197,24 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
       ndt_model_->setGroundMap(ground_map_);
       RCLCPP_INFO(get_logger(),
                   "ndt3d: ground height grid built (%zu cells of %.2f m, %zu ground candidates, "
-                  "%.1f MB, %.2f s). ground_height_from_map is on: base_height = %.3f m is the "
-                  "height of the cloud frame above the local ground, not a map z",
+                  "%.1f MB, %.2f s, %zu points outside the supported range skipped). "
+                  "ground_height_from_map is on: base_height = %.3f m is the height of the cloud "
+                  "frame above the local ground, not a map z",
                   ground_map_->numCells(), gp.resolution, ground_map_->numCandidates(),
-                  static_cast<double>(ground_map_->approxBytes()) / 1.0e6, secs, base_height_);
+                  static_cast<double>(ground_map_->approxBytes()) / 1.0e6, secs,
+                  ground_map_->numSkippedOutOfRange(), base_height_);
+      if (ground_map_->numSkippedOutOfRange() > 0)
+        RCLCPP_WARN(get_logger(),
+                    "ndt3d: %zu map points lie outside the range of the ground grid (about 1e6 cells "
+                    "of ground_resolution %.2f m from the map origin) and were skipped; check the map "
+                    "coordinates",
+                    ground_map_->numSkippedOutOfRange(), gp.resolution);
       if (ground_map_->numCells() == 0)
         RCLCPP_WARN(get_logger(),
-                    "ndt3d: the ground height grid is empty (no %.2f m cell holds %d map points): "
-                    "every particle keeps the height of the estimate; lower ground_min_points, raise "
-                    "ground_resolution, or check the map",
+                    "ndt3d: the ground height grid is empty (no %.2f m cell holds %d map points in one "
+                    "vertical group, or the map coordinates are outside the supported range of about "
+                    "1e6 cells of ground_resolution): every particle keeps the height of the "
+                    "estimate; lower ground_min_points, raise ground_resolution, or check the map",
                     gp.resolution, gp.min_points);
     }
     points_topic_ = declare_parameter<std::string>("points_topic", "/points");
@@ -355,6 +365,12 @@ void LocalizationNode::onDiagnostics() {
                   match_.sinceReseed(), match_verify_updates_, update_min_d_, update_min_a_);
     warnings.emplace_back(buf);
   }
+  if (!laser && ground_from_map_ && any_update_ && ndt_model_->groundMisses() >= ground_reanchor_after_) {
+    std::snprintf(buf, sizeof(buf), "no map ground under the estimate for %d updates: height held at "
+                  "%.3f m (the map may not cover the route; see ground_resolution, ground_min_points)",
+                  ndt_model_->groundMisses(), ground_est_);
+    warnings.emplace_back(buf);
+  }
   if (zero_stamp_inputs_ > 0) {
     std::snprintf(buf, sizeof(buf), "%ld %s with a zero header stamp dropped in the last second",
                   zero_stamp_inputs_, input_name);
@@ -424,11 +440,16 @@ void LocalizationNode::onDiagnostics() {
       kv("ground_height_at_estimate", any_update_ && ground_est_ok_ ? num(ground_est_, "%.3f") : std::string("n/a"));
       kv("ground_cell_at_estimate", !any_update_ ? "n/a" : (ground_est_ok_ ? "true" : "false"));
       kv("ground_cloud_map_z", any_update_ ? num(cloud_map_z_, "%.3f") : std::string("n/a"));
-      // Particles with no usable ground cell keep the height of the estimate.
       size_t no_cell = 0;
       for (const auto& part : pf_->particles())
         if (!ndt_model_->groundHeightAt(part.pose)) ++no_cell;
+      // Of the current particles, those the grid does not answer for against the current hint
+      // (counted here, by the 1 Hz diagnostics timer; not a per-update record). They keep the
+      // height of the estimate.
       kv("ground_particles_without_cell", std::to_string(no_cell));
+      static const char* const kFollow[] = {"followed", "kept", "reanchored", "no_ground"};
+      kv("ground_follow_state", any_update_ ? kFollow[static_cast<int>(ndt_model_->lastGroundFollow())] : "n/a");
+      kv("ground_follow_misses", std::to_string(ndt_model_->groundMisses()));
     }
   }
   diagnostic_msgs::msg::DiagnosticArray arr;
@@ -663,11 +684,16 @@ void LocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr m
   }
   auto cloud = fromPointCloud2(*msg);
   if (use_sensor_tilt_) {
-    if (std::isfinite(roll) && std::isfinite(pitch))
-      levelCloud(roll, pitch, cloud);
+    // R_tilt = Rz(-yaw) * R_base_sensor with the yaw the model uses (sib.yaw), so that the
+    // model's Rz(yaw) * R_tilt is the full rotation of the transform.
+    const auto& q = sensor_tf.rotation;
+    const Eigen::Matrix3d R_tilt =
+        tiltFromRotation(rotationFromQuaternion(q.x, q.y, q.z, q.w), sib.yaw);
+    if (R_tilt.allFinite())
+      levelCloud(R_tilt, cloud);
     else
       RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
-                           "ndt3d: roll or pitch of %s -> %s is not finite: the cloud is not levelled",
+                           "ndt3d: the rotation of %s -> %s is not finite: the cloud is not levelled",
                            base_frame_.c_str(), msg->header.frame_id.c_str());
   }
   ndt_model_->setCloud(cloud, sib);
@@ -736,12 +762,10 @@ void LocalizationNode::seedGroundHint(const Pose2D& at, double z_guess) {
   if (!ground_from_map_ || !ndt_model_) return;
   if (!std::isfinite(z_guess)) z_guess = 0.0;
   // The level nearest to z_guess at the seeded x, y (no distance limit): with one level
-  // that is the ground, with several the pose z picks one.
-  const std::optional<double> g = ndt_model_->groundHeightNearest(at, z_guess);
-  ground_est_ok_ = g.has_value();
-  ground_est_ = g ? *g : z_guess;
-  ndt_model_->setHeightHint(ground_est_);
-  if (g)
+  // that is the ground, with several the pose z picks one. Also resets the miss counter.
+  ground_est_ok_ = ndt_model_->seedGround(at, z_guess);
+  ground_est_ = ndt_model_->heightHint();
+  if (ground_est_ok_)
     RCLCPP_INFO(get_logger(), "ndt3d: ground height at the seed (%.2f, %.2f) is %.3f m (initial pose z %.2f)",
                 at.x, at.y, ground_est_, z_guess);
   else
@@ -753,14 +777,18 @@ void LocalizationNode::seedGroundHint(const Pose2D& at, double z_guess) {
 
 void LocalizationNode::followGroundHint(const Pose2D& base_in_map) {
   if (!ground_from_map_ || !ndt_model_) return;
-  // The ground under the new estimate, on the level of the previous one; no answer: keep the
-  // previous hint.
-  const std::optional<double> g = ndt_model_->groundHeightAt(base_in_map);
-  ground_est_ok_ = g.has_value();
-  if (g) {
-    ground_est_ = *g;
-    ndt_model_->setHeightHint(ground_est_);
-  }
+  // Moves the hint to the ground under the new estimate on its level; after
+  // ground_reanchor_after misses in a row it takes the nearest level instead (see
+  // Ndt3DModel::followGround).
+  const int misses_before = ndt_model_->groundMisses();
+  const prism_loc_core::GroundFollow r = ndt_model_->followGround(base_in_map);
+  ground_est_ok_ = r == prism_loc_core::GroundFollow::Followed || r == prism_loc_core::GroundFollow::Reanchored;
+  ground_est_ = ndt_model_->heightHint();
+  if (r == prism_loc_core::GroundFollow::Reanchored)
+    RCLCPP_INFO(get_logger(),
+                "ndt3d: no map ground at the estimate on the previous level for %d updates; the "
+                "height is re-anchored to the nearest level, %.3f m",
+                misses_before + 1, ground_est_);
   cloud_map_z_ = ndt_model_->cloudHeightAt(base_in_map);
 }
 

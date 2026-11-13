@@ -11,11 +11,11 @@
     max_points: 500                   # count: scan points subsampled per measurement update (must be >= ndt_effective_points unless that is 0, the default)
     base_height: 0.0                  # m: height of the LIDAR for the model. ground_height_from_map off: its z in the map frame (its height above a map ground plane at z = 0), not the robot's height. On: its height above the local ground. The TF's z is not used; its roll and pitch only with use_sensor_tilt
     ground_height_from_map: false     # bool: false = the cloud sits at the constant map z base_height (previous behaviour). true = at ground(x, y) + base_height, with the ground height of each particle from a grid built from the map points (needs map points on the ground under the route)
-    ground_resolution: 1.0            # m: xy cell edge of the ground grid (> 0); on a slope the cell's ground height is below the surface by up to slope x this
-    ground_layer_gap: 1.5             # m: a vertical gap over this in a cell starts a separate level (head-room between two drivable levels; > 0)
-    ground_max_step: 0.5              # m: a level counts for a particle only within this of the ground height under the estimate (> 0)
-    ground_min_points: 5              # count: map points a cell (and a level inside it) needs for a ground height (>= 1)
-    ground_quantile: 0.05             # fraction in [0, 1]: which low z of a level is its ground height (0 = the lowest point)
+    ground_resolution: 1.0            # m: xy cell edge of the ground grid (> 0); heights are interpolated between cell centres
+    ground_layer_gap: 0.2             # m: smallest empty vertical gap that separates two surfaces in one cell (floor / ceiling underside, two floors; > 0)
+    ground_max_step: 0.5              # m: a surface counts for a particle only within this of the ground height under the estimate (> 0)
+    ground_min_points: 5              # count: map points a cell (and a surface inside it) needs for a ground height (>= 1)
+    ground_quantile: 0.05             # fraction in [0, 1]: where the low band of a surface starts (its points up to 0.3 m above are fitted by a plane; 0 = the lowest point)
     use_sensor_tilt: false            # bool: false = ignore the roll and pitch of base_frame -> cloud frame (WARN at startup). true = level each cloud with them (a static mount correction; the body's roll and pitch on a slope are not handled)
     ndt_effective_points: 0.0         # count: the scan counts as this many independent points in the likelihood (mean per-point log score x this value; 0 = off, plain sum over max_points, the previous behaviour; opt-in, try 5-10; at most max_points)
     ndt_min_sigma: 0.0                # m: absolute floor on the std deviation of every NDT cell along each axis (0 = off, relative floor only, the previous behaviour; opt-in, use together with ndt_effective_points, try 0.05-0.10 and re-measure min_match_fraction; the scoring of a pose for match_fraction ignores it, but the estimated pose can change; at most ndt_resolution)
