@@ -34,15 +34,21 @@ void validate(const GroundHeightParams& p);
 //     points: s_low = its lowest z; the points with s_low <= z <= s_low + band; the
 //     sub-column value v = the median z of those points, at the position of their centroid
 //     (x, y).
-//  3. Fit the least-squares plane through the sub-column values. One robust pass: drop the
-//     sub-columns whose value lies more than max(0.05 m, 2.5 x MAD of the residuals) ABOVE
-//     the plane (walls and objects only bias upward; the MAD is about the median residual),
-//     and refit when at least 3 well-spread sub-columns remain. Median instead of minimum
-//     keeps the value unbiased on noisy ground at any density.
+//  3. Fit the least-squares plane through the sub-column values. With 8 or more sub-columns
+//     one robust pass follows: re-fit through the half of them that lie lowest above that
+//     plane (a strip of objects at the cell edge would pull the first plane towards it),
+//     measure every residual from that plane's median residual, drop the sub-columns more
+//     than max(0.05 m, 2.5 x MAD of the residuals) above, and refit through the rest
+//     (walls and objects only lift). With fewer than 8 sub-columns the plain fit stays.
+//     The median keeps the sub-column value close to the true ground on noisy ground; some
+//     negative bias remains on sparse noisy ground (about -0.7 cm at sigma 0.05 m and 20
+//     points per cell).
 //  4. The fit is refused, and the mean of the (kept) sub-column values is stored with slope
 //     0, when fewer than 3 sub-columns are used, or the smaller eigenvalue of their 2 x 2 xy
 //     covariance is below (0.1 * resolution)^2 (they lie on a line or in a corner), or the
 //     plane's value at the centre differs from the mean by more than band.
+//     A group refused for poor xy spread that is taller than 2 x band (the foot of a wall
+//     or pillar in a cell without ground) gives no candidate.
 // Points that are not finite are skipped. Points beyond about +-1e6 cells of the origin are
 // skipped too and counted in numSkippedOutOfRange(). The result depends on the set of
 // points only, not on their order (every comparison is a total order on the values).
@@ -50,8 +56,8 @@ void validate(const GroundHeightParams& p);
 //
 // heightAt() blends the planes of the four cells around the query with bilinear weights, so
 // the height is continuous and a constant slope is exact with any subset of cells present.
-// Edges of the mapped ground: a query between the centre of an edge cell and the edge uses
-// that cell's plane alone (it extends half a cell); where the edge cell's fit was refused
+// Edges of the mapped ground: the plane of an edge cell answers alone from the cell's centre
+// outwards, up to half a cell beyond the cell's border (no answer further out); where the edge cell's fit was refused
 // (a thin strip of points) its slope is 0, and the error there is up to about
 // slope x resolution / 2. Remaining errors elsewhere: curvature of the ground inside a cell,
 // and objects that cover most of a cell's sub-columns up to the band.

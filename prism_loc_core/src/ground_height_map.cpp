@@ -114,7 +114,10 @@ void fitOrMean(const std::vector<SubCol>& c, const GroundHeightParams& prm, doub
 
 // Ground candidate of one group of z-sorted points (indices s[b, e) into pts) of the cell
 // with centre (cx, cy).
-void candidateOf(const std::vector<Eigen::Vector3d>& pts, const std::uint32_t* s, std::size_t b,
+// Returns false when the group is no ground: its sub-columns lie in a thin strip (the first
+// fit is refused for poor xy spread) and the group is taller than 2 x band, i.e. the foot of
+// a wall or pillar that spills into a cell without ground.
+bool candidateOf(const std::vector<Eigen::Vector3d>& pts, const std::uint32_t* s, std::size_t b,
                  std::size_t e, double cx, double cy, const GroundHeightParams& prm, double& a,
                  double& bx, double& by) {
   std::array<std::vector<double>, kSub * kSub> zs;     // z of the points of each sub-column, ascending
@@ -140,9 +143,12 @@ void candidateOf(const std::vector<Eigen::Vector3d>& pts, const std::uint32_t* s
     const double n = static_cast<double>(xy[bin].size());
     cols.push_back({mx / n, my / n, medianOf(zs[bin])});  // zs is ascending already
   }
-  fitOrMean(cols, prm, a, bx, by);
   double pa, pbx, pby;
-  if (cols.size() < 3 || !fitPlane(cols, prm.resolution, pa, pbx, pby)) return;
+  const bool fitted = fitPlane(cols, prm.resolution, pa, pbx, pby);
+  if (!fitted && pts[s[e - 1]].z() - pts[s[b]].z() > 2.0 * prm.band) return false;
+  fitOrMean(cols, prm, a, bx, by);
+  // The robust pass needs enough sub-columns to tell outliers from noise.
+  if (!fitted || cols.size() < 8) return true;
   // One robust pass. Objects on the ground only lift sub-columns, but a strip of them at the
   // edge of the cell pulls the all-column plane towards itself. So: re-fit through the half
   // of the sub-columns that lie lowest above the first plane (when 3 or more well-spread
@@ -167,11 +173,13 @@ void candidateOf(const std::vector<Eigen::Vector3d>& pts, const std::uint32_t* s
   const double med1 = medianOf(tmp);
   for (auto& t : tmp) t = std::fabs(t - med1);
   const double thr = std::max(0.05, 2.5 * medianOf(tmp));
+  // the lower-half plane sits below the ground by about the noise: measure from the median residual
   std::vector<SubCol> kept;
   for (std::size_t i = 0; i < cols.size(); ++i)
-    if (r1[i] <= thr) kept.push_back(cols[i]);
-  if (kept.size() == cols.size() || kept.empty()) return;
+    if (r1[i] - med1 <= thr) kept.push_back(cols[i]);
+  if (kept.size() == cols.size() || kept.empty()) return true;
   fitOrMean(kept, prm, a, bx, by);
+  return true;
 }
 }  // namespace
 
@@ -228,8 +236,7 @@ GroundHeightMap::GroundHeightMap(const std::vector<Eigen::Vector3d>& points,
       if (k < e0 && points[s[k]].z() - points[s[k - 1]].z() <= params_.layer_gap) continue;
       if (k - begin >= min_pts) {
         Cand c;
-        candidateOf(points, s, begin, k, cx, cy, params_, c.a, c.bx, c.by);
-        cand.push_back(c);
+        if (candidateOf(points, s, begin, k, cx, cy, params_, c.a, c.bx, c.by)) cand.push_back(c);
       }
       begin = k;
     }

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <Eigen/QR>
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -450,6 +451,116 @@ TEST(GroundHeightMap, HeightNearestPrefersTheContainingCell) {
   // a cell with no candidate takes its neighbours' nearest level
   GroundHeightMap h(surface(0, 1, 0, 1, 0.1, [](double, double) { return 5.0; }));
   EXPECT_NEAR(*h.heightNearest(1.1, 0.5, 0.0), 5.0, 1e-9);
+}
+
+// A cell holding only the foot of a wall is not ground: at a wall whose ground is mapped on
+// one side, the cell on the other side has no answer (or the ground), and near the wall the
+// ground is not lifted.
+TEST(GroundHeightMap, WallFootCellIsNotGround) {
+  Pts pts = surface(-6, 0, -3, 3, 0.1, [](double, double) { return 0.0; });  // ground for x < 0
+  for (double y = -3.0; y < 3.0; y += 0.02)
+    for (double z = 0.02; z <= 3.0; z += 0.02) pts.emplace_back(0.001, y, z);  // the wall at x = 0
+  GroundHeightMap g(pts);
+  for (double d : {0.1, 0.2, 0.3, 0.5}) {
+    const auto h = g.heightAt(-d, 0.5, 0.0);
+    ASSERT_TRUE(h.has_value());
+    EXPECT_NEAR(*h, 0.0, 0.03) << d << " m before the wall";
+  }
+  for (double d : {0.1, 0.3, 0.6, 1.0}) {
+    const auto h = g.heightAt(d, 0.5, 0.0);
+    if (h) { EXPECT_NEAR(*h, 0.0, 0.03) << d << " m past the wall"; }
+  }
+}
+
+// A wall inside a cell that also holds ground (at x = 0.25: ground over x < 0.25 of the cell).
+TEST(GroundHeightMap, WallInsideACellWithGround) {
+  Pts pts = surface(-6, 0.25, -3, 3, 0.1, [](double, double) { return 0.0; });
+  for (double y = -3.0; y < 3.0; y += 0.02)
+    for (double z = 0.02; z <= 3.0; z += 0.02) pts.emplace_back(0.25, y, z);
+  GroundHeightMap g(pts);
+  for (double x : {-0.3, 0.0, 0.1, 0.2}) {
+    const auto h = g.heightAt(x, 0.5, 0.0);
+    ASSERT_TRUE(h.has_value());
+    EXPECT_NEAR(*h, 0.0, 0.05) << x;
+  }
+}
+
+// Flat ground with noise sigma 0.05: the robust pass leaves the bias small.
+TEST(GroundHeightMap, NoisyGroundSigma005HasSmallBias) {
+  for (int per_cell : {20, 100}) {
+    std::mt19937 rng(21);
+    std::uniform_real_distribution<double> u(0.0, 20.0);
+    std::normal_distribution<double> n(0.0, 0.05);
+    Pts pts;
+    for (int i = 0; i < 400 * per_cell; ++i) pts.emplace_back(u(rng), u(rng), n(rng));
+    GroundHeightMap g(pts);
+    double sum = 0.0;
+    int cnt = 0;
+    for (double x = 1.0; x < 19.0; x += 0.5)
+      for (double y = 1.0; y < 19.0; y += 0.5) {
+        const auto h = g.heightAt(x, y, 0.0);
+        ASSERT_TRUE(h.has_value());
+        sum += *h;
+        ++cnt;
+      }
+    EXPECT_LT(std::fabs(sum / cnt), 0.01) << per_cell << " points per cell";
+  }
+}
+
+// A cell with only 6 sub-columns that have points: the robust pass does not run (fewer than 8);
+// the result is the plain least-squares plane through the 6 values, outlier column included.
+TEST(GroundHeightMap, FewSubColumnsKeepThePlainFit) {
+  const int cols[6][2] = {{0, 0}, {3, 0}, {0, 3}, {3, 3}, {1, 1}, {2, 2}};
+  const double noise[6] = {0.0, 0.01, -0.01, 0.02, 0.10, 0.0};  // one column 0.1 m high
+  Pts pts;
+  Eigen::MatrixXd A(6, 3);
+  Eigen::VectorXd b(6);
+  for (int k = 0; k < 6; ++k) {
+    const double x = (cols[k][0] + 0.5) / 4.0, y = (cols[k][1] + 0.5) / 4.0;  // sub-column centres
+    const double z = 0.2 * x + noise[k];
+    for (int r = 0; r < 3; ++r) pts.emplace_back(x, y, z);
+    A.row(k) << 1.0, x - 0.5, y - 0.5;
+    b[k] = z;
+  }
+  const Eigen::Vector3d plane = A.colPivHouseholderQr().solve(b);
+  GroundHeightMap g(pts);
+  const auto h = g.heightAt(0.5, 0.5, 0.1);
+  ASSERT_TRUE(h.has_value());
+  EXPECT_NEAR(*h, plane[0], 1e-9);
+}
+
+// The value of a sub-column sits at the centroid of its points, not at its centre: ground
+// points clumped at the left edge of every sub-column of a slope (z = 0.3 x) must still give
+// the plane exactly.
+TEST(GroundHeightMap, SubColumnValueIsPlacedAtTheCentroid) {
+  Pts pts;
+  for (int ix = 0; ix < 4; ++ix)
+    for (double dx = 0.01; dx < 0.06; dx += 0.01)  // x in [ix/4 + 0.01, ix/4 + 0.05]
+      for (double y = 0.02; y < 1.0; y += 0.05) pts.emplace_back(0.25 * ix + dx, y, 0.3 * (0.25 * ix + dx));
+  GroundHeightMap g(pts);
+  EXPECT_NEAR(*g.heightAt(0.5, 0.5, 0.15), 0.3 * 0.5, 0.005);
+}
+
+// The drop threshold follows the noise (2.5 x MAD), not a fixed 0.05 m: with sigma 0.1 a fixed
+// threshold would drop valid sub-columns and pull the ground down.
+TEST(GroundHeightMap, DropThresholdFollowsTheNoise) {
+  std::mt19937 rng(33);
+  std::uniform_real_distribution<double> u(0.0, 20.0);
+  std::normal_distribution<double> n(0.0, 0.10);
+  Pts pts;
+  for (int i = 0; i < 400 * 40; ++i) pts.emplace_back(u(rng), u(rng), n(rng));
+  GroundHeightMap g(pts);
+  double sum = 0.0;
+  int cnt = 0;
+  for (double x = 1.0; x < 19.0; x += 0.5)
+    for (double y = 1.0; y < 19.0; y += 0.5) {
+      const auto h = g.heightAt(x, y, 0.0);
+      if (!h) continue;
+      sum += *h;
+      ++cnt;
+    }
+  ASSERT_GT(cnt, 1000);
+  EXPECT_LT(std::fabs(sum / cnt), 0.02);
 }
 
 TEST(GroundHeightMap, ParameterValidation) {
