@@ -251,7 +251,7 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
-`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed` (ndt3d only); `imu_rate_hz`,
+`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed`, `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
@@ -262,9 +262,17 @@ runs on the `map→base_link` fallback by design reports OK with
 then lost, or when odometry appears while the fallback was being broadcast (two
 parents for `base_link`).
 
+**ndt3d likelihood.** Two parameters shape the NDT likelihood (details in
+[`PARAMS.md`](PARAMS.md)). `ndt_effective_points` makes the scan count as a fixed number
+of independent points instead of the full subsample, so one scan does not outweigh the
+motion model; `ndt_min_sigma` (m) puts a floor under the spread of every NDT cell, so a
+flat cell does not score a point a few centimetres off its surface as zero. Setting both
+to `0` restores the earlier likelihood. A correction multiplies each particle's previous
+weight by its likelihood, so the weights carry over when resampling is skipped.
+
 **ndt3d status.** The effective particle count is not a health signal for `ndt3d`: with
-the NDT likelihood one particle takes nearly all the weight at every update of a healthy
-run, and when no scan point falls in a map cell all particles weigh the same. `ndt3d`
+the plain NDT likelihood (`ndt_effective_points: 0`) one particle takes nearly all the
+weight at every update of a healthy run, and when no scan point falls in a map cell all particles weigh the same. `ndt3d`
 therefore reports `match_fraction`: the share of the scored scan points that lie within
 3 standard deviations of the NDT cell they fall in, at the published pose, averaged over
 the last 5 filter updates. Three states follow from it:

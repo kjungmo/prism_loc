@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include "prism_loc/param_validation.hpp"
@@ -97,4 +98,23 @@ TEST(ParamValidation, MinMatchFractionRange) {
   EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 0));
   EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 1000));
   expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, -1); }, "match_verify_updates");
+}
+
+// ndt_effective_points and ndt_min_sigma: finite and >= 0; 0 keeps the previous behaviour.
+TEST(ParamValidation, NdtLikelihoodShapingRanges) {
+  const double inf = std::numeric_limits<double>::infinity();
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  prism_loc_core::NdtParams np;
+  np.effective_points = prism_loc::kDefaultNdtEffectivePoints;
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 15, prism_loc::kDefaultNdtMinSigma));
+  EXPECT_DOUBLE_EQ(prism_loc::kDefaultNdtEffectivePoints, 10.0);
+  EXPECT_DOUBLE_EQ(prism_loc::kDefaultNdtMinSigma, 0.10);
+  np.effective_points = 0.0;
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 15, 0.0));
+  for (double bad : {-0.5, inf, -inf, nan}) {
+    np.effective_points = bad;
+    expectRejects([&] { validateNdtParams(1.0, 5, np); }, "ndt_effective_points");
+    np.effective_points = 10.0;
+    expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, 15, bad); }, "ndt_min_sigma");
+  }
 }

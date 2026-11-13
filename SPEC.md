@@ -103,14 +103,28 @@ backends.
    `p = z_hit * exp(-d²/(2 σ_hit²)) + z_rand/z_max`.
 3. Particle weight `*= Π p` (sum of log-likelihoods for numerical stability).
 
+Both backends: a correction multiplies each particle's previous weight by its
+likelihood. The weights carry over when the resampling step is skipped; after a
+resampling they are uniform. A particle with weight 0 or a non-finite log-likelihood gets
+weight 0; if no particle is left, the weights become uniform.
+
 ### 3.3b Observation model — `ndt3d` NDT score
 1. From the PCD map, build an **NDT voxel grid**: bucket points into voxels of
    `ndt_resolution`, store per-voxel mean `μ` and covariance `Σ` (≥`min_points`
    per voxel, regularized). Built once on map load.
 2. Per particle, for a subsample of `max_points` cloud points: transform point
    into map, find its voxel, score `p = exp(-½ (x-μ)ᵀ Σ⁻¹ (x-μ))` (NDT score,
-   Biber 2003). Skip points whose voxel is empty.
-3. Particle weight `*= Π p` (log-domain accumulation).
+   Biber 2003). A point in an empty voxel scores 0; a small `score_floor` is added
+   to every score before the logarithm.
+3. Log-likelihood of a particle: with `ndt_effective_points = 0`, the sum of
+   `log(p + score_floor)` over the evaluated points. With `ndt_effective_points = K > 0`,
+   the mean of those terms times `K`: the cloud counts as `K` independent points,
+   however many were evaluated. Neighbouring points of one scan are correlated, so the
+   plain sum is overconfident. The particle weight is multiplied by the exponential of
+   this value (log-domain accumulation).
+4. Cell covariance regularization: each eigenvalue of a cell's covariance is raised to
+   at least `0.001 ×` the largest one and, when `ndt_min_sigma = s > 0`, to at least
+   `s²` (`s` in metres). `s = 0` applies the relative floor only.
 
 ### 3.4 Resampling — KLD-adaptive low-variance
 - **Low-variance / systematic resampler** (Probabilistic Robotics §4.3).

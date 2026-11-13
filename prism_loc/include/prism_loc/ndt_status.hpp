@@ -26,11 +26,16 @@ namespace prism_loc {
 //   fewer than n                      false
 //   n or more                         true
 //   n = 0                             true (check off)
-// The effective particle count is no health signal for ndt3d: with the NDT likelihood one
-// particle takes all the weight at every update of a healthy run (n_eff 1 of 500), and
-// when no scan point falls in a map cell all particles weigh the same (n_eff = N).
+// The effective particle count is no health signal for ndt3d: with the plain NDT likelihood
+// (ndt_effective_points 0) one particle takes all the weight at every update of a healthy
+// run (n_eff 1 of 500), and when no scan point falls in a map cell all particles weigh the
+// same (n_eff = N).
 constexpr double kDefaultMinMatchFraction = 0.65;  // default of the min_match_fraction parameter
 constexpr int kDefaultMatchVerifyUpdates = 15;     // default of the match_verify_updates parameter
+// Defaults of the ndt_effective_points and ndt_min_sigma parameters. The prism_loc_core
+// defaults stay 0 (plain sum, relative covariance floor only); the node and ndt3d.yaml use these.
+constexpr double kDefaultNdtEffectivePoints = 10.0;  // points the cloud counts as (see NdtParams)
+constexpr double kDefaultNdtMinSigma = 0.10;         // m: floor on an NDT cell's standard deviation
 
 // In-code default of min_neff_fraction: the laser2d check stays at 0.005; for ndt3d it
 // is off (0), min_match_fraction being its check.
