@@ -167,3 +167,30 @@ TEST(IgnoredSensorTf, NonFiniteCountsAsIgnoredPart) {
   EXPECT_TRUE(ignoredSensorTf(0.0, 0.0, nan, 0.5).height);
   EXPECT_TRUE(ignoredSensorTf(0.0, 0.0, 0.5, nan).height);
 }
+
+// A timed update (update_min_period) feeds the running mean but does not advance the
+// since-reseed count: that count stands for travel, and timed updates can come after a
+// few centimetres on an almost unchanged view.
+TEST(MatchMonitor, TimedUpdateFeedsTheMeanButNotTheVerifiedCount) {
+  MatchMonitor m;
+  m.update(true, 0.9);
+  for (int i = 0; i < 20; ++i) m.update(false, 0.9, /*counts_toward_verified=*/false);
+  EXPECT_EQ(m.sinceReseed(), 0u);
+  EXPECT_FALSE(m.verified(15));
+  EXPECT_EQ(m.size(), MatchMonitor::kWindow);  // the window did take the values
+  EXPECT_NEAR(m.mean(), 0.9, 1e-12);
+  for (int i = 0; i < 5; ++i) m.update(false, 0.1, false);  // low timed matches still warn
+  EXPECT_TRUE(m.low(0.65));
+  EXPECT_EQ(m.sinceReseed(), 0u);
+  for (int i = 0; i < 15; ++i) add(m, 0.9);  // motion updates count as before
+  EXPECT_EQ(m.sinceReseed(), 15u);
+  EXPECT_TRUE(m.verified(15));
+}
+
+TEST(MatchMonitor, ReseedStillForgetsAfterTimedUpdates) {
+  MatchMonitor m;
+  m.update(false, 0.9, false);
+  m.update(true, 0.9, false);  // a forced update never counts, whatever the flag
+  EXPECT_EQ(m.size(), 0u);
+  EXPECT_EQ(m.sinceReseed(), 0u);
+}

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 #include "prism_loc/param_validation.hpp"
@@ -24,6 +25,7 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
   base_frame_ = declare_parameter<std::string>("base_frame", "base_link");
   update_min_d_ = declare_parameter<double>("update_min_d", 0.2);
   update_min_a_ = declare_parameter<double>("update_min_a", 0.2);
+  update_min_period_ = declare_parameter<double>("update_min_period", 0.0);
   transform_tolerance_ = declare_parameter<double>("transform_tolerance", 0.1);
   tf_broadcast_ = declare_parameter<bool>("tf_broadcast", true);
   // /diagnostics: grace before missing inputs count as errors (drivers can be slow to
@@ -32,6 +34,7 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
   NodeParams np;
   np.update_min_d = update_min_d_;
   np.update_min_a = update_min_a_;
+  np.update_min_period = update_min_period_;
   np.transform_tolerance = transform_tolerance_;
   startup_timeout_s_ = np.startup_timeout_s =
       declare_parameter<double>("startup_timeout_s", np.startup_timeout_s);
@@ -314,9 +317,10 @@ void LocalizationNode::onDiagnostics() {
     warnings.emplace_back(buf);
   } else if (!laser && filter_init_ && min_match_fraction_ > 0.0 &&
              !match_.verified(static_cast<std::size_t>(match_verify_updates_))) {
+    // Only motion updates count here; timed updates (update_min_period) do not.
     std::snprintf(buf, sizeof(buf), "pose not verified since the last reseed: %zu of %d filter "
-                  "updates judged (an update needs %.2f m or %.2f rad of motion); a wrong "
-                  "initial pose can match well at first",
+                  "updates judged (a judged update needs %.2f m or %.2f rad of motion; timed "
+                  "updates do not count); a wrong initial pose can match well at first",
                   match_.sinceReseed(), match_verify_updates_, update_min_d_, update_min_a_);
     warnings.emplace_back(buf);
   }
@@ -369,6 +373,10 @@ void LocalizationNode::onDiagnostics() {
   kv("covariance_yaw", num(last_cov_(5, 5), "%.6f"));
   kv("input_rate_hz", num(input_period_s_ > 0.0 ? 1.0 / input_period_s_ : 0.0, "%.2f"));
   kv("seconds_since_last_input", num(since_input, "%.2f"));
+  kv("update_min_period", num(update_min_period_, "%.3f"));
+  kv("updates_by_motion", std::to_string(updates_by_motion_));
+  kv("updates_by_time", std::to_string(updates_by_time_));
+  kv("updates_forced", std::to_string(updates_forced_));
   kv("seconds_since_last_update", num(any_update_ ? secs(last_update_wall_) : since_start, "%.2f"));
   kv("odom_tf_failures", std::to_string(odom_tf_failures_));
   kv("relocalization", reloc_state_);
@@ -662,9 +670,18 @@ void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {
 
   const double dd = std::hypot(odom_base.x - last_odom_.x, odom_base.y - last_odom_.y);
   const double da = std::fabs(prism_loc_core::normalizeAngle(odom_base.yaw - last_odom_.yaw));
-  const bool moved = dd >= update_min_d_ || da >= update_min_a_;
+  UpdateGate gate;
+  gate.min_d = update_min_d_;
+  gate.min_a = update_min_a_;
+  gate.min_period_s = update_min_period_;
+  // Elapsed message-stamp time since the last update (NaN before the first one). Only
+  // read when the option is on: period 0 never reads the stamp state.
+  const double stamp_s = stamp.seconds();
+  const double since_update_s = update_min_period_ > 0.0 ? last_update_stamp_.elapsed(stamp_s)
+                                                          : std::numeric_limits<double>::quiet_NaN();
+  const UpdateGate::Decision decision = gate.decide(force_update_, dd, da, since_update_s);
 
-  if (force_update_ || moved) {
+  if (decision.update) {
     const bool reseeded = force_update_;
     pf_->predict(*motion_, last_odom_, odom_base);
     if (backend_ == "laser2d") pf_->correct(*laser_model_);
@@ -686,13 +703,21 @@ void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {
     if (backend_ == "ndt3d") {
       // Diagnostic only: nothing here feeds the filter.
       const prism_loc_core::NdtMatchStats ms = ndt_model_->matchStats(base_in_map);
-      match_.update(reseeded, ms.fraction());
+      match_.update(reseeded, ms.fraction(),
+                     decision.reason != UpdateReason::Time);
       last_match_points_ = ms.points;
     }
     map_odom_ = prism_loc_core::compose(base_in_map, prism_loc_core::inverse(odom_base));
     have_map_odom_ = true;
     any_update_ = true;
     last_update_wall_ = Steady::now();
+    last_update_stamp_.mark(stamp_s);
+    switch (decision.reason) {
+      case UpdateReason::Forced: ++updates_forced_; break;
+      case UpdateReason::Motion: ++updates_by_motion_; break;
+      case UpdateReason::Time: ++updates_by_time_; break;
+      case UpdateReason::None: break;
+    }
   }
   if (have_map_odom_) publish(stamp, odom_base);
 }

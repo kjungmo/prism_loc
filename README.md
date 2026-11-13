@@ -251,7 +251,7 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
-`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed`, `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
+`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed` (motion updates only, not timed ones), `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
@@ -301,7 +301,7 @@ the last 5 filter updates. Three states follow from it:
 | Status | When |
 |---|---|
 | WARN `low scan-to-map match: ...` | `match_fraction` below `min_match_fraction` (0.65) |
-| WARN `pose not verified since the last reseed: N of 15 ...` | after `/initialpose` (or `set_initial_pose`), until `match_verify_updates` (15) filter updates have been judged, about 3 m of travel; a robot that stands still stays here. A wrong initial pose can match well for its first updates |
+| WARN `pose not verified since the last reseed: N of 15 ...` | after `/initialpose` (or `set_initial_pose`), until `match_verify_updates` (15) motion-triggered filter updates have been judged, about 3 m of travel; a robot that stands still stays here. A wrong initial pose can match well for its first updates |
 | OK `localizing` | otherwise |
 
 **OK is not proof that the pose is right.** The signal is a classifier with these measured

@@ -136,6 +136,30 @@ weight 0; if no particle is left, the weights become uniform.
   skipped the weights carry over to the next correction; `resample_threshold = 0` never
   resamples, so the weights accumulate for the whole run.
 
+### 3.4a Update gate
+A scan or cloud runs one filter update (predict, correct, resample, estimate) only when
+the gate opens (`prism_loc/update_gate.hpp`, a ROS-free rule). In this order:
+1. A reseed forces an update.
+2. Odometry moved `update_min_d` or turned `update_min_a` since the last update (motion).
+3. Only when `update_min_period > 0` (default `0`, off): at least `update_min_period`
+   seconds of message-stamp time passed since the last update, and the robot moved at
+   least `0.05 × update_min_d` or turned at least `0.05 × update_min_a` (time).
+Between updates the pose follows odometry. The time rule has a "moved at all" condition:
+no timed update while odometry reports less than `0.05 × update_min_d` and less than
+`0.05 × update_min_a` of motion since the last update. Reason: a standing robot scores the
+same view again, and the motion model adds noise in proportion to motion, so with zero
+motion every repeated correct and resample only narrows the particle set (test
+`UpdateGateFilter` in `prism_loc`). The motion counts since the last update, not per scan:
+odometry that drifts while the robot stands (a gyro bias, lidar-odometry jitter) or a
+creeping robot accumulates it and does trigger timed updates on a nearly unchanged view,
+which narrows the particle set without new information. The elapsed time uses message
+stamps, never the wall clock. A stamp that goes back restarts the period; a repeated stamp
+gives zero elapsed time, so a stuck sim clock never triggers. Timed updates do not count
+toward `match_verify_updates` and `match_updates_since_reseed` (those count motion
+updates only); their match fraction still feeds the low-match check. With the option
+on, the node runs more updates per second, and each costs what it cost before. With `0`
+the gate is the motion rule alone, as before.
+
 ### 3.5 Pose & covariance estimate
 Weighted mean of `x,y`; circular weighted mean of `yaw`; weighted sample
 covariance → 6×6 (fill `x,y,yaw`; large constant variance on `z,roll,pitch`).
