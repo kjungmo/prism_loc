@@ -8,33 +8,49 @@
 namespace prism_loc_core {
 
 struct GroundHeightParams {
-  double resolution{1.0};      // m: edge of an xy cell; > 0
-  int min_points{5};           // a cell, and a vertical group inside it, needs this many points; >= 1
-  double layer_gap{1.5};       // m: z gap that splits a cell's points into separate vertical groups
-                               // (head-room between two drivable levels); > 0
-  double ground_quantile{0.05};  // in [0, 1]: which low z of a group is its ground candidate
-  double max_step{0.5};        // m: heightAt() accepts candidates within this of the hint; > 0
+  double resolution{1.0};        // m: edge of an xy cell; finite and > 0
+  int min_points{5};             // a cell, and a vertical group inside it, needs this many points; >= 1
+  double layer_gap{0.2};         // m: smallest empty vertical gap that separates two surfaces in one
+                                 // cell (floor and ceiling underside, two floors); finite and > 0
+  double ground_quantile{0.05};  // in [0, 1]: the low quantile of a group that starts its ground band
+  double max_step{0.5};          // m: a candidate counts only within this of the hint; finite and > 0
+  double band{0.3};              // m: height of the low band above the quantile that is fitted; finite and >= 0.
+                                 // Core field only (not a node parameter)
 };
 
 // Throws std::invalid_argument naming the field when a value is out of range or not finite.
 void validate(const GroundHeightParams& p);
 
 // Ground height of the map as a function of (x, y), built once from the map points (the
-// points the NdtMap gets). A hash grid of xy cells; each cell stores a short ascending
-// list of "ground candidates", one per vertical group of points, so a multi-level map
-// (a ramp, a bridge, two floors) keeps every level.
+// points the NdtMap gets). A hash grid of xy cells; each cell stores a short ascending list
+// of "ground candidates", one per vertical group of points, so a map with several surfaces
+// over the same xy (two floors, a floor below a ceiling) keeps each of them.
 //
-// Build, per cell holding at least min_points points: sort the z values; start a new
-// group wherever two consecutive z differ by more than layer_gap; a group with at least
-// min_points points gives one candidate, the value at sorted index
-// floor(ground_quantile * (n - 1)) of that group (n = its size). A low quantile instead of
-// the minimum ignores a few points below the surface; a wall standing on the ground adds
-// points above it in the same group, so the low quantile is still the ground. Points that
-// are not finite or lie beyond about +-1e6 cells are skipped. The result depends on the
-// set of points only, not on their order.
+// Build, per cell that holds at least min_points points:
+//  1. Sort the cell's points by z. Start a new group wherever two consecutive z differ by
+//     more than layer_gap (an empty vertical gap: the surfaces are separate). A group with
+//     fewer than min_points points gives no candidate.
+//  2. In a group of n points take zq = z at sorted index floor(ground_quantile * (n - 1)).
+//     The low band is the points with zq <= z <= zq + band. Points below zq (the lowest few
+//     per cent: noise under the surface) are left out.
+//  3. Split the cell into 4 x 4 sub-columns; of the band points keep the lowest one of each
+//     sub-column. A wall or pillar standing on the ground adds points above the ground in
+//     the same sub-columns; they are never the lowest, so they do not enter the fit.
+//  4. Fit the least-squares plane z = a + bx (x - cx) + by (y - cy) to the kept points,
+//     (cx, cy) the cell centre, and store a: the candidate is the ground height at the
+//     cell centre, so a sloped ground is not shifted towards the downhill edge.
+//     The fit is refused, and the mean z of the kept points is stored instead, when fewer
+//     than 3 points are kept, or the smaller eigenvalue of their 2 x 2 xy covariance is
+//     below (0.1 * resolution)^2 (the points lie on a line or in a corner), or |a - mean z|
+//     exceeds band (an extrapolation that far is not trusted).
+// Points that are not finite are skipped. Points beyond about +-1e6 cells of the origin are
+// skipped too and counted in numSkippedOutOfRange(). The result depends on the set of
+// points only, not on their order (every comparison is a total order on the values).
+// Build memory: 8 bytes per map point on top of the input (a cell id and an index each).
 //
-// Ground under a ceiling or an overhead structure: it forms its own group (when the gap is
-// larger than layer_gap) and its own candidate; heightAt()'s hint keeps it from being used.
+// heightAt() interpolates bilinearly between the cell centres, so the height is continuous.
+// Remaining errors: curvature of the ground inside a cell, and non-ground points that are
+// the lowest in a sub-column of the band (a bush on a lawn; low overhangs).
 //
 // The object is immutable after construction: queries are const and thread safe.
 class GroundHeightMap {
@@ -44,37 +60,43 @@ class GroundHeightMap {
 
   // Ground height under (x, y) on the level that holds z_hint (the ground height of the
   // current estimate, or any z near the level wanted).
-  // In each of the 3x3 cells around (x, y), take the candidate nearest to z_hint (a tie
-  // goes to the lower one); keep those within max_step of z_hint; return their median
-  // (mean of the two middle values when there is an even number). nullopt when no cell
-  // has such a candidate, or when an argument is not finite. One hash lookup per cell.
+  // The four cells whose centres surround (x, y) are looked at. In each, take the candidate
+  // nearest to z_hint (a tie goes to the lower one) and keep it only when within max_step
+  // of z_hint. Return the bilinear interpolation over the cells that kept one, with the
+  // weights renormalised (equal weights when the kept cells all have weight 0, i.e. (x, y)
+  // is the centre of an empty cell). nullopt when no cell kept one, or an argument is not
+  // finite.
   std::optional<double> heightAt(double x, double y, double z_hint) const;
 
-  // Same, for a reseed where the level is only roughly known: z_guess may be far from
-  // every candidate (RViz sends z = 0).
-  // 1. In each of the 3x3 cells, take the candidate nearest to z_guess (tie: lower).
-  // 2. Among those values take the one nearest to z_guess (tie: lower), the anchor.
-  // 3. Return heightAt(x, y, anchor), i.e. the median of the step 1 values within
-  //    max_step of the anchor.
-  // No limit on the distance between z_guess and the anchor. nullopt only when the 3x3
-  // cells hold no candidate at all, or when an argument is not finite.
+  // Same, for a reseed where the level is only roughly known: z_guess may be far from every
+  // candidate (RViz sends z = 0).
+  // 1. In each of the four cells take the candidate nearest to z_guess (tie: lower).
+  // 2. Among those take the one nearest to z_guess (tie: lower): the anchor.
+  // 3. Return heightAt(x, y, anchor).
+  // No limit on the distance between z_guess and the anchor. nullopt when the four cells hold
+  // no candidate, or an argument is not finite.
   std::optional<double> heightNearest(double x, double y, double z_guess) const;
 
   std::size_t numCells() const { return cells_.size(); }       // cells with >= 1 candidate
   std::size_t numCandidates() const { return num_candidates_; }
-  // Rough heap use of the grid in bytes (entries, candidate vectors, hash buckets).
+  std::size_t numSkippedOutOfRange() const { return skipped_out_of_range_; }
+  // Estimate of the heap held by the grid after the build, in bytes: per cell a hash node
+  // (next pointer, key, vector header: 40 bytes) plus the allocator's 16 byte granularity
+  // and header, the candidate array likewise, and the bucket array.
   std::size_t approxBytes() const;
   const GroundHeightParams& params() const { return params_; }
 
  private:
-  std::int64_t keyOfCell(std::int64_t i, std::int64_t j) const;
-  // Candidates of a cell, ascending; nullptr when the cell has none or i, j are out of range.
+  static std::int64_t keyOfCell(std::int64_t i, std::int64_t j);
   const std::vector<double>* cell(std::int64_t i, std::int64_t j) const;
   bool cellIndex(double x, double y, std::int64_t& i, std::int64_t& j) const;
+  // the four surrounding cells and their weights; false when out of range
+  bool surround(double x, double y, std::int64_t& i0, std::int64_t& j0, double& tx, double& ty) const;
 
   GroundHeightParams params_;
   std::unordered_map<std::int64_t, std::vector<double>> cells_;
   std::size_t num_candidates_{0};
+  std::size_t skipped_out_of_range_{0};
 };
 
 }  // namespace prism_loc_core

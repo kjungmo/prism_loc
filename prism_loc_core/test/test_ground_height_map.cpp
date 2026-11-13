@@ -104,13 +104,18 @@ TEST(GroundHeightMap, TwoLevelsHintSelectsTheLevel) {
   EXPECT_NEAR(*g.heightNearest(3.0, 3.0, 1.5), 0.0, 1e-9);
 }
 
-// Levels closer than layer_gap are one group: one candidate at the low quantile.
-TEST(GroundHeightMap, LevelsCloserThanLayerGapMerge) {
+// Surfaces closer than layer_gap (0.2 m) are one group: one candidate. Further apart: two.
+TEST(GroundHeightMap, SurfacesCloserThanLayerGapMerge) {
   Pts pts = surface(0, 3, 0, 3, 0.1, [](double, double) { return 0.0; });
-  append(pts, surface(0, 3, 0, 3, 0.1, [](double, double) { return 1.0; }));
+  append(pts, surface(0, 3, 0, 3, 0.1, [](double, double) { return 0.1; }));
   GroundHeightMap g(pts);
   EXPECT_EQ(g.numCandidates(), g.numCells());
   EXPECT_NEAR(*g.heightAt(1.5, 1.5, 0.0), 0.0, 1e-9);
+  Pts far = surface(0, 3, 0, 3, 0.1, [](double, double) { return 0.0; });
+  append(far, surface(0, 3, 0, 3, 0.1, [](double, double) { return 0.3; }));
+  GroundHeightMap g2(far);
+  EXPECT_EQ(g2.numCandidates(), 2 * g2.numCells());
+  EXPECT_NEAR(*g2.heightAt(1.5, 1.5, 0.3), 0.3, 1e-9);
 }
 
 // A thin group (fewer than min_points) gives no candidate, e.g. a few points of a cable.
@@ -146,15 +151,17 @@ TEST(GroundHeightMap, HolesAreFilledByNeighboursFarHolesAreNot) {
   EXPECT_FALSE(g.heightNearest(50.0, 50.0, 0.0).has_value());
 }
 
-// Neighbour fill uses the median: one neighbour on another level (within max_step
-// of the hint, an outlier among the nine) does not drag the result.
-TEST(GroundHeightMap, MedianOfNeighbours) {
-  Pts pts = surface(0, 3, 0, 3, 0.1, [](double, double) { return 0.0; });
-  // raise the cell (2, 2) by 0.4 m
+// The height is interpolated between the cell centres: at a centre it is that cell's value,
+// halfway between two centres the mean, and it never leaves the range of the cells' values.
+TEST(GroundHeightMap, InterpolatesBetweenCellCentres) {
+  Pts pts = surface(0, 4, 0, 4, 0.1, [](double, double) { return 0.0; });
   for (auto& p : pts)
-    if (p.x() >= 2 && p.y() >= 2) p.z() = 0.4;
+    if (p.x() >= 2 && p.y() >= 2 && p.x() < 3 && p.y() < 3) p.z() = 0.4;  // the cell (2, 2)
   GroundHeightMap g(pts);
-  EXPECT_NEAR(*g.heightAt(1.5, 1.5, 0.1), 0.0, 1e-9);  // 8 of 9 at 0, one at 0.4: median 0
+  EXPECT_NEAR(*g.heightAt(1.5, 1.5, 0.1), 0.0, 1e-9);
+  EXPECT_NEAR(*g.heightAt(2.5, 2.5, 0.4), 0.4, 1e-9);
+  EXPECT_NEAR(*g.heightAt(2.0, 2.0, 0.1), 0.1, 1e-9);   // the corner of four cells, one at 0.4
+  EXPECT_NEAR(*g.heightAt(2.5, 2.0, 0.2), 0.2, 1e-9);   // halfway between the centres (2,1) 0 and (2,2) 0.4
 }
 
 TEST(GroundHeightMap, EmptyMapAndBadArguments) {
@@ -227,6 +234,122 @@ TEST(GroundHeightMap, NegativeCoordinatesAndCellBorders) {
   EXPECT_NEAR(*g.heightAt(-1.0, -1.0, -2.0), -2.0, 1e-9);
 }
 
+// The error of heightAt against a constant slope is below 2 cm inside the map, mid-cell and
+// on cell borders alike (the candidate is the plane value at the cell centre, the query
+// interpolates between centres), and the height is continuous.
+TEST(GroundHeightMap, ConstantSlopesAreFollowedWithinTwoCentimetres) {
+  for (double s : {0.05, 0.1})
+    for (int dir = 0; dir < 3; ++dir) {
+      const double ax = dir == 0 || dir == 2 ? s : 0.0, ay = dir == 1 || dir == 2 ? s : 0.0;
+      const auto f = [&](double x, double y) { return 0.7 + ax * x + ay * y; };
+      GroundHeightMap g(surface(0, 12, 0, 12, 0.1, f));
+      double worst = 0.0, worst_jump = 0.0;
+      for (double x = 1.0; x < 11.0; x += 0.037)
+        for (double y = 1.0; y < 11.0; y += 0.041) {
+          const auto h = g.heightAt(x, y, f(x, y));
+          ASSERT_TRUE(h.has_value());
+          worst = std::max(worst, std::fabs(*h - f(x, y)));
+          const auto h2 = g.heightAt(x + 0.01, y, f(x, y));
+          worst_jump = std::max(worst_jump, std::fabs(*h2 - *h));
+        }
+      EXPECT_LT(worst, 0.02) << "slope " << s << " dir " << dir;
+      EXPECT_LT(worst_jump, ax * 0.01 + 0.002) << "slope " << s << " dir " << dir;
+    }
+}
+
+// A wall standing on a slope: the ground under and next to it is still the ground.
+TEST(GroundHeightMap, WallOnASlopeReturnsTheGround) {
+  const auto f = [](double x, double) { return 0.1 * x; };
+  Pts pts = surface(0, 8, 0, 8, 0.1, f);
+  for (double y = 2.0; y < 6.0; y += 0.05)
+    for (double h = 0.05; h < 2.5; h += 0.05) pts.emplace_back(3.02, y, f(3.02, y) + h);
+  GroundHeightMap g(pts);
+  for (double x : {2.6, 3.2, 3.5, 3.9, 4.4})
+    for (double y : {2.5, 3.5, 5.0}) {
+      const auto h = g.heightAt(x, y, f(x, y));
+      ASSERT_TRUE(h.has_value());
+      EXPECT_NEAR(*h, f(x, y), 0.02) << x << " " << y;
+    }
+}
+
+// Floor at 0, a ceiling underside at 3.0 and a floor above at 3.3: three surfaces; the hint picks.
+TEST(GroundHeightMap, FloorCeilingFloorAboveAreSeparateSurfaces) {
+  Pts pts = surface(0, 6, 0, 6, 0.1, [](double, double) { return 0.0; });
+  append(pts, surface(0, 6, 0, 6, 0.1, [](double, double) { return 3.0; }));
+  append(pts, surface(0, 6, 0, 6, 0.1, [](double, double) { return 3.3; }));
+  GroundHeightMap g(pts);
+  EXPECT_EQ(g.numCandidates(), 3 * g.numCells());
+  EXPECT_NEAR(*g.heightAt(3.0, 3.0, 3.3), 3.3, 1e-9);
+  EXPECT_NEAR(*g.heightAt(3.0, 3.0, 0.0), 0.0, 1e-9);
+  EXPECT_NEAR(*g.heightAt(3.0, 3.0, 3.0), 3.0, 1e-9);   // the ceiling underside is a candidate too
+  EXPECT_NEAR(*g.heightNearest(3.0, 3.0, 3.4), 3.3, 1e-9);
+  EXPECT_NEAR(*g.heightNearest(3.0, 3.0, 1.0), 0.0, 1e-9);
+}
+
+// A pillar from the floor to the ceiling in one cell: that cell's lower group holds the floor
+// and the pillar, the floor above stays separate. A pillar with more points than 5 % of the
+// group lifts the low quantile above the floor a little (here 5 cm at the pillar's cell);
+// the hint still selects the floor.
+TEST(GroundHeightMap, PillarCellKeepsFloorAndFloorAbove) {
+  Pts pts = surface(0, 6, 0, 6, 0.1, [](double, double) { return 0.0; });
+  append(pts, surface(0, 6, 0, 6, 0.1, [](double, double) { return 3.3; }));
+  for (double z = 0.05; z < 3.0; z += 0.05)
+    for (double dx = 0.0; dx < 0.3; dx += 0.05)
+      for (double dy = 0.0; dy < 0.3; dy += 0.05) pts.emplace_back(2.6 + dx, 2.6 + dy, z);
+  GroundHeightMap g(pts);
+  EXPECT_NEAR(*g.heightAt(2.75, 2.75, 0.0), 0.0, 0.05);
+  EXPECT_NEAR(*g.heightAt(2.75, 2.75, 3.3), 3.3, 0.01);
+  EXPECT_NEAR(*g.heightAt(1.5, 1.5, 0.0), 0.0, 1e-9);  // next to it: untouched
+}
+
+// Wall points every 0.5 m in z: each height with enough points is a candidate of its own,
+// the hint (the ground of the estimate) still picks the ground.
+TEST(GroundHeightMap, SparseWallPointsDoNotMoveTheGround) {
+  Pts pts = surface(0, 6, 0, 6, 0.1, [](double, double) { return 0.0; });
+  for (double z = 0.5; z < 3.0; z += 0.5)
+    for (double y = 2.0; y < 4.0; y += 0.1) pts.emplace_back(3.02, y, z);
+  GroundHeightMap g(pts);
+  EXPECT_GT(g.numCandidates(), g.numCells());  // the wall rows are candidates
+  for (double hint : {0.0, 0.1, -0.1})
+    for (double y : {2.5, 3.0, 3.5}) EXPECT_NEAR(*g.heightAt(3.3, y, hint), 0.0, 1e-9);
+}
+
+// Plane fit refused: the points of the band lie on a line, or fewer than 3: the mean z.
+TEST(GroundHeightMap, IllConditionedFitFallsBackToTheMeanZ) {
+  Pts line;  // one row of points across a cell, z rising 0.1 m: a line in xy
+  for (int k = 0; k < 20; ++k) line.emplace_back(0.025 + 0.045 * k, 0.5, 0.005 * k);
+  GroundHeightParams p;
+  p.ground_quantile = 0.0;
+  const auto h = GroundHeightMap(line, p).heightAt(0.5, 0.5, 0.05);
+  ASSERT_TRUE(h.has_value());
+  // the lowest point of each of the 4 sub-columns is kept (z 0, 0.025, 0.055, 0.085): their mean
+  EXPECT_NEAR(*h, 0.04125, 0.005);
+  // two sub-columns only: fewer than 3 points kept
+  Pts two;
+  for (int k = 0; k < 10; ++k) { two.emplace_back(0.1, 0.1, 0.0); two.emplace_back(0.9, 0.9, 0.2); }
+  EXPECT_NEAR(*GroundHeightMap(two, p).heightAt(0.5, 0.5, 0.1), 0.1, 1e-9);
+}
+
+TEST(GroundHeightMap, CountsPointsOutOfRange) {
+  Pts pts = surface(0, 3, 0, 3, 0.1, [](double, double) { return 0.0; });
+  EXPECT_EQ(GroundHeightMap(pts).numSkippedOutOfRange(), 0u);
+  pts.emplace_back(2e6, 0.0, 0.0);
+  pts.emplace_back(0.0, -3e6, 0.0);
+  pts.emplace_back(std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0);  // not finite: not counted
+  EXPECT_EQ(GroundHeightMap(pts).numSkippedOutOfRange(), 2u);
+  GroundHeightParams p;
+  p.resolution = 10.0;  // 2e6 m is 2e5 cells: in range now
+  EXPECT_EQ(GroundHeightMap(pts, p).numSkippedOutOfRange(), 0u);
+}
+
+TEST(GroundHeightMap, ApproxBytesIsTheSizeOfWhatIsHeld) {
+  GroundHeightMap g(surface(0, 20, 0, 20, 0.1, [](double, double) { return 0.0; }));
+  ASSERT_EQ(g.numCells(), 400u);
+  // 400 cells, one candidate each: at least a node (48) and a candidate array (16) per cell
+  EXPECT_GE(g.approxBytes(), 400u * 64u);
+  EXPECT_LE(g.approxBytes(), 400u * 64u + 400u * 8u * 4u);  // plus the bucket array
+}
+
 TEST(GroundHeightMap, ParameterValidation) {
   const double nan = std::numeric_limits<double>::quiet_NaN();
   EXPECT_NO_THROW(validate(GroundHeightParams{}));
@@ -247,6 +370,8 @@ TEST(GroundHeightMap, ParameterValidation) {
   p = {}; p.ground_quantile = 1.1; bad(p, "ground_quantile");
   p = {}; p.max_step = 0.0; bad(p, "max_step");
   p = {}; p.max_step = nan; bad(p, "max_step");
+  p = {}; p.band = -0.1; bad(p, "band");
+  p = {}; p.band = nan; bad(p, "band");
   p = {}; p.resolution = -1.0;
   EXPECT_THROW(GroundHeightMap(Pts{}, p), std::invalid_argument);
 }

@@ -149,7 +149,7 @@ TEST(ParamValidation, GroundHeightParams) {
   prism_loc_core::GroundHeightParams gp;
   EXPECT_NO_THROW(validateGroundParams(gp));
   EXPECT_DOUBLE_EQ(gp.resolution, 1.0);
-  EXPECT_DOUBLE_EQ(gp.layer_gap, 1.5);
+  EXPECT_DOUBLE_EQ(gp.layer_gap, 0.2);
   EXPECT_DOUBLE_EQ(gp.max_step, 0.5);
   EXPECT_EQ(gp.min_points, 5);
   EXPECT_DOUBLE_EQ(gp.ground_quantile, 0.05);
