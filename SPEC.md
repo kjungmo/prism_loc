@@ -83,10 +83,34 @@ where `T_odom_base` is read from tf2 at the scan stamp. Publishing
 
 ### 3.1 State & particle
 2D-planar pose is sufficient for both backends on a ground robot (`ndt3d` scores
-3D points but the filter samples `x,y,yaw`; the lidar is taken to be level at the
-height `base_height` in the map frame, and the `z`, roll and pitch of the TF
-`base_frame → cloud frame` are not used — documented limitation; full 6-DoF is
-future work). Each particle: `Pose2D{ x, y, yaw }` + `weight`.
+3D points but the filter samples `x,y,yaw`). Each particle: `Pose2D{ x, y, yaw }` +
+`weight`.
+
+`ndt3d` height and tilt assumptions. The model places the cloud level, at a height
+that is not part of the particle state:
+- Default: at the constant map z `base_height`. The `z`, roll and pitch of the TF
+  `base_frame → cloud frame` are not used.
+- `ground_height_from_map` (optional, off by default): at map z = ground(x, y) +
+  `base_height`, where `base_height` is then the height of the cloud frame above the
+  local ground. `ground(x, y)` comes from a grid built once from the map points: per xy
+  cell, the low quantile of each vertical group of points (groups split by gaps over
+  `ground_layer_gap`). A particle looks up the 3 × 3 cells around it, takes in each cell
+  the level nearest to a hint (the ground height under the current estimate), keeps those
+  within `ground_max_step` of the hint, and uses their median. With no answer it keeps
+  the height of the estimate. The hint is set at every reseed (the level nearest to the
+  initial pose z, no distance limit) and after each filter update. Limits: it needs map
+  points on the ground under the robot's path; on a multi-level map the hint selects the
+  level, so a wrong level at a reseed stays wrong until the next reseed; on a slope the
+  ground height of a cell is up to slope × `ground_resolution` below the surface at its
+  middle. The published pose stays planar.
+- `use_sensor_tilt` (optional, off by default): the cloud is rotated by the roll and
+  pitch of the static `base_frame → cloud frame` rotation before matching. The rotation
+  is `Rz(yaw) · Ry(pitch) · Rx(roll)` (tf2 `getRPY`); the points are multiplied by
+  `Ry(pitch) · Rx(roll)`, and `yaw`, `x`, `y` go through the transform as without the
+  option. The z of the transform is still not used. It does not handle the roll and
+  pitch of the robot body on a slope.
+
+Full 6-DoF is future work.
 
 ### 3.2 Motion model — odometry sample model
 `sample_motion_model_odometry` (Probabilistic Robotics §5.4). Given previous and

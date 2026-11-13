@@ -80,8 +80,10 @@ class MatchMonitor {
 };
 
 // ndt3d is planar: of the transform base_frame -> cloud frame it uses x, y and yaw only.
-// The sensor is placed level, at height base_height in the map frame; the transform's z,
-// roll and pitch are ignored. This reports which ignored parts are not negligible: a tilt
+// The sensor is placed level, at height base_height in the map frame (with the optional
+// ground_height_from_map: base_height above the local ground); the transform's z is
+// ignored, and so are its roll and pitch unless the optional use_sensor_tilt levels the
+// cloud with them (then the node informs instead of warning). This reports which ignored parts are not negligible: a tilt
 // over angle_tol (always a mismatch: the node warns), or a z that differs from base_height
 // by more than height_tol. The latter is not an error by itself: base_height is a height
 // in the map frame and z one above base_frame, so they differ on every robot whose
