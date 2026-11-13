@@ -10,7 +10,10 @@ class Rng {
     return std::uniform_real_distribution<double>(lo, hi)(gen_);
   }
   double gaussian(double mean = 0.0, double stddev = 1.0) {
-    return std::normal_distribution<double>(mean, stddev)(gen_);
+    // mean + stddev * N(0, 1): the same draws and the same value as
+    // std::normal_distribution(mean, stddev), and defined for stddev == 0 (a zero motion
+    // gives a zero noise spread), which the standard distribution does not allow.
+    return mean + stddev * std::normal_distribution<double>(0.0, 1.0)(gen_);
   }
   std::mt19937_64& engine() { return gen_; }
  private:
