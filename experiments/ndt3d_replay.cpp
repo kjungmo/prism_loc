@@ -15,9 +15,7 @@
 //                [--effective-points E] [--min-sigma S]
 //
 // --effective-points and --min-sigma are the node's ndt_effective_points and ndt_min_sigma.
-// Their defaults here are 0 and 0, the plain likelihood.
-// To replay the node's defaults, pass --effective-points 10 (ndt_min_sigma is 0 in
-// prism_loc/params/ndt3d.yaml).
+// Their defaults here are 0 and 0, the plain likelihood, the same as the node's defaults.
 // The committed results in experiments/results/ndt3d_replay used the plain likelihood.
 //
 // One row per filter update: time, forced (reseed), particles, n_eff, estimate, errors

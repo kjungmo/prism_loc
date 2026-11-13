@@ -263,22 +263,30 @@ then lost, or when odometry appears while the fallback was being broadcast (two
 parents for `base_link`).
 
 **ndt3d likelihood.** Two parameters shape the NDT likelihood (details in
-[`PARAMS.md`](PARAMS.md)). `ndt_effective_points` makes the scan count as a fixed number
-of independent points instead of the full subsample, so one scan does not outweigh the
-motion model; `ndt_min_sigma` (m) puts a floor under the spread of every NDT cell, so a
-flat cell does not score a point a few centimetres off its surface as zero. The scoring of a pose
-for `match_fraction` below ignores `ndt_min_sigma`; the estimated pose, and so the reported
-`match_fraction`, can change with it. `ndt_min_sigma` is off by default. The floor widens the likelihood around thin map
-surfaces, which reduced position excursions on a real outdoor recording when used together
-with `ndt_effective_points`; using it without `ndt_effective_points` is not recommended. On
-a map whose surfaces are thinner than the floor it lets the estimate move a few centimetres,
-which lowers `match_fraction` at the tracked pose. One run each of the `ndt3d_track` scenario
-of `scripts/synthetic_e2e.py` with `ndt_effective_points: 10`, `match_fraction` in the statuses
-after t = 15 s (the 5-update mean): `ndt_min_sigma` 0 gave min 0.77 and median 0.81; 0.05 gave
-min 0.67 and median 0.70; 0.10 gave min 0.62 and median 0.66. At 0.10 m the default
-`min_match_fraction` 0.65 WARNs on that healthy run. Re-measure `min_match_fraction` on a healthy run when you enable the floor; try 0.05 to 0.10 m. Setting both
-to `0` restores the earlier likelihood. A correction multiplies each particle's previous
-weight by its likelihood, so the weights carry over when resampling is skipped.
+[`PARAMS.md`](PARAMS.md)). Both are off by default (0), which is the plain likelihood.
+`ndt_effective_points` makes the scan count as a fixed number of independent points instead
+of the full subsample, so one scan does not outweigh the motion model; `ndt_min_sigma` (m)
+puts a floor under the spread of every NDT cell, so a flat cell does not score a point a few
+centimetres off its surface as zero. On a real outdoor recording, `ndt_effective_points`
+around 5 to 10, alone or with `ndt_min_sigma` 0.05 to 0.10 m, reduced position excursions.
+Using `ndt_min_sigma` without `ndt_effective_points` is not recommended.
+
+Costs, measured in the synthetic end-to-end world of this repository
+(`scripts/synthetic_e2e.py`, ndt3d):
+- With `ndt_effective_points: 10` the filter converges more slowly after `/initialpose`
+  (seeded with a 0.5 m spread). In four runs the position error in the first 10 s was up to
+  0.25 to 0.54 m, against 0.10 m with 0. After 30 s the error and `match_fraction` were the same.
+- The scoring of a pose for `match_fraction` ignores `ndt_min_sigma`; the estimated pose, and
+  so the reported `match_fraction`, can change with it. On a map whose surfaces are thinner
+  than the floor the estimate moves a few centimetres, which lowers `match_fraction` at the
+  tracked pose. One run each of the `ndt3d_track` scenario with `ndt_effective_points: 10`,
+  `match_fraction` in the statuses after t = 15 s (the 5-update mean): `ndt_min_sigma` 0 gave
+  min 0.77 and median 0.81; 0.05 gave min 0.67 and median 0.70; 0.10 gave min 0.62 and median
+  0.66. At 0.10 m the default `min_match_fraction` 0.65 WARNs on that healthy run. Re-measure
+  `min_match_fraction` on a healthy run when you enable the floor.
+
+Setting both to `0` is the earlier likelihood. A correction multiplies each particle's
+previous weight by its likelihood, so the weights carry over when resampling is skipped.
 
 **ndt3d status.** The effective particle count is not a health signal for `ndt3d`: with
 the plain NDT likelihood (`ndt_effective_points: 0`) one particle takes nearly all the
@@ -295,8 +303,8 @@ the last 5 filter updates. Three states follow from it:
 
 **OK is not proof that the pose is right.** The signal is a classifier with these measured
 rates, as shares of all filter updates of the runs named. The tables in this section were
-measured with `ndt_effective_points: 0` and `ndt_min_sigma: 0` (the plain likelihood; the
-node defaults are 10 and 0). The runs come from the offline replay (
+measured with the defaults, `ndt_effective_points: 0` and `ndt_min_sigma: 0` (the plain
+likelihood). The runs come from the offline replay (
 [`experiments/ndt3d_replay.cpp`](experiments/ndt3d_replay.cpp): the real filter core and
 `MatchMonitor` driven by synthetic clouds of the world `scripts/synthetic_e2e.py` uses, 4 seeds
 per case; no part of a run left out unless stated). Regenerate them with

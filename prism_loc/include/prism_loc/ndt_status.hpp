@@ -32,10 +32,9 @@ namespace prism_loc {
 // same (n_eff = N).
 constexpr double kDefaultMinMatchFraction = 0.65;  // default of the min_match_fraction parameter
 constexpr int kDefaultMatchVerifyUpdates = 15;     // default of the match_verify_updates parameter
-// Defaults of the ndt_effective_points and ndt_min_sigma parameters. The prism_loc_core
-// defaults and the node's ndt_min_sigma default are 0 (relative covariance floor only);
-// the node and ndt3d.yaml use these.
-constexpr double kDefaultNdtEffectivePoints = 10.0;  // points the cloud counts as (see NdtParams)
+// Defaults of the ndt_effective_points and ndt_min_sigma parameters: both 0 (off), the plain
+// likelihood, as in prism_loc_core. The node and ndt3d.yaml use these.
+constexpr double kDefaultNdtEffectivePoints = 0.0;   // points the cloud counts as (see NdtParams); 0 = off
 constexpr double kDefaultNdtMinSigma = 0.0;          // m: floor on an NDT cell's standard deviation (0 = off)
 
 // In-code default of min_neff_fraction: the laser2d check stays at 0.005; for ndt3d it
