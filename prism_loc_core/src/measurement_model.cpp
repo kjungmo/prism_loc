@@ -49,9 +49,10 @@ std::optional<double> Ndt3DModel::groundHeightNearest(const Pose2D& p, double z_
 
 bool Ndt3DModel::seedGround(const Pose2D& at, double z_guess) {
   ground_misses_ = 0;
-  last_follow_ = GroundFollow::NoGround;
+  last_follow_ = GroundFollow::Seeded;
   const std::optional<double> g = groundHeightNearest(at, z_guess);
   height_hint_ = g ? *g : z_guess;
+  hint_is_guess_ = !g.has_value();
   return g.has_value();
 }
 
@@ -60,14 +61,18 @@ GroundFollow Ndt3DModel::followGround(const Pose2D& estimate) {
   if (const auto g = groundHeightAt(estimate)) {
     height_hint_ = *g;
     ground_misses_ = 0;
+    hint_is_guess_ = false;
     return last_follow_ = GroundFollow::Followed;
   }
   if (ground_misses_ < 1000000000) ++ground_misses_;
   if (ground_misses_ < std::max(1, params_.ground_reanchor_after)) return last_follow_ = GroundFollow::Kept;
   if (const auto g = groundHeightNearest(estimate, height_hint_)) {
-    height_hint_ = *g;
-    ground_misses_ = 0;
-    return last_follow_ = GroundFollow::Reanchored;
+    if (hint_is_guess_ || std::fabs(*g - height_hint_) <= params_.ground_reanchor_max_jump) {
+      height_hint_ = *g;
+      ground_misses_ = 0;
+      hint_is_guess_ = false;
+      return last_follow_ = GroundFollow::Reanchored;
+    }
   }
   return last_follow_ = GroundFollow::NoGround;
 }

@@ -334,9 +334,10 @@ TEST(NdtGround, ConstantHeightDegradesUpTheRampGroundMapDoesNot) {
 // continuous, so no false peak sits at a cell edge. With and without the NDT min_sigma.
 TEST(NdtGround, LikelihoodPeaksAtTheTruthMidCellOnTheRamp) {
   Ramp r;
-  const Pose2D truth{10.5, 0.0, 0.0};
-  const auto cloud = viewFrom(r.pts, truth, 1.0);
   for (double min_sigma : {0.0, 0.1}) {
+   for (double tx : {10.5, 10.95, 10.05}) {  // a cell centre, close to a cell edge on either side
+    const Pose2D truth{tx, 0.0, 0.0};
+    const auto cloud = viewFrom(r.pts, truth, 1.0);
     auto ndt = std::make_shared<NdtMap>(r.pts, 1.0, 5, min_sigma);
     Ndt3DModel m(ndt, Ramp::params(1.0));
     m.setGroundMap(r.ground);
@@ -348,7 +349,8 @@ TEST(NdtGround, LikelihoodPeaksAtTheTruthMidCellOnTheRamp) {
       const double ll = m.logLikelihood(Pose2D{x, truth.y, 0.0});
       if (ll > best) { best = ll; best_x = x; }
     }
-    EXPECT_NEAR(best_x, truth.x, 0.05) << "min_sigma " << min_sigma;
+    EXPECT_NEAR(best_x, truth.x, 0.05) << "min_sigma " << min_sigma << " x " << tx;
+   }
   }
 }
 
@@ -498,10 +500,10 @@ TEST(NdtGround, FollowGroundFollowsTheEstimateOnARamp) {
   Ndt3DModel m(r.ndt, Ramp::params(1.0));
   m.setGroundMap(r.ground);
   EXPECT_TRUE(m.seedGround(Pose2D{5.5, 0.0, 0.0}, 0.0));
-  EXPECT_NEAR(m.heightHint(), kSlope * 5.5, 1e-9);
+  EXPECT_NEAR(m.heightHint(), kSlope * 5.5, 0.02);
   for (double x = 5.5; x < 25.0; x += 0.2) {
     EXPECT_EQ(m.followGround(Pose2D{x, 0.0, 0.0}), GroundFollow::Followed);
-    EXPECT_NEAR(m.heightHint(), kSlope * x, 1e-9) << x;
+    EXPECT_NEAR(m.heightHint(), kSlope * x, 0.02) << x;  // within 2 cm: a wall crosses the ramp at x = 13.5
     EXPECT_EQ(m.groundMisses(), 0);
   }
   EXPECT_EQ(m.lastGroundFollow(), GroundFollow::Followed);
@@ -608,4 +610,52 @@ TEST(NdtGround, ReseedResetsTheMissCounterAndNoMapMeansNoGround) {
   EXPECT_EQ(none.heightHint(), 2.0);
   EXPECT_FALSE(none.seedGround(Pose2D{5.0, 5.0, 0.0}, 7.0));  // no map: only the hint is set
   EXPECT_EQ(none.heightHint(), 7.0);
+}
+
+// Re-anchoring must not jump floors: the upper floor (3.3 m) has a gap; a floor at 0 runs under
+// all of it. After the miss limit the nearest level to the hint is the lower floor, 3.3 m
+// away, more than ground_reanchor_max_jump: the hint is held, and the upper floor is
+// followed again after the gap.
+TEST(NdtGround, ReanchorDoesNotJumpFloors) {
+  std::vector<Eigen::Vector3d> pts;
+  flat(pts, 0.0, 30.0, 0.0);
+  flat(pts, 0.0, 10.0, 3.3);
+  flat(pts, 14.0, 30.0, 3.3);
+  auto map = std::make_shared<NdtMap>(pts, 1.0, 5);
+  Ndt3DModel m(map, Ramp::params(1.0));
+  m.setGroundMap(std::make_shared<GroundHeightMap>(pts));
+  ASSERT_TRUE(m.seedGround(Pose2D{5.0, 5.0, 0.0}, 3.3));
+  EXPECT_NEAR(m.heightHint(), 3.3, 1e-9);
+  int no_ground = 0;
+  for (double x = 8.0; x < 20.0; x += 0.25) {
+    const GroundFollow r = m.followGround(Pose2D{x, 5.0, 0.0});
+    EXPECT_NE(r, GroundFollow::Reanchored) << x;
+    no_ground += r == GroundFollow::NoGround;
+    if (r != GroundFollow::Followed) { EXPECT_NEAR(m.heightHint(), 3.3, 1e-6) << x; }  // held
+  }
+  EXPECT_GT(no_ground, 0);  // the limit was reached and the lower floor was refused
+  EXPECT_EQ(m.lastGroundFollow(), GroundFollow::Followed);
+  EXPECT_NEAR(m.heightHint(), 3.3, 1e-9);
+}
+
+// A seed that found no ground cell has only a guess for a hint: it takes the first ground it
+// meets, however far. A seed that found its level does not (above); the state reads Seeded.
+TEST(NdtGround, SeedState) {
+  std::vector<Eigen::Vector3d> pts;
+  flat(pts, 0.0, 30.0, 50.0);
+  auto map = std::make_shared<NdtMap>(pts, 1.0, 5);
+  Ndt3DModel m(map, Ramp::params(1.0));
+  m.setGroundMap(std::make_shared<GroundHeightMap>(pts));
+  m.seedGround(Pose2D{-40.0, 5.0, 0.0}, 0.0);
+  EXPECT_EQ(m.lastGroundFollow(), GroundFollow::Seeded);
+  for (int k = 0; k < 4; ++k) m.followGround(Pose2D{10.0, 5.0, 0.0});
+  EXPECT_EQ(m.followGround(Pose2D{10.0, 5.0, 0.0}), GroundFollow::Reanchored);  // 50 m away: accepted
+  EXPECT_NEAR(m.heightHint(), 50.0, 1e-9);
+  // the same distance after a seed that found a cell: refused
+  m.seedGround(Pose2D{10.0, 5.0, 0.0}, 50.0);
+  EXPECT_EQ(m.lastGroundFollow(), GroundFollow::Seeded);
+  m.setHeightHint(0.0);  // a hint 50 m from the only level (e.g. a stale one)
+  for (int k = 0; k < 6; ++k) EXPECT_NE(m.followGround(Pose2D{10.0, 5.0, 0.0}), GroundFollow::Reanchored);
+  EXPECT_EQ(m.lastGroundFollow(), GroundFollow::NoGround);
+  EXPECT_EQ(m.heightHint(), 0.0);
 }
