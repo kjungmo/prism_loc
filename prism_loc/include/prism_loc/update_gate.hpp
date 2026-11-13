@@ -16,11 +16,14 @@ namespace prism_loc {
 //      of min_a)                                           -> update, reason Time
 //   4. otherwise                                           -> no update
 //
-// "Moved at all" exists because scoring one view again while the robot stands adds no
-// information: the motion model adds noise in proportion to motion, so with zero motion
-// each correct + resample only narrows the particle set (see test_update_gate_collapse
-// in prism_loc_core). A threshold of 0 makes the fraction 0, so every scan may update,
-// as it does today with a threshold of 0.
+// "Moved at all" exists because scoring one view again adds no information: the motion
+// model adds noise in proportion to motion, so with zero motion each correct + resample
+// only narrows the particle set (see test_update_gate_filter). The rule: no timed update
+// while the odometry motion SINCE THE LAST UPDATE is below kStandingFraction of both
+// thresholds. That is not "the robot stands": odometry that drifts while it stands (a gyro
+// bias, lidar-odometry jitter) or a creeping robot accumulates that motion and does trigger
+// timed updates on a nearly unchanged view, which narrows the set without new information.
+// A threshold of 0 makes the fraction 0, so every scan may update, as today.
 enum class UpdateReason { None, Motion, Time, Forced };
 
 struct UpdateGate {
@@ -58,7 +61,9 @@ struct UpdateGate {
 // A repeated stamp (a stuck sim clock) gives elapsed 0. Non-finite stamps are ignored.
 class UpdateStamp {
  public:
-  // NaN until the first mark(), and for a non-finite `now_s`.
+  // NaN until the first mark(), and for a non-finite `now_s`. Any backwards stamp
+  // re-anchors, so a few ms of out-of-order jitter makes the next timed update that much
+  // early.
   double elapsed(double now_s) {
     if (!have_ || !std::isfinite(now_s)) return std::numeric_limits<double>::quiet_NaN();
     if (now_s < last_s_) last_s_ = now_s;

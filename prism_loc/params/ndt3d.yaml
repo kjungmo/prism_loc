@@ -21,7 +21,7 @@
     kld_bin_yaw: 0.17                 # rad: KLD histogram bin size in yaw (~10 deg)
     update_min_d: 0.2                 # m: min translation before a filter update runs
     update_min_a: 0.2                 # rad: min rotation before a filter update runs
-    update_min_period: 0.0            # s: also update after this much scan time if the robot moved at all (0 = off, motion only; raises CPU use when on)
+    update_min_period: 0.0            # s: also update after this much scan time if odometry moved >= 0.05 x update_min_d or update_min_a since the last update (0 = off; odometry drift counts as motion; raises CPU use when on)
     transform_tolerance: 0.1          # s: future-dating added to the map->odom TF stamp
     tf_broadcast: true                # bool: broadcast map->odom (false when another node owns it)
     seed: 42                          # count: RNG seed for the particle filter

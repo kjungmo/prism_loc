@@ -317,15 +317,11 @@ void LocalizationNode::onDiagnostics() {
     warnings.emplace_back(buf);
   } else if (!laser && filter_init_ && min_match_fraction_ > 0.0 &&
              !match_.verified(static_cast<std::size_t>(match_verify_updates_))) {
-    char timed[96] = "";  // with update_min_period on, a slow robot also updates by time
-    if (update_min_period_ > 0.0)
-      std::snprintf(timed, sizeof(timed), ", or %.2f s with %.3f m or %.3f rad of motion",
-                    update_min_period_, UpdateGate::kStandingFraction * update_min_d_,
-                    UpdateGate::kStandingFraction * update_min_a_);
+    // Only motion updates count here; timed updates (update_min_period) do not.
     std::snprintf(buf, sizeof(buf), "pose not verified since the last reseed: %zu of %d filter "
-                  "updates judged (an update needs %.2f m or %.2f rad of motion%s); a wrong "
-                  "initial pose can match well at first",
-                  match_.sinceReseed(), match_verify_updates_, update_min_d_, update_min_a_, timed);
+                  "updates judged (a judged update needs %.2f m or %.2f rad of motion; timed "
+                  "updates do not count); a wrong initial pose can match well at first",
+                  match_.sinceReseed(), match_verify_updates_, update_min_d_, update_min_a_);
     warnings.emplace_back(buf);
   }
   if (zero_stamp_inputs_ > 0) {
@@ -679,7 +675,7 @@ void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {
   gate.min_a = update_min_a_;
   gate.min_period_s = update_min_period_;
   // Elapsed message-stamp time since the last update (NaN before the first one). Only
-  // read when the option is on, so period 0 never touches the stamp state.
+  // read when the option is on: period 0 never reads the stamp state.
   const double stamp_s = stamp.seconds();
   const double since_update_s = update_min_period_ > 0.0 ? last_update_stamp_.elapsed(stamp_s)
                                                           : std::numeric_limits<double>::quiet_NaN();
@@ -707,7 +703,8 @@ void LocalizationNode::runUpdate(const rclcpp::Time& stamp) {
     if (backend_ == "ndt3d") {
       // Diagnostic only: nothing here feeds the filter.
       const prism_loc_core::NdtMatchStats ms = ndt_model_->matchStats(base_in_map);
-      match_.update(reseeded, ms.fraction());
+      match_.update(reseeded, ms.fraction(),
+                     decision.reason != UpdateReason::Time);
       last_match_points_ = ms.points;
     }
     map_odom_ = prism_loc_core::compose(base_in_map, prism_loc_core::inverse(odom_base));
