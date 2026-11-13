@@ -142,3 +142,27 @@ TEST(ParamValidation, NdtLikelihoodShapingCaps) {
   expectRejects([&] { validateNdtParams(0.05, 5, np, 0.65, 15, 0.10); }, "ndt_min_sigma");
   expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, 15, 1e200); }, "ndt_min_sigma");
 }
+
+// ground_* parameters (ground_height_from_map): the shipped defaults pass; each key is
+// named in the message of its own rejection.
+TEST(ParamValidation, GroundHeightParams) {
+  prism_loc_core::GroundHeightParams gp;
+  EXPECT_NO_THROW(validateGroundParams(gp));
+  EXPECT_DOUBLE_EQ(gp.resolution, 1.0);
+  EXPECT_DOUBLE_EQ(gp.layer_gap, 0.2);
+  EXPECT_DOUBLE_EQ(gp.max_step, 0.5);
+  EXPECT_EQ(gp.min_points, 5);
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  auto with = [&](auto setter) {
+    prism_loc_core::GroundHeightParams p;
+    setter(p);
+    return p;
+  };
+  for (double bad : {0.0, -1.0, nan, std::numeric_limits<double>::infinity()}) {
+    expectRejects([&] { validateGroundParams(with([&](auto& p) { p.resolution = bad; })); }, "ground_resolution");
+    expectRejects([&] { validateGroundParams(with([&](auto& p) { p.layer_gap = bad; })); }, "ground_layer_gap");
+    expectRejects([&] { validateGroundParams(with([&](auto& p) { p.max_step = bad; })); }, "ground_max_step");
+  }
+  expectRejects([&] { validateGroundParams(with([](auto& p) { p.min_points = 0; })); }, "ground_min_points");
+  EXPECT_NO_THROW(validateGroundParams(with([](auto& p) { p.min_points = 1; })));
+}
