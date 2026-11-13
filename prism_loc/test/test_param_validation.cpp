@@ -108,7 +108,7 @@ TEST(ParamValidation, NdtLikelihoodShapingRanges) {
   np.effective_points = prism_loc::kDefaultNdtEffectivePoints;
   EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 15, prism_loc::kDefaultNdtMinSigma));
   EXPECT_DOUBLE_EQ(prism_loc::kDefaultNdtEffectivePoints, 10.0);
-  EXPECT_DOUBLE_EQ(prism_loc::kDefaultNdtMinSigma, 0.10);
+  EXPECT_DOUBLE_EQ(prism_loc::kDefaultNdtMinSigma, 0.0);
   np.effective_points = 0.0;
   EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 15, 0.0));
   for (double bad : {-0.5, inf, -inf, nan}) {
