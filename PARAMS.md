@@ -26,6 +26,7 @@ node with an error naming the parameter.
 | base_frame | str | `"base_link"` | str | Robot body frame the pose estimate refers to. |
 | update_min_d | double | `0.2` | m | Min translation before a filter update runs. |
 | update_min_a | double | `0.2` | rad | Min rotation before a filter update runs. |
+| update_min_period | double | `0.0` | s | Time-based update, `0` = off (the update gate is then the motion gate above, unchanged). When `> 0`, an update also runs once at least this much message-stamp time has passed since the last update and the robot has moved at least `0.05 × update_min_d` or turned at least `0.05 × update_min_a` (0.01 m or 0.01 rad at the defaults). A standing robot never gets a timed update: scoring the same view again adds no information, and with zero motion the motion model adds no noise, so each repeated correct and resample only narrows the particle set. Must be finite and `>= 0`. A stamp that goes back (looping bag, sim-time reset) restarts the period; a repeated stamp (stuck sim clock) never triggers. Enabling it raises the number of updates per second and so the CPU use of the node; `/diagnostics` reports `update_min_period`, `updates_by_motion`, `updates_by_time` and `updates_forced`. |
 | transform_tolerance | double | `0.1` | s | Future-dating added to the `map->odom` TF stamp. |
 | tf_broadcast | bool | `true` | bool | Whether to broadcast the `map->odom` transform. |
 | seed | int | `42` | count | RNG seed for the particle filter. |
@@ -87,6 +88,7 @@ node with an error naming the parameter.
 | base_frame | str | `"base_link"` | str | Robot body frame the pose estimate refers to. |
 | update_min_d | double | `0.2` | m | Min translation before a filter update runs. |
 | update_min_a | double | `0.2` | rad | Min rotation before a filter update runs. |
+| update_min_period | double | `0.0` | s | Time-based update, `0` = off (the update gate is then the motion gate above, unchanged). When `> 0`, an update also runs once at least this much message-stamp time has passed since the last update and the robot has moved at least `0.05 × update_min_d` or turned at least `0.05 × update_min_a` (0.01 m or 0.01 rad at the defaults). A standing robot never gets a timed update: scoring the same view again adds no information, and with zero motion the motion model adds no noise, so each repeated correct and resample only narrows the particle set. Must be finite and `>= 0`. A stamp that goes back (looping bag, sim-time reset) restarts the period; a repeated stamp (stuck sim clock) never triggers. Enabling it raises the number of updates per second and so the CPU use of the node; `/diagnostics` reports `update_min_period`, `updates_by_motion`, `updates_by_time` and `updates_forced`. |
 | transform_tolerance | double | `0.1` | s | Future-dating added to the `map->odom` TF stamp. |
 | tf_broadcast | bool | `true` | bool | Whether to broadcast the `map->odom` transform. |
 | seed | int | `42` | count | RNG seed for the particle filter. |

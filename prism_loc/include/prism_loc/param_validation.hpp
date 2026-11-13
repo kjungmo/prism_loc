@@ -13,6 +13,7 @@ namespace prism_loc {
 
 struct NodeParams {
   double update_min_d{0.2}, update_min_a{0.2}, transform_tolerance{0.1};
+  double update_min_period{0.0};
   double startup_timeout_s{30.0}, input_timeout_s{1.0}, input_timeout_periods{5.0};
   double min_neff_fraction{0.005};
 };

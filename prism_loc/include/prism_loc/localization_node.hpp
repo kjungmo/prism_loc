@@ -27,6 +27,7 @@
 #include "prism_loc_core/relocalization.hpp"
 #include "prism_loc/tf_wait_rule.hpp"
 #include "prism_loc/ndt_status.hpp"
+#include "prism_loc/update_gate.hpp"
 
 namespace prism_loc {
 
@@ -62,6 +63,7 @@ class LocalizationNode : public rclcpp::Node {
   std::string backend_, global_frame_, odom_frame_, base_frame_;
   std::string scan_topic_, map_topic_, points_topic_;
   double update_min_d_{0.2}, update_min_a_{0.2}, transform_tolerance_{0.1};
+  double update_min_period_{0.0};  // s: time-based update trigger, 0 = off (update_gate.hpp)
   double laser_min_range_{0.0}, laser_max_range_{0.0};
   bool tf_broadcast_{true};
 
@@ -108,6 +110,8 @@ class LocalizationNode : public rclcpp::Node {
   double min_neff_fraction_{0.005};
   Steady::time_point start_wall_, last_input_wall_, last_update_wall_;
   bool any_input_{false}, any_update_{false};
+  UpdateStamp last_update_stamp_;  // message stamp of the last update (update_gate.hpp)
+  long updates_by_motion_{0}, updates_by_time_{0}, updates_forced_{0};  // since start
   double input_period_s_{0.0};  // smoothed scan/cloud inter-arrival time (steady clock)
   long input_count_{0};
   long odom_tf_failures_{0}, sensor_tf_failures_{0}, zero_stamp_inputs_{0};  // since last status

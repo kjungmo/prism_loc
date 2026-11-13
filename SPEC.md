@@ -136,6 +136,23 @@ weight 0; if no particle is left, the weights become uniform.
   skipped the weights carry over to the next correction; `resample_threshold = 0` never
   resamples, so the weights accumulate for the whole run.
 
+### 3.4a Update gate
+A scan or cloud runs one filter update (predict, correct, resample, estimate) only when
+the gate opens (`prism_loc/update_gate.hpp`, a ROS-free rule). In this order:
+1. A reseed forces an update.
+2. Odometry moved `update_min_d` or turned `update_min_a` since the last update (motion).
+3. Only when `update_min_period > 0` (default `0`, off): at least `update_min_period`
+   seconds of message-stamp time passed since the last update, and the robot moved at
+   least `0.05 × update_min_d` or turned at least `0.05 × update_min_a` (time).
+Between updates the pose follows odometry. The time rule has a "moved at all" condition
+because a standing robot scores the same view again: the motion model adds noise in
+proportion to motion, so with zero motion every repeated correct and resample only narrows
+the particle set (`prism_loc_core` test `UpdateGateCollapse`). The elapsed time uses message
+stamps, never the wall clock. A stamp that goes back restarts the period; a repeated stamp
+gives zero elapsed time, so a stuck sim clock never triggers. With the option on, the node
+runs more updates per second, and each costs what it cost before. With `0` the gate is the
+motion rule alone, as before.
+
 ### 3.5 Pose & covariance estimate
 Weighted mean of `x,y`; circular weighted mean of `yaw`; weighted sample
 covariance → 6×6 (fill `x,y,yaw`; large constant variance on `z,roll,pitch`).

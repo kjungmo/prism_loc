@@ -65,6 +65,18 @@ TEST(ParamValidation, LaserRangesRejected) {
   EXPECT_NO_THROW(validateLaserParams(prism_loc_core::LaserParams{}, 0.2, 12.0));
 }
 
+TEST(ParamValidation, UpdateMinPeriodMustBeFiniteAndNonNegative) {
+  NodeParams np;
+  EXPECT_NO_THROW(validateNodeParams(np));  // default 0 = off
+  np.update_min_period = 1.5;
+  EXPECT_NO_THROW(validateNodeParams(np));
+  for (double bad : {-0.1, std::numeric_limits<double>::quiet_NaN(),
+                     std::numeric_limits<double>::infinity()}) {
+    np.update_min_period = bad;
+    expectRejects([&] { validateNodeParams(np); }, "update_min_period");
+  }
+}
+
 TEST(ParamValidation, NodeAndVerifierRangesRejected) {
   NodeParams np;
   np.transform_tolerance = -0.1;
