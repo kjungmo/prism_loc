@@ -251,7 +251,7 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
-`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed` (ndt3d only); `imu_rate_hz`,
+`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed`, `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total`, `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
@@ -262,9 +262,38 @@ runs on the `map→base_link` fallback by design reports OK with
 then lost, or when odometry appears while the fallback was being broadcast (two
 parents for `base_link`).
 
+**ndt3d likelihood.** Two parameters shape the NDT likelihood (details in
+[`PARAMS.md`](PARAMS.md)). Both are off by default (0), which is the plain likelihood.
+`ndt_effective_points` makes the scan count as a fixed number of independent points instead
+of the full subsample, so one scan does not outweigh the motion model; `ndt_min_sigma` (m)
+puts a floor under the spread of every NDT cell, so a flat cell does not score a point a few
+centimetres off its surface as zero. On a real outdoor recording, `ndt_effective_points`
+around 5 to 10, alone or with `ndt_min_sigma` 0.05 to 0.10 m, reduced position excursions.
+Using `ndt_min_sigma` without `ndt_effective_points` is not recommended.
+
+Costs, measured in the synthetic end-to-end world of this repository
+(`scripts/synthetic_e2e.py`, ndt3d):
+- With `ndt_effective_points: 10` the filter converges more slowly after a reseed, and the
+  end-to-end limits leave little margin, which is why it is off by default. `ndt3d_track`,
+  largest position error from 10 s after `/initialpose`: 0.05 to 0.29 m in five runs with 0;
+  0.08 to 0.54 m in four runs with 10 (test limit 0.5 m, exceeded in one run). `ndt3d_strict`,
+  from 6 s after `/initialpose`: 0.04 to 0.15 m in five runs with 0; 0.41 to 0.47 m in four
+  runs with 10 (limit 0.5 m). After 30 s the largest error is 0.02 to 0.03 m with either value.
+- The scoring of a pose for `match_fraction` ignores `ndt_min_sigma`; the estimated pose, and
+  so the reported `match_fraction`, can change with it. On a map whose surfaces are thinner
+  than the floor the estimate moves a few centimetres, which lowers `match_fraction` at the
+  tracked pose. One run each of the `ndt3d_track` scenario with `ndt_effective_points: 10`,
+  `match_fraction` in the statuses after t = 15 s (the 5-update mean): `ndt_min_sigma` 0 gave
+  min 0.77 and median 0.81; 0.05 gave min 0.67 and median 0.70; 0.10 gave min 0.62 and median
+  0.66. At 0.10 m the default `min_match_fraction` 0.65 WARNs on that healthy run. Re-measure
+  `min_match_fraction` on a healthy run when you enable the floor.
+
+Setting both to `0` is the earlier likelihood. A correction multiplies each particle's
+previous weight by its likelihood, so the weights carry over when resampling is skipped.
+
 **ndt3d status.** The effective particle count is not a health signal for `ndt3d`: with
-the NDT likelihood one particle takes nearly all the weight at every update of a healthy
-run, and when no scan point falls in a map cell all particles weigh the same. `ndt3d`
+the plain NDT likelihood (`ndt_effective_points: 0`) one particle takes nearly all the
+weight at every update of a healthy run, and when no scan point falls in a map cell all particles weigh the same. `ndt3d`
 therefore reports `match_fraction`: the share of the scored scan points that lie within
 3 standard deviations of the NDT cell they fall in, at the published pose, averaged over
 the last 5 filter updates. Three states follow from it:
@@ -276,7 +305,9 @@ the last 5 filter updates. Three states follow from it:
 | OK `localizing` | otherwise |
 
 **OK is not proof that the pose is right.** The signal is a classifier with these measured
-rates, as shares of all filter updates of the runs named (the offline replay
+rates, as shares of all filter updates of the runs named. The tables in this section were
+measured with the defaults, `ndt_effective_points: 0` and `ndt_min_sigma: 0` (the plain
+likelihood). The runs come from the offline replay (
 [`experiments/ndt3d_replay.cpp`](experiments/ndt3d_replay.cpp): the real filter core and
 `MatchMonitor` driven by synthetic clouds of the world `scripts/synthetic_e2e.py` uses, 4 seeds
 per case; no part of a run left out unless stated). Regenerate them with

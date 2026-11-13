@@ -152,3 +152,104 @@ TEST(NdtModel, MatchStatsUsesSensorPoseAndBaseHeight) {
   low.setCloud(cloud, sensor_in_base);
   EXPECT_EQ(low.matchStats(base).matched, 0);
 }
+
+// --- effective_points: the log-likelihood as the mean per-point log score times a fixed count ---
+
+// Half the cloud on the wall, half far off it, at the identity pose with sensor = base.
+static std::vector<Eigen::Vector3d> halfOnWall(int n) {
+  std::vector<Eigen::Vector3d> pts;
+  for (int i = 0; i < n; ++i)
+    pts.emplace_back(i % 2 == 0 ? Eigen::Vector3d(3.0, -1.0 + 0.002 * i, 0.5)
+                                : Eigen::Vector3d(50.0 + 0.01 * i, 60.0, 5.0));
+  return pts;
+}
+
+TEST(NdtModel, EffectivePointsZeroIsThePlainSum) {
+  auto map = std::make_shared<NdtMap>(wallCloud(), 0.5, 3);
+  const auto cloud = halfOnWall(600);  // max_points 500 < 600: step 1, every point scored
+  Ndt3DModel model(map, NdtParams{});
+  model.setCloud(cloud, Pose2D{0, 0, 0});
+  double expect = 0.0;
+  for (const auto& p : cloud) expect += std::log(map->score(p) + NdtParams{}.score_floor);
+  EXPECT_DOUBLE_EQ(model.logLikelihood(Pose2D{0, 0, 0}), expect);
+}
+
+TEST(NdtModel, EffectivePointsScalesTheMeanPerPointLogScore) {
+  auto map = std::make_shared<NdtMap>(wallCloud(), 0.5, 3);
+  const auto cloud = halfOnWall(600);
+  NdtParams plain;
+  Ndt3DModel m0(map, plain);
+  m0.setCloud(cloud, Pose2D{0, 0, 0});
+  const double sum = m0.logLikelihood(Pose2D{0, 0, 0});
+  NdtParams p;
+  p.effective_points = 10.0;
+  Ndt3DModel m(map, p);
+  m.setCloud(cloud, Pose2D{0, 0, 0});
+  EXPECT_NEAR(m.logLikelihood(Pose2D{0, 0, 0}), sum / 600.0 * 10.0, 1e-9);
+  // The spread between poses shrinks by effective_points / points_evaluated.
+  const double off0 = m0.logLikelihood(Pose2D{0, 0, 0}) - m0.logLikelihood(Pose2D{0.8, 0, 0});
+  const double off = m.logLikelihood(Pose2D{0, 0, 0}) - m.logLikelihood(Pose2D{0.8, 0, 0});
+  EXPECT_NEAR(off, off0 * 10.0 / 600.0, 1e-9);
+}
+
+// The subsample holds max_points .. 2*max_points-1 points depending on the cloud size
+// (integer step). The tempered value does not depend on that count.
+TEST(NdtModel, EffectivePointsRemovesDependenceOnSubsampleSize) {
+  auto map = std::make_shared<NdtMap>(wallCloud(), 0.5, 3);
+  NdtParams p;
+  p.max_points = 100;
+  p.effective_points = 10.0;
+  // Same per-point scores in every cloud: all far off the map.
+  std::vector<double> values;
+  for (int n : {100, 199, 200, 299, 1000}) {
+    std::vector<Eigen::Vector3d> far;
+    for (int i = 0; i < n; ++i) far.emplace_back(50.0 + 0.01 * i, 60.0, 5.0);
+    Ndt3DModel model(map, p);
+    model.setCloud(far, Pose2D{0, 0, 0});
+    values.push_back(model.logLikelihood(Pose2D{0, 0, 0}));
+  }
+  for (double v : values) EXPECT_NEAR(v, 10.0 * std::log(p.score_floor), 1e-9);
+}
+
+TEST(NdtModel, EffectivePointsEdgeCases) {
+  auto map = std::make_shared<NdtMap>(wallCloud(), 0.5, 3);
+  NdtParams p;
+  p.effective_points = 10.0;
+  Ndt3DModel model(map, p);
+  EXPECT_EQ(model.logLikelihood(Pose2D{0, 0, 0}), 0.0);  // no cloud yet
+  model.setCloud({}, Pose2D{0, 0, 0});
+  EXPECT_EQ(model.logLikelihood(Pose2D{0, 0, 0}), 0.0);  // empty cloud
+  model.setCloud({Eigen::Vector3d(3.0, 0.0, 0.5)}, Pose2D{0, 0, 0});  // fewer points than max_points
+  const double one = model.logLikelihood(Pose2D{0, 0, 0});
+  EXPECT_TRUE(std::isfinite(one));
+  EXPECT_NEAR(one, 10.0 * std::log(map->score(Eigen::Vector3d(3.0, 0.0, 0.5)) + p.score_floor), 1e-9);
+}
+
+// --- min_sigma shapes only the likelihood: matchStats judges the cell without it ---
+
+TEST(NdtModel, MatchStatsIgnoresMinSigma) {
+  const auto wall = wallCloud();
+  auto plain = std::make_shared<NdtMap>(wall, 0.5, 3);
+  auto floored = std::make_shared<NdtMap>(wall, 0.5, 3, /*min_sigma=*/0.10);
+  Ndt3DModel mp(plain, NdtParams{}), mf(floored, NdtParams{});
+  mp.setCloud(wall, Pose2D{0, 0, 0});
+  mf.setCloud(wall, Pose2D{0, 0, 0});
+  for (double dx : {0.0, 0.005, 0.02, 0.1, 0.25, 0.8}) {
+    const NdtMatchStats a = mp.matchStats(Pose2D{dx, 0, 0});
+    const NdtMatchStats b = mf.matchStats(Pose2D{dx, 0, 0});
+    EXPECT_EQ(a.points, b.points) << dx;
+    EXPECT_EQ(a.matched, b.matched) << dx;
+  }
+  EXPECT_EQ(mf.matchStats(Pose2D{0.1, 0, 0}).matched, 0);  // 0.1 m off the plane: not on it
+}
+
+TEST(NdtModel, MinSigmaChangesTheLikelihood) {
+  const auto wall = wallCloud();
+  auto plain = std::make_shared<NdtMap>(wall, 0.5, 3);
+  auto floored = std::make_shared<NdtMap>(wall, 0.5, 3, 0.10);
+  Ndt3DModel mp(plain, NdtParams{}), mf(floored, NdtParams{});
+  mp.setCloud(wall, Pose2D{0, 0, 0});
+  mf.setCloud(wall, Pose2D{0, 0, 0});
+  EXPECT_NE(mp.logLikelihood(Pose2D{0.1, 0, 0}), mf.logLikelihood(Pose2D{0.1, 0, 0}));
+  EXPECT_GT(mf.logLikelihood(Pose2D{0.1, 0, 0}), mp.logLikelihood(Pose2D{0.1, 0, 0}));
+}
