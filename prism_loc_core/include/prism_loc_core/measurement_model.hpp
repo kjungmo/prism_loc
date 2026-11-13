@@ -55,7 +55,8 @@ struct NdtParams {
 };
 
 // How well the current cloud fits the map at one pose. A diagnostic: the filter does not
-// use it, and computing it changes nothing in the model.
+// use it, and computing it changes nothing in the model. It scores with NdtMap::matchScore,
+// i.e. without the map's min_sigma floor, so "on a surface" does not depend on min_sigma.
 struct NdtMatchStats {
   int points{0};   // points evaluated: the subsample logLikelihood() scores
   int matched{0};  // of those, within kNdtMatchSigma standard deviations of the map cell they fall in

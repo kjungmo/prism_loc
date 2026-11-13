@@ -67,7 +67,7 @@ NdtMatchStats Ndt3DModel::matchStats(const Pose2D& base_in_map) const {
   const double min_score = std::exp(-0.5 * kNdtMatchSigma * kNdtMatchSigma);
   for (int i = 0; i < n; i += step) {
     ++st.points;
-    if (map_->score(T * pts_sensor_[i]) >= min_score) ++st.matched;
+    if (map_->matchScore(T * pts_sensor_[i]) >= min_score) ++st.matched;
   }
   return st;
 }

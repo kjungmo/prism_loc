@@ -224,3 +224,32 @@ TEST(NdtModel, EffectivePointsEdgeCases) {
   EXPECT_TRUE(std::isfinite(one));
   EXPECT_NEAR(one, 10.0 * std::log(map->score(Eigen::Vector3d(3.0, 0.0, 0.5)) + p.score_floor), 1e-9);
 }
+
+// --- min_sigma shapes only the likelihood: matchStats judges the cell without it ---
+
+TEST(NdtModel, MatchStatsIgnoresMinSigma) {
+  const auto wall = wallCloud();
+  auto plain = std::make_shared<NdtMap>(wall, 0.5, 3);
+  auto floored = std::make_shared<NdtMap>(wall, 0.5, 3, /*min_sigma=*/0.10);
+  Ndt3DModel mp(plain, NdtParams{}), mf(floored, NdtParams{});
+  mp.setCloud(wall, Pose2D{0, 0, 0});
+  mf.setCloud(wall, Pose2D{0, 0, 0});
+  for (double dx : {0.0, 0.005, 0.02, 0.1, 0.25, 0.8}) {
+    const NdtMatchStats a = mp.matchStats(Pose2D{dx, 0, 0});
+    const NdtMatchStats b = mf.matchStats(Pose2D{dx, 0, 0});
+    EXPECT_EQ(a.points, b.points) << dx;
+    EXPECT_EQ(a.matched, b.matched) << dx;
+  }
+  EXPECT_EQ(mf.matchStats(Pose2D{0.1, 0, 0}).matched, 0);  // 0.1 m off the plane: not on it
+}
+
+TEST(NdtModel, MinSigmaChangesTheLikelihood) {
+  const auto wall = wallCloud();
+  auto plain = std::make_shared<NdtMap>(wall, 0.5, 3);
+  auto floored = std::make_shared<NdtMap>(wall, 0.5, 3, 0.10);
+  Ndt3DModel mp(plain, NdtParams{}), mf(floored, NdtParams{});
+  mp.setCloud(wall, Pose2D{0, 0, 0});
+  mf.setCloud(wall, Pose2D{0, 0, 0});
+  EXPECT_NE(mp.logLikelihood(Pose2D{0.1, 0, 0}), mf.logLikelihood(Pose2D{0.1, 0, 0}));
+  EXPECT_GT(mf.logLikelihood(Pose2D{0.1, 0, 0}), mp.logLikelihood(Pose2D{0.1, 0, 0}));
+}

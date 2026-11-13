@@ -40,10 +40,17 @@ NdtMap::NdtMap(const std::vector<Eigen::Vector3d>& points, double resolution, in
     Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(cov);
     Eigen::Vector3d evals = es.eigenvalues();
     const double max_ev = evals.maxCoeff();
-    const double floor_ev = std::max((max_ev > 0.0) ? 0.001 * max_ev : 1e-6, min_sigma_ * min_sigma_);
-    for (int d = 0; d < 3; ++d) evals[d] = std::max(evals[d], floor_ev);
-    const Eigen::Matrix3d reg = es.eigenvectors() * evals.asDiagonal() * es.eigenvectors().transpose();
+    const double rel_floor = (max_ev > 0.0) ? 0.001 * max_ev : 1e-6;
+    const double floor_ev = std::max(rel_floor, min_sigma_ * min_sigma_);
+    Eigen::Vector3d floored = evals;
+    for (int d = 0; d < 3; ++d) floored[d] = std::max(evals[d], floor_ev);
+    const Eigen::Matrix3d reg = es.eigenvectors() * floored.asDiagonal() * es.eigenvectors().transpose();
     voxels_[kv.first] = Voxel{mean, reg.inverse()};
+    if (min_sigma_ > 0.0) {
+      for (int d = 0; d < 3; ++d) evals[d] = std::max(evals[d], rel_floor);
+      const Eigen::Matrix3d rel = es.eigenvectors() * evals.asDiagonal() * es.eigenvectors().transpose();
+      match_inv_cov_[kv.first] = rel.inverse();
+    }
   }
 }
 
@@ -56,6 +63,16 @@ double NdtMap::score(const Eigen::Vector3d& p) const {
   if (it == voxels_.end()) return 0.0;
   const Eigen::Vector3d d = p - it->second.mean;
   const double m = d.transpose() * it->second.inv_cov * d;
+  return std::exp(-0.5 * m);
+}
+
+double NdtMap::matchScore(const Eigen::Vector3d& p) const {
+  if (match_inv_cov_.empty()) return score(p);  // no absolute floor: the same cell
+  const std::int64_t key = keyOf(p);
+  auto it = voxels_.find(key);
+  if (it == voxels_.end()) return 0.0;
+  const Eigen::Vector3d d = p - it->second.mean;
+  const double m = d.transpose() * match_inv_cov_.at(key) * d;
   return std::exp(-0.5 * m);
 }
 
