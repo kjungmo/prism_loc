@@ -130,6 +130,12 @@ TEST(ParamValidation, NdtLikelihoodShapingCaps) {
   np.effective_points = 1e300;
   expectRejects([&] { validateNdtParams(1.0, 5, np); }, "ndt_effective_points");
   np.effective_points = 10.0;
+  // The message names both parameters and the remedy.
+  np.max_points = 5;
+  expectRejects([&] { validateNdtParams(1.0, 5, np); }, "max_points = 5");
+  expectRejects([&] { validateNdtParams(1.0, 5, np); }, "ndt_effective_points = 10");
+  expectRejects([&] { validateNdtParams(1.0, 5, np); }, "lower ndt_effective_points or raise max_points");
+  np.max_points = 500;
   expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, 15, 1.01); }, "ndt_min_sigma");
   expectRejects([&] { validateNdtParams(0.05, 5, np, 0.65, 15, 0.10); }, "ndt_min_sigma");
   expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, 15, 1e200); }, "ndt_min_sigma");

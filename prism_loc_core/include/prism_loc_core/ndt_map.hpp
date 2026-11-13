@@ -12,7 +12,7 @@ class NdtMap {
   // keeps a flat cell from scoring a point a few centimetres off its surface as ~0.
   // 0 (or a negative / NaN value) applies the relative floor only. min_sigma shapes score()
   // (the likelihood) only; matchScore() keeps the relative floor alone. With min_sigma > 0 the
-  // map stores a second inverse covariance per cell (72 bytes) for it.
+  // map stores a second inverse covariance per cell (a separate map entry, about 100 bytes) for it.
   NdtMap(const std::vector<Eigen::Vector3d>& points, double resolution, int min_points = 6,
          double min_sigma = 0.0);
   double score(const Eigen::Vector3d& p) const;
