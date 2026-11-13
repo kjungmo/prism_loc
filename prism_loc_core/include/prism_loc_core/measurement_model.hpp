@@ -1,10 +1,12 @@
 #pragma once
 #include <memory>
+#include <optional>
 #include <vector>
 #include <Eigen/Core>
 #include "prism_loc_core/types.hpp"
 #include "prism_loc_core/occupancy_grid.hpp"
 #include "prism_loc_core/ndt_map.hpp"
+#include "prism_loc_core/ground_height_map.hpp"
 namespace prism_loc_core {
 
 class MeasurementModel {
@@ -45,6 +47,9 @@ class Laser2DLikelihoodField : public MeasurementModel {
 
 struct NdtParams {
   int max_points{500};
+  // Height of the cloud frame (the sensor, level) in the map frame. Without a ground map
+  // (Ndt3DModel::setGroundMap) it is a constant map z. With one it is the height of the
+  // cloud frame above the local ground: the cloud sits at ground(x, y) + base_height.
   double base_height{0.0};
   double score_floor{1e-6};
   // 0: the log-likelihood is the sum of log(score + score_floor) over the evaluated points.
@@ -79,11 +84,39 @@ class Ndt3DModel : public MeasurementModel {
   // Scores the same points as logLikelihood(base_in_map), placed the same way.
   NdtMatchStats matchStats(const Pose2D& base_in_map) const;
 
+  // --- optional: height of each particle from a ground height grid of the map ---
+  // Without a ground map (the default, or null) every particle's cloud sits at the constant
+  // map z base_height and the model is exactly the one without this feature.
+  // With one, the cloud of a particle at (x, y) sits at map z = ground(x, y) + base_height,
+  // where ground() is GroundHeightMap::heightAt(x, y, height hint). When that has no answer
+  // (no ground cell near (x, y), or none within max_step of the hint) the particle keeps the
+  // height of the current estimate: hint + base_height. logLikelihood() and matchStats()
+  // both place the cloud with sensorInMap(), so they cannot differ.
+  void setGroundMap(std::shared_ptr<const GroundHeightMap> ground) { ground_ = std::move(ground); }
+  bool hasGroundMap() const { return ground_ != nullptr; }
+  // Ground height (map z) under the current estimate; the hint of every particle's query in
+  // the next evaluations. The caller sets it after each filter update and at a reseed.
+  // Ignored without a ground map.
+  void setHeightHint(double z_ground) { height_hint_ = z_ground; }
+  double heightHint() const { return height_hint_; }
+  // Ground height under base_in_map with the current hint; nullopt without a ground map or
+  // when the grid has no answer there.
+  std::optional<double> groundHeightAt(const Pose2D& base_in_map) const;
+  // Reseed query: GroundHeightMap::heightNearest, the level nearest to z_guess with no
+  // limit on the distance. nullopt without a ground map or when the grid has no cell there.
+  std::optional<double> groundHeightNearest(const Pose2D& base_in_map, double z_guess) const;
+  // Map z of the cloud frame for a particle at base_in_map (what the next evaluation uses).
+  double cloudHeightAt(const Pose2D& base_in_map) const;
+  // Pose of the (level) cloud frame in the map for a particle at base_in_map.
+  Eigen::Isometry3d sensorInMap(const Pose2D& base_in_map) const;
+
  private:
   std::shared_ptr<const NdtMap> map_;
   NdtParams params_;
   std::vector<Eigen::Vector3d> pts_sensor_;
   Pose2D sensor_in_base_;
+  std::shared_ptr<const GroundHeightMap> ground_;
+  double height_hint_{0.0};
 };
 
 }  // namespace prism_loc_core

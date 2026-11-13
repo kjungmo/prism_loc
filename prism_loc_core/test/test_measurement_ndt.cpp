@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <vector>
+#include "prism_loc_core/ground_height_map.hpp"
 #include "prism_loc_core/measurement_model.hpp"
 #include "prism_loc_core/ndt_map.hpp"
 using namespace prism_loc_core;
@@ -252,4 +254,226 @@ TEST(NdtModel, MinSigmaChangesTheLikelihood) {
   mf.setCloud(wall, Pose2D{0, 0, 0});
   EXPECT_NE(mp.logLikelihood(Pose2D{0.1, 0, 0}), mf.logLikelihood(Pose2D{0.1, 0, 0}));
   EXPECT_GT(mf.logLikelihood(Pose2D{0.1, 0, 0}), mp.logLikelihood(Pose2D{0.1, 0, 0}));
+}
+
+// --- ground height from the map: the cloud is placed at ground(x, y) + base_height ---
+
+namespace {
+constexpr double kSlope = 0.2;  // ground z = kSlope * x
+
+// Map of a ramp (z = 0.2 x for x in [0, 30], y in [-8, 8]) with a wall at x = 30 and walls
+// at y = +-6 (1.5 m high above the ground). 0.1 m spacing.
+std::vector<Eigen::Vector3d> rampMap() {
+  std::vector<Eigen::Vector3d> pts;
+  for (double x = 0.05; x < 30.0; x += 0.1)
+    for (double y = -8.0 + 0.05; y < 8.0; y += 0.1) pts.emplace_back(x, y, kSlope * x);
+  for (double x = 0.05; x < 30.0; x += 0.1)
+    for (double h = 0.1; h <= 1.5; h += 0.1)
+      for (double y : {-6.0, 6.0}) pts.emplace_back(x, y, kSlope * x + h);
+  for (double y = -8.0 + 0.05; y < 8.0; y += 0.1)
+    for (double h = 0.1; h <= 3.0; h += 0.1) pts.emplace_back(29.95, y, kSlope * 29.95 + h);
+  return pts;
+}
+
+// The map points within 10 m of the robot, as seen from base_in_map with the level sensor
+// base_height above the local ground.
+std::vector<Eigen::Vector3d> viewFrom(const std::vector<Eigen::Vector3d>& map, const Pose2D& base,
+                                      double base_height) {
+  const Eigen::Isometry3d T = toIsometry3(base, kSlope * base.x + base_height);
+  std::vector<Eigen::Vector3d> cloud;
+  for (const auto& p : map)
+    if (std::hypot(p.x() - base.x, p.y() - base.y) < 10.0) cloud.push_back(T.inverse() * p);
+  return cloud;
+}
+
+struct Ramp {
+  std::vector<Eigen::Vector3d> pts = rampMap();
+  std::shared_ptr<NdtMap> ndt = std::make_shared<NdtMap>(pts, 1.0, 5);
+  std::shared_ptr<GroundHeightMap> ground = std::make_shared<GroundHeightMap>(pts);
+  static NdtParams params(double base_height) {
+    NdtParams p;
+    p.base_height = base_height;
+    p.max_points = 1 << 20;  // score every point
+    return p;
+  }
+};
+}  // namespace
+
+// Moving up the ramp, a constant height puts the cloud ever further from the map and the
+// match falls; with the ground map it stays on the map. (The query points sit on cell
+// borders: the grid's candidate is the cell's low quantile, which on a slope lies up to
+// slope x resolution below the surface in the middle of a cell; see the next test.)
+TEST(NdtGround, ConstantHeightDegradesUpTheRampGroundMapDoesNot) {
+  Ramp r;
+  const double bh = 1.0;  // cloud frame 1 m above the local ground
+  for (double x : {0.0, 1.0, 5.0, 10.0, 20.0}) {
+    const Pose2D truth{x, 0.0, 0.0};
+    const auto cloud = viewFrom(r.pts, truth, bh);
+    ASSERT_GT(cloud.size(), 5000u);
+    Ndt3DModel constant(r.ndt, Ramp::params(bh));  // right at x = 0 (ground at 0), wrong above
+    constant.setCloud(cloud, Pose2D{0, 0, 0});
+    Ndt3DModel grounded(r.ndt, Ramp::params(bh));
+    grounded.setGroundMap(r.ground);
+    grounded.setHeightHint(kSlope * x);
+    grounded.setCloud(cloud, Pose2D{0, 0, 0});
+    const double fc = constant.matchStats(truth).fraction();
+    if (x == 0.0) {
+      EXPECT_GT(fc, 0.9);  // the ground is at z = 0 here: the constant height is right
+      continue;            // (and the grid, at the map's edge, has two cells to average)
+    }
+    const double fg = grounded.matchStats(truth).fraction();
+    EXPECT_GT(fg, 0.9) << "x = " << x;
+    EXPECT_LT(fc, 0.3) << "x = " << x;
+    EXPECT_GT(grounded.logLikelihood(truth), constant.logLikelihood(truth)) << "x = " << x;
+  }
+}
+
+// In the middle of a cell the candidate lies below the surface by up to slope x resolution
+// (the low quantile of a sloped cell is at its downhill edge). With the NDT map's min_sigma
+// the likelihood still prefers the ground map to the constant height there.
+TEST(NdtGround, MidCellOnTheRampStillBeatsConstantHeightWithMinSigma) {
+  Ramp r;
+  auto ndt = std::make_shared<NdtMap>(r.pts, 1.0, 5, /*min_sigma=*/0.1);
+  const Pose2D truth{10.5, 0.0, 0.0};
+  const auto cloud = viewFrom(r.pts, truth, 1.0);
+  Ndt3DModel constant(ndt, Ramp::params(1.0));
+  constant.setCloud(cloud, Pose2D{0, 0, 0});
+  Ndt3DModel grounded(ndt, Ramp::params(1.0));
+  grounded.setGroundMap(r.ground);
+  grounded.setHeightHint(kSlope * truth.x);
+  grounded.setCloud(cloud, Pose2D{0, 0, 0});
+  const double err = std::fabs(grounded.cloudHeightAt(truth) - (kSlope * truth.x + 1.0));
+  EXPECT_LE(err, kSlope * 1.0);  // within slope x resolution
+  EXPECT_GT(grounded.logLikelihood(truth), constant.logLikelihood(truth) + 100.0);
+}
+
+// A particle one metre up the ramp from the truth sees the cloud placed on its own
+// ground, not the robot's: the likelihood still peaks at the true pose.
+TEST(NdtGround, LikelihoodPeaksAtTruthOnTheRamp) {
+  Ramp r;
+  const Pose2D truth{12.0, 1.0, 0.0};
+  const auto cloud = viewFrom(r.pts, truth, 1.0);
+  Ndt3DModel m(r.ndt, Ramp::params(1.0));
+  m.setGroundMap(r.ground);
+  m.setHeightHint(kSlope * truth.x);
+  m.setCloud(cloud, Pose2D{0, 0, 0});
+  const double at = m.logLikelihood(truth);
+  for (const Pose2D& p : {Pose2D{13.0, 1.0, 0.0}, Pose2D{11.0, 1.0, 0.0}, Pose2D{12.0, 2.0, 0.0},
+                          Pose2D{12.0, 1.0, 0.1}})
+    EXPECT_GT(at, m.logLikelihood(p));
+}
+
+// logLikelihood and matchStats place the cloud with the same transform (sensorInMap).
+TEST(NdtGround, LikelihoodAndMatchStatsPlaceTheCloudAlike) {
+  Ramp r;
+  const Pose2D base{8.3, -0.7, 0.4}, sib{0.3, 0.1, 0.2};
+  NdtParams p = Ramp::params(1.0);
+  p.max_points = 700;  // a subsample, so the two must agree on that too
+  Ndt3DModel m(r.ndt, p);
+  m.setGroundMap(r.ground);
+  m.setHeightHint(kSlope * 8.3);
+  const auto cloud = viewFrom(r.pts, Pose2D{8.0, 0.0, 0.0}, 1.0);
+  m.setCloud(cloud, sib);
+  for (const Pose2D& pose : {base, Pose2D{9.1, 0.2, 0.0}, Pose2D{30.0, 30.0, 1.0}}) {
+    const Eigen::Isometry3d T = m.sensorInMap(pose);
+    const int step = std::max(1, static_cast<int>(cloud.size()) / p.max_points);
+    double ll = 0.0;
+    int n = 0, matched = 0;
+    const double min_score = std::exp(-0.5 * kNdtMatchSigma * kNdtMatchSigma);
+    for (size_t i = 0; i < cloud.size(); i += step) {
+      ll += std::log(r.ndt->score(T * cloud[i]) + p.score_floor);
+      matched += r.ndt->matchScore(T * cloud[i]) >= min_score;
+      ++n;
+    }
+    EXPECT_DOUBLE_EQ(m.logLikelihood(pose), ll);
+    const NdtMatchStats st = m.matchStats(pose);
+    EXPECT_EQ(st.points, n);
+    EXPECT_EQ(st.matched, matched);
+    EXPECT_DOUBLE_EQ(T.translation().z(), m.cloudHeightAt(pose));
+  }
+}
+
+// No ground map (never set, or set to null): the model is the one of before, bit for bit,
+// and a height hint is ignored.
+TEST(NdtGround, NullGroundMapIsTheConstantHeightModel) {
+  const auto map_pts = wallCloud();
+  auto map = std::make_shared<NdtMap>(map_pts, 0.5, 3);
+  NdtParams p;
+  p.base_height = 0.4;
+  Ndt3DModel plain(map, p), nulled(map, p), hinted(map, p);
+  nulled.setGroundMap(nullptr);
+  hinted.setGroundMap(nullptr);
+  hinted.setHeightHint(7.0);
+  const Pose2D sib{0.1, 0.0, 0.0};
+  for (Ndt3DModel* m : {&plain, &nulled, &hinted}) m->setCloud(map_pts, sib);
+  EXPECT_FALSE(hinted.hasGroundMap());
+  for (const Pose2D& pose : {Pose2D{0, 0, 0}, Pose2D{0.3, -0.2, 0.05}, Pose2D{4, 4, 1}}) {
+    const double ref = plain.logLikelihood(pose);
+    EXPECT_EQ(nulled.logLikelihood(pose), ref);
+    EXPECT_EQ(hinted.logLikelihood(pose), ref);
+    EXPECT_EQ(hinted.matchStats(pose).matched, plain.matchStats(pose).matched);
+    // and it is what the formula says
+    const Eigen::Isometry3d T = toIsometry3(pose, 0.4) * toIsometry3(sib, 0.0);
+    double ll = 0.0;
+    const int step = std::max(1, static_cast<int>(map_pts.size()) / p.max_points);
+    for (size_t i = 0; i < map_pts.size(); i += step) ll += std::log(map->score(T * map_pts[i]) + p.score_floor);
+    EXPECT_DOUBLE_EQ(ref, ll);
+    EXPECT_EQ(hinted.cloudHeightAt(pose), 0.4);
+    EXPECT_FALSE(hinted.groundHeightAt(pose).has_value());
+  }
+}
+
+// A particle with no ground cell keeps the height of the estimate: hint + base_height.
+TEST(NdtGround, ParticleWithoutGroundCellUsesTheHint) {
+  Ramp r;
+  // ground map of the first 10 m of the ramp only
+  std::vector<Eigen::Vector3d> head;
+  for (const auto& p : r.pts)
+    if (p.x() < 10.0) head.push_back(p);
+  auto partial = std::make_shared<GroundHeightMap>(head);
+  const Pose2D far{20.0, 0.0, 0.0};
+  const auto cloud = viewFrom(r.pts, far, 1.0);
+  Ndt3DModel g(r.ndt, Ramp::params(1.0));
+  g.setGroundMap(partial);
+  g.setHeightHint(3.9);
+  g.setCloud(cloud, Pose2D{0, 0, 0});
+  EXPECT_FALSE(g.groundHeightAt(far).has_value());
+  EXPECT_DOUBLE_EQ(g.cloudHeightAt(far), 3.9 + 1.0);
+  Ndt3DModel c(r.ndt, Ramp::params(4.9));  // the constant model at that height
+  c.setCloud(cloud, Pose2D{0, 0, 0});
+  EXPECT_EQ(g.logLikelihood(far), c.logLikelihood(far));
+  EXPECT_EQ(g.matchStats(far).matched, c.matchStats(far).matched);
+  // inside the mapped part the map answers instead
+  EXPECT_DOUBLE_EQ(g.cloudHeightAt(Pose2D{5.0, 0.0, 0.0}), 3.9 + 1.0);  // ground ~1 m: 2.9 m off the hint, rejected
+  g.setHeightHint(1.1);
+  EXPECT_NEAR(g.cloudHeightAt(Pose2D{5.0, 0.0, 0.0}), kSlope * 5.0 + 1.0, 0.25);
+}
+
+// Two levels 3 m apart over the same xy: the hint picks the level; a hint between them
+// (rejected by max_step) falls back to the hint.
+TEST(NdtGround, TwoLevelsFollowTheHint) {
+  std::vector<Eigen::Vector3d> pts;
+  for (double x = 0.05; x < 10.0; x += 0.1)
+    for (double y = 0.05; y < 10.0; y += 0.1) {
+      pts.emplace_back(x, y, 0.0);
+      pts.emplace_back(x, y, 3.0);
+    }
+  auto map = std::make_shared<NdtMap>(pts, 1.0, 5);
+  auto ground = std::make_shared<GroundHeightMap>(pts);
+  Ndt3DModel m(map, Ramp::params(0.8));
+  m.setGroundMap(ground);
+  const Pose2D at{5.0, 5.0, 0.0};
+  m.setHeightHint(0.1);
+  EXPECT_DOUBLE_EQ(m.cloudHeightAt(at), 0.0 + 0.8);
+  m.setHeightHint(2.9);
+  EXPECT_DOUBLE_EQ(m.cloudHeightAt(at), 3.0 + 0.8);
+  m.setHeightHint(1.5);  // 1.5 m from both: no candidate within max_step
+  EXPECT_FALSE(m.groundHeightAt(at).has_value());
+  EXPECT_DOUBLE_EQ(m.cloudHeightAt(at), 1.5 + 0.8);
+  // the reseed query picks the nearest level whatever the guess
+  EXPECT_DOUBLE_EQ(*m.groundHeightNearest(at, 0.0), 0.0);
+  EXPECT_DOUBLE_EQ(*m.groundHeightNearest(at, 2.0), 3.0);
+  EXPECT_FALSE(m.groundHeightNearest(Pose2D{50.0, 50.0, 0.0}, 0.0).has_value());
+  Ndt3DModel none(map, NdtParams{});
+  EXPECT_FALSE(none.groundHeightNearest(at, 0.0).has_value());
 }
