@@ -47,6 +47,31 @@ std::optional<double> Ndt3DModel::groundHeightNearest(const Pose2D& p, double z_
   return ground_->heightNearest(p.x, p.y, z_guess);
 }
 
+bool Ndt3DModel::seedGround(const Pose2D& at, double z_guess) {
+  ground_misses_ = 0;
+  last_follow_ = GroundFollow::NoGround;
+  const std::optional<double> g = groundHeightNearest(at, z_guess);
+  height_hint_ = g ? *g : z_guess;
+  return g.has_value();
+}
+
+GroundFollow Ndt3DModel::followGround(const Pose2D& estimate) {
+  if (!ground_) return last_follow_ = GroundFollow::NoGround;
+  if (const auto g = groundHeightAt(estimate)) {
+    height_hint_ = *g;
+    ground_misses_ = 0;
+    return last_follow_ = GroundFollow::Followed;
+  }
+  if (ground_misses_ < 1000000000) ++ground_misses_;
+  if (ground_misses_ < std::max(1, params_.ground_reanchor_after)) return last_follow_ = GroundFollow::Kept;
+  if (const auto g = groundHeightNearest(estimate, height_hint_)) {
+    height_hint_ = *g;
+    ground_misses_ = 0;
+    return last_follow_ = GroundFollow::Reanchored;
+  }
+  return last_follow_ = GroundFollow::NoGround;
+}
+
 double Ndt3DModel::cloudHeightAt(const Pose2D& p) const {
   if (!ground_) return params_.base_height;
   // No ground cell for this particle: it keeps the height of the current estimate.

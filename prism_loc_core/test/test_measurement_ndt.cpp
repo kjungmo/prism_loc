@@ -261,8 +261,9 @@ TEST(NdtModel, MinSigmaChangesTheLikelihood) {
 namespace {
 constexpr double kSlope = 0.2;  // ground z = kSlope * x
 
-// Map of a ramp (z = 0.2 x for x in [0, 30], y in [-8, 8]) with a wall at x = 30 and walls
-// at y = +-6 (1.5 m high above the ground). 0.1 m spacing.
+// Map of a ramp (z = 0.2 x for x in [0, 30], y in [-8, 8]) with a wall at x = 30, a wall across
+// it at x = 13.5 (so that x is observable) and walls at y = +-6 (1.5 m high above the
+// ground). 0.1 m spacing.
 std::vector<Eigen::Vector3d> rampMap() {
   std::vector<Eigen::Vector3d> pts;
   for (double x = 0.05; x < 30.0; x += 0.1)
@@ -272,6 +273,8 @@ std::vector<Eigen::Vector3d> rampMap() {
       for (double y : {-6.0, 6.0}) pts.emplace_back(x, y, kSlope * x + h);
   for (double y = -8.0 + 0.05; y < 8.0; y += 0.1)
     for (double h = 0.1; h <= 3.0; h += 0.1) pts.emplace_back(29.95, y, kSlope * 29.95 + h);
+  for (double y = -8.0 + 0.05; y < 8.0; y += 0.1)
+    for (double h = 0.1; h <= 1.5; h += 0.1) pts.emplace_back(13.5, y, kSlope * 13.5 + h);
   return pts;
 }
 
@@ -300,13 +303,11 @@ struct Ramp {
 }  // namespace
 
 // Moving up the ramp, a constant height puts the cloud ever further from the map and the
-// match falls; with the ground map it stays on the map. (The query points sit on cell
-// borders: the grid's candidate is the cell's low quantile, which on a slope lies up to
-// slope x resolution below the surface in the middle of a cell; see the next test.)
+// match falls; with the ground map it stays on the map, mid-cell as well as on cell borders.
 TEST(NdtGround, ConstantHeightDegradesUpTheRampGroundMapDoesNot) {
   Ramp r;
   const double bh = 1.0;  // cloud frame 1 m above the local ground
-  for (double x : {0.0, 1.0, 5.0, 10.0, 20.0}) {
+  for (double x : {0.0, 1.0, 2.5, 5.5, 10.5, 20.5}) {
     const Pose2D truth{x, 0.0, 0.0};
     const auto cloud = viewFrom(r.pts, truth, bh);
     ASSERT_GT(cloud.size(), 5000u);
@@ -328,38 +329,42 @@ TEST(NdtGround, ConstantHeightDegradesUpTheRampGroundMapDoesNot) {
   }
 }
 
-// In the middle of a cell the candidate lies below the surface by up to slope x resolution
-// (the low quantile of a sloped cell is at its downhill edge). With the NDT map's min_sigma
-// the likelihood still prefers the ground map to the constant height there.
-TEST(NdtGround, MidCellOnTheRampStillBeatsConstantHeightWithMinSigma) {
+// The likelihood along x peaks at the truth when the truth is in the middle of a cell, scanned
+// over one cell either side in 5 cm steps: the ground height seen by the particles is
+// continuous, so no false peak sits at a cell edge. With and without the NDT min_sigma.
+TEST(NdtGround, LikelihoodPeaksAtTheTruthMidCellOnTheRamp) {
   Ramp r;
-  auto ndt = std::make_shared<NdtMap>(r.pts, 1.0, 5, /*min_sigma=*/0.1);
   const Pose2D truth{10.5, 0.0, 0.0};
   const auto cloud = viewFrom(r.pts, truth, 1.0);
-  Ndt3DModel constant(ndt, Ramp::params(1.0));
-  constant.setCloud(cloud, Pose2D{0, 0, 0});
-  Ndt3DModel grounded(ndt, Ramp::params(1.0));
-  grounded.setGroundMap(r.ground);
-  grounded.setHeightHint(kSlope * truth.x);
-  grounded.setCloud(cloud, Pose2D{0, 0, 0});
-  const double err = std::fabs(grounded.cloudHeightAt(truth) - (kSlope * truth.x + 1.0));
-  EXPECT_LE(err, kSlope * 1.0);  // within slope x resolution
-  EXPECT_GT(grounded.logLikelihood(truth), constant.logLikelihood(truth) + 100.0);
+  for (double min_sigma : {0.0, 0.1}) {
+    auto ndt = std::make_shared<NdtMap>(r.pts, 1.0, 5, min_sigma);
+    Ndt3DModel m(ndt, Ramp::params(1.0));
+    m.setGroundMap(r.ground);
+    m.setHeightHint(kSlope * truth.x);
+    m.setCloud(cloud, Pose2D{0, 0, 0});
+    double best = -1e300, best_x = 0.0;
+    for (int k = -20; k <= 20; ++k) {
+      const double x = truth.x + 0.05 * k;
+      const double ll = m.logLikelihood(Pose2D{x, truth.y, 0.0});
+      if (ll > best) { best = ll; best_x = x; }
+    }
+    EXPECT_NEAR(best_x, truth.x, 0.05) << "min_sigma " << min_sigma;
+  }
 }
 
 // A particle one metre up the ramp from the truth sees the cloud placed on its own
 // ground, not the robot's: the likelihood still peaks at the true pose.
 TEST(NdtGround, LikelihoodPeaksAtTruthOnTheRamp) {
   Ramp r;
-  const Pose2D truth{12.0, 1.0, 0.0};
+  const Pose2D truth{12.5, 1.3, 0.0};  // mid-cell
   const auto cloud = viewFrom(r.pts, truth, 1.0);
   Ndt3DModel m(r.ndt, Ramp::params(1.0));
   m.setGroundMap(r.ground);
   m.setHeightHint(kSlope * truth.x);
   m.setCloud(cloud, Pose2D{0, 0, 0});
   const double at = m.logLikelihood(truth);
-  for (const Pose2D& p : {Pose2D{13.0, 1.0, 0.0}, Pose2D{11.0, 1.0, 0.0}, Pose2D{12.0, 2.0, 0.0},
-                          Pose2D{12.0, 1.0, 0.1}})
+  for (const Pose2D& p : {Pose2D{13.5, 1.3, 0.0}, Pose2D{11.5, 1.3, 0.0}, Pose2D{12.5, 2.3, 0.0},
+                          Pose2D{12.5, 1.3, 0.1}, Pose2D{12.3, 1.3, 0.0}, Pose2D{12.7, 1.3, 0.0}})
     EXPECT_GT(at, m.logLikelihood(p));
 }
 
@@ -476,4 +481,131 @@ TEST(NdtGround, TwoLevelsFollowTheHint) {
   EXPECT_FALSE(m.groundHeightNearest(Pose2D{50.0, 50.0, 0.0}, 0.0).has_value());
   Ndt3DModel none(map, NdtParams{});
   EXPECT_FALSE(none.groundHeightNearest(at, 0.0).has_value());
+}
+
+// --- followGround: the hint follows the estimate, and re-anchors when it has lost the ground ---
+
+namespace {
+// Flat ground at `z` over x in [x0, x1), y in [0, 10).
+void flat(std::vector<Eigen::Vector3d>& pts, double x0, double x1, double z) {
+  for (double x = x0 + 0.05; x < x1; x += 0.1)
+    for (double y = 0.05; y < 10.0; y += 0.1) pts.emplace_back(x, y, z);
+}
+}  // namespace
+
+TEST(NdtGround, FollowGroundFollowsTheEstimateOnARamp) {
+  Ramp r;
+  Ndt3DModel m(r.ndt, Ramp::params(1.0));
+  m.setGroundMap(r.ground);
+  EXPECT_TRUE(m.seedGround(Pose2D{5.5, 0.0, 0.0}, 0.0));
+  EXPECT_NEAR(m.heightHint(), kSlope * 5.5, 1e-9);
+  for (double x = 5.5; x < 25.0; x += 0.2) {
+    EXPECT_EQ(m.followGround(Pose2D{x, 0.0, 0.0}), GroundFollow::Followed);
+    EXPECT_NEAR(m.heightHint(), kSlope * x, 1e-9) << x;
+    EXPECT_EQ(m.groundMisses(), 0);
+  }
+  EXPECT_EQ(m.lastGroundFollow(), GroundFollow::Followed);
+}
+
+// A stretch without ground cells while the ground rises 0.6 m (more than ground_max_step):
+// Kept for four updates, NoGround while no cell answers, Reanchored at the first cell on the
+// far side, then Followed again.
+TEST(NdtGround, FollowGroundReanchorsAfterAStretchWithoutGround) {
+  std::vector<Eigen::Vector3d> pts;
+  flat(pts, 0.0, 10.0, 0.0);
+  flat(pts, 14.0, 30.0, 0.6);
+  auto map = std::make_shared<NdtMap>(pts, 1.0, 5);
+  Ndt3DModel m(map, Ramp::params(1.0));
+  m.setGroundMap(std::make_shared<GroundHeightMap>(pts));
+  ASSERT_TRUE(m.seedGround(Pose2D{5.0, 5.0, 0.0}, 0.0));
+  std::vector<GroundFollow> seen;
+  for (double x = 8.0; x < 20.0; x += 0.5) {
+    seen.push_back(m.followGround(Pose2D{x, 5.0, 0.0}));
+    if (seen.back() == GroundFollow::Kept) { EXPECT_LT(m.groundMisses(), 5); }
+  }
+  int reanchored = 0;
+  size_t first_miss = seen.size();
+  for (size_t i = 0; i < seen.size(); ++i) {
+    if (seen[i] != GroundFollow::Followed && first_miss == seen.size()) first_miss = i;
+    reanchored += seen[i] == GroundFollow::Reanchored;
+  }
+  ASSERT_LT(first_miss, seen.size());
+  for (size_t i = 0; i < 4; ++i) EXPECT_EQ(seen[first_miss + i], GroundFollow::Kept) << i;
+  EXPECT_EQ(seen[first_miss + 4], GroundFollow::NoGround);  // fifth miss: nothing to anchor to yet
+  EXPECT_EQ(reanchored, 1);
+  EXPECT_EQ(seen.back(), GroundFollow::Followed);
+  EXPECT_NEAR(m.heightHint(), 0.6, 1e-9);
+  EXPECT_EQ(m.groundMisses(), 0);
+  // while the hint was held, it stayed where it was
+  Ndt3DModel held(map, Ramp::params(1.0));
+  held.setGroundMap(std::make_shared<GroundHeightMap>(pts));
+  held.seedGround(Pose2D{5.0, 5.0, 0.0}, 0.0);
+  held.followGround(Pose2D{12.0, 5.0, 0.0});
+  EXPECT_EQ(held.lastGroundFollow(), GroundFollow::Kept);
+  EXPECT_EQ(held.heightHint(), 0.0);
+}
+
+// A seed with no ground cell near it (hint = the guess 0) while the map ground is at z = 50:
+// held for four updates, then the first estimate with a cell takes the level.
+TEST(NdtGround, SeedWithoutGroundThenReanchorsWhereTheGroundIs) {
+  std::vector<Eigen::Vector3d> pts;
+  flat(pts, 0.0, 30.0, 50.0);
+  auto map = std::make_shared<NdtMap>(pts, 1.0, 5);
+  Ndt3DModel m(map, Ramp::params(1.0));
+  m.setGroundMap(std::make_shared<GroundHeightMap>(pts));
+  EXPECT_FALSE(m.seedGround(Pose2D{-40.0, 5.0, 0.0}, 0.0));
+  EXPECT_EQ(m.heightHint(), 0.0);
+  for (int k = 0; k < 4; ++k) EXPECT_EQ(m.followGround(Pose2D{10.0 + k, 5.0, 0.0}), GroundFollow::Kept);
+  EXPECT_EQ(m.groundMisses(), 4);
+  EXPECT_EQ(m.followGround(Pose2D{14.0, 5.0, 0.0}), GroundFollow::Reanchored);
+  EXPECT_NEAR(m.heightHint(), 50.0, 1e-9);
+  EXPECT_EQ(m.followGround(Pose2D{14.5, 5.0, 0.0}), GroundFollow::Followed);
+  // a seed on the mapped ground with the guess 0 (RViz) takes the level at once
+  EXPECT_TRUE(m.seedGround(Pose2D{10.0, 5.0, 0.0}, 0.0));
+  EXPECT_NEAR(m.heightHint(), 50.0, 1e-9);
+}
+
+// Two levels (0 and 3): the estimate stops getting answers because the hint (1.2) sits between
+// them; re-anchoring takes the level nearest to the stale hint, here the lower one. That can be
+// the wrong level; holding the hint for ever would leave every particle at one fixed height.
+TEST(NdtGround, ReanchorPicksTheLevelNearestTheStaleHint) {
+  std::vector<Eigen::Vector3d> pts;
+  flat(pts, 0.0, 10.0, 0.0);
+  flat(pts, 0.0, 10.0, 3.0);
+  auto map = std::make_shared<NdtMap>(pts, 1.0, 5);
+  Ndt3DModel m(map, Ramp::params(1.0));
+  m.setGroundMap(std::make_shared<GroundHeightMap>(pts));
+  m.setHeightHint(1.2);
+  for (int k = 0; k < 4; ++k) EXPECT_EQ(m.followGround(Pose2D{5.0, 5.0, 0.0}), GroundFollow::Kept);
+  EXPECT_EQ(m.followGround(Pose2D{5.0, 5.0, 0.0}), GroundFollow::Reanchored);
+  EXPECT_NEAR(m.heightHint(), 0.0, 1e-9);
+  m.setHeightHint(1.8);
+  for (int k = 0; k < 4; ++k) m.followGround(Pose2D{5.0, 5.0, 0.0});
+  EXPECT_EQ(m.followGround(Pose2D{5.0, 5.0, 0.0}), GroundFollow::Reanchored);
+  EXPECT_NEAR(m.heightHint(), 3.0, 1e-9);
+}
+
+TEST(NdtGround, ReseedResetsTheMissCounterAndNoMapMeansNoGround) {
+  std::vector<Eigen::Vector3d> pts;
+  flat(pts, 0.0, 10.0, 0.0);
+  auto map = std::make_shared<NdtMap>(pts, 1.0, 5);
+  NdtParams p = Ramp::params(1.0);
+  p.ground_reanchor_after = 3;
+  Ndt3DModel m(map, p);
+  m.setGroundMap(std::make_shared<GroundHeightMap>(pts));
+  m.seedGround(Pose2D{5.0, 5.0, 0.0}, 0.0);
+  m.followGround(Pose2D{50.0, 5.0, 0.0});
+  m.followGround(Pose2D{50.0, 5.0, 0.0});
+  EXPECT_EQ(m.groundMisses(), 2);
+  m.seedGround(Pose2D{5.0, 5.0, 0.0}, 0.0);
+  EXPECT_EQ(m.groundMisses(), 0);
+  EXPECT_EQ(m.followGround(Pose2D{50.0, 5.0, 0.0}), GroundFollow::Kept);  // the limit is 3: still held
+  EXPECT_EQ(m.followGround(Pose2D{50.0, 5.0, 0.0}), GroundFollow::Kept);
+  EXPECT_EQ(m.followGround(Pose2D{50.0, 5.0, 0.0}), GroundFollow::NoGround);  // third miss, no cell anywhere near
+  Ndt3DModel none(map, p);
+  none.setHeightHint(2.0);
+  EXPECT_EQ(none.followGround(Pose2D{5.0, 5.0, 0.0}), GroundFollow::NoGround);
+  EXPECT_EQ(none.heightHint(), 2.0);
+  EXPECT_FALSE(none.seedGround(Pose2D{5.0, 5.0, 0.0}, 7.0));  // no map: only the hint is set
+  EXPECT_EQ(none.heightHint(), 7.0);
 }

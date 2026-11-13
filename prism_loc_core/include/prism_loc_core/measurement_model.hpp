@@ -57,6 +57,10 @@ struct NdtParams {
   // this many independent points however many were evaluated (a 3D scan's neighbouring
   // points are strongly correlated, so the plain sum is overconfident).
   double effective_points{0.0};
+  // Ground height option (Ndt3DModel::setGroundMap): after this many consecutive filter
+  // updates without a ground answer at the estimate, followGround() looks for the nearest
+  // level instead of holding the hint. >= 1. Core field only (not a node parameter).
+  int ground_reanchor_after{5};
 };
 // The NDT map's min_sigma (NdtMap constructor) is the other likelihood shaping knob. It is not
 // part of NdtParams, and matchStats() does not use it.
@@ -74,6 +78,14 @@ struct NdtMatchStats {
 // at most this (NdtMap::score >= exp(-0.5 * 3^2)); a point in a cell without a Gaussian
 // (score 0) never does.
 constexpr double kNdtMatchSigma = 3.0;
+
+// Result of Ndt3DModel::followGround().
+enum class GroundFollow {
+  Followed,    // the grid answered at the estimate on the hint's level: hint = that height
+  Kept,        // no answer; fewer than ground_reanchor_after misses in a row: hint unchanged
+  Reanchored,  // after ground_reanchor_after misses the nearest level answered: hint = it
+  NoGround     // no map ground (no map set, or no cell near the estimate at all): hint unchanged
+};
 
 class Ndt3DModel : public MeasurementModel {
  public:
@@ -105,6 +117,23 @@ class Ndt3DModel : public MeasurementModel {
   // Reseed query: GroundHeightMap::heightNearest, the level nearest to z_guess with no
   // limit on the distance. nullopt without a ground map or when the grid has no cell there.
   std::optional<double> groundHeightNearest(const Pose2D& base_in_map, double z_guess) const;
+  // Reseed: set the hint to the ground height of the level nearest to z_guess under at
+  // (groundHeightNearest), reset the miss counter. With no answer the hint becomes z_guess.
+  // Returns whether the grid answered. Without a ground map it only sets the hint.
+  bool seedGround(const Pose2D& at, double z_guess);
+  // After a filter update, move the hint to the ground under the new estimate:
+  //  1. groundHeightAt(estimate) (the hint's level) answers: hint = it, misses = 0: Followed.
+  //  2. No answer: misses += 1. Below ground_reanchor_after: hint unchanged: Kept.
+  //  3. At ground_reanchor_after misses or more: groundHeightNearest(estimate, hint). It
+  //     answers: hint = it, misses = 0: Reanchored. It does not: hint unchanged: NoGround
+  //     (the next update tries again).
+  // Re-anchoring takes the level nearest to the stale hint. With several levels over the
+  // same xy that can be the wrong one; holding a hint that no level answers to for ever would
+  // be worse: every particle would keep one fixed height for the rest of the run.
+  // Without a ground map: NoGround, nothing changes.
+  GroundFollow followGround(const Pose2D& estimate);
+  GroundFollow lastGroundFollow() const { return last_follow_; }  // NoGround until the first call
+  int groundMisses() const { return ground_misses_; }  // consecutive updates without an answer
   // Map z of the cloud frame for a particle at base_in_map (what the next evaluation uses).
   double cloudHeightAt(const Pose2D& base_in_map) const;
   // Pose of the (level) cloud frame in the map for a particle at base_in_map.
@@ -117,6 +146,8 @@ class Ndt3DModel : public MeasurementModel {
   Pose2D sensor_in_base_;
   std::shared_ptr<const GroundHeightMap> ground_;
   double height_hint_{0.0};
+  int ground_misses_{0};
+  GroundFollow last_follow_{GroundFollow::NoGround};
 };
 
 }  // namespace prism_loc_core
