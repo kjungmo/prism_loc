@@ -118,3 +118,19 @@ TEST(ParamValidation, NdtLikelihoodShapingRanges) {
     expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, 15, bad); }, "ndt_min_sigma");
   }
 }
+
+// Caps that keep extreme finite values from overflowing the likelihood or the cell covariance:
+// ndt_min_sigma <= ndt_resolution, ndt_effective_points <= max_points.
+TEST(ParamValidation, NdtLikelihoodShapingCaps) {
+  prism_loc_core::NdtParams np;  // max_points 500
+  np.effective_points = 500.0;
+  EXPECT_NO_THROW(validateNdtParams(1.0, 5, np, 0.65, 15, 1.0));
+  np.effective_points = 500.5;
+  expectRejects([&] { validateNdtParams(1.0, 5, np); }, "ndt_effective_points");
+  np.effective_points = 1e300;
+  expectRejects([&] { validateNdtParams(1.0, 5, np); }, "ndt_effective_points");
+  np.effective_points = 10.0;
+  expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, 15, 1.01); }, "ndt_min_sigma");
+  expectRejects([&] { validateNdtParams(0.05, 5, np, 0.65, 15, 0.10); }, "ndt_min_sigma");
+  expectRejects([&] { validateNdtParams(1.0, 5, np, 0.65, 15, 1e200); }, "ndt_min_sigma");
+}

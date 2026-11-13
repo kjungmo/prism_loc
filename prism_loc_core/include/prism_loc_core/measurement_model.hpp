@@ -53,6 +53,8 @@ struct NdtParams {
   // points are strongly correlated, so the plain sum is overconfident).
   double effective_points{0.0};
 };
+// The NDT map's min_sigma (NdtMap constructor) is the other likelihood shaping knob. It is not
+// part of NdtParams, and matchStats() does not use it.
 
 // How well the current cloud fits the map at one pose. A diagnostic: the filter does not
 // use it, and computing it changes nothing in the model. It scores with NdtMap::matchScore,

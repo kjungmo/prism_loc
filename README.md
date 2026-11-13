@@ -266,8 +266,9 @@ parents for `base_link`).
 [`PARAMS.md`](PARAMS.md)). `ndt_effective_points` makes the scan count as a fixed number
 of independent points instead of the full subsample, so one scan does not outweigh the
 motion model; `ndt_min_sigma` (m) puts a floor under the spread of every NDT cell, so a
-flat cell does not score a point a few centimetres off its surface as zero. Setting both
-to `0` restores the earlier likelihood. A correction multiplies each particle's previous
+flat cell does not score a point a few centimetres off its surface as zero. Both shape the
+likelihood only: `match_fraction` below is computed on the cell without the `ndt_min_sigma`
+floor. Setting both to `0` restores the earlier likelihood. A correction multiplies each particle's previous
 weight by its likelihood, so the weights carry over when resampling is skipped.
 
 **ndt3d status.** The effective particle count is not a health signal for `ndt3d`: with
@@ -284,7 +285,9 @@ the last 5 filter updates. Three states follow from it:
 | OK `localizing` | otherwise |
 
 **OK is not proof that the pose is right.** The signal is a classifier with these measured
-rates, as shares of all filter updates of the runs named (the offline replay
+rates, as shares of all filter updates of the runs named. The tables in this section were
+measured with `ndt_effective_points: 0` and `ndt_min_sigma: 0` (the plain likelihood; the
+node defaults are 10 and 0.10). The runs come from the offline replay (
 [`experiments/ndt3d_replay.cpp`](experiments/ndt3d_replay.cpp): the real filter core and
 `MatchMonitor` driven by synthetic clouds of the world `scripts/synthetic_e2e.py` uses, 4 seeds
 per case; no part of a run left out unless stated). Regenerate them with

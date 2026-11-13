@@ -124,13 +124,17 @@ weight 0; if no particle is left, the weights become uniform.
    this value (log-domain accumulation).
 4. Cell covariance regularization: each eigenvalue of a cell's covariance is raised to
    at least `0.001 ×` the largest one and, when `ndt_min_sigma = s > 0`, to at least
-   `s²` (`s` in metres). `s = 0` applies the relative floor only.
+   `s²` (`s` in metres). `s = 0` applies the relative floor only. `ndt_min_sigma` shapes
+   the likelihood only: the `match_fraction` diagnostic scores points against the cell
+   covariance without it.
 
 ### 3.4 Resampling — KLD-adaptive low-variance
 - **Low-variance / systematic resampler** (Probabilistic Robotics §4.3).
 - **KLD-sampling** (Fox): choose the resampled set size from the number of
   occupied bins so particle count adapts between `min_particles` and
-  `max_particles`. Resample only when `N_eff < resample_threshold * N`.
+  `max_particles`. Resample only when `N_eff < resample_threshold * N`. While resampling is
+  skipped the weights carry over to the next correction; `resample_threshold = 0` never
+  resamples, so the weights accumulate for the whole run.
 
 ### 3.5 Pose & covariance estimate
 Weighted mean of `x,y`; circular weighted mean of `yaw`; weighted sample

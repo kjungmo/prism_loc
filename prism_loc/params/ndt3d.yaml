@@ -10,11 +10,11 @@
     voxel_min_points: 5               # count: min points per voxel to form a valid NDT cell
     max_points: 500                   # count: scan points subsampled per measurement update
     base_height: 0.0                  # m: z of the LIDAR in the map frame (its height above a map ground plane at z = 0), not the robot's height; the TF's z, roll, pitch are not used
-    ndt_effective_points: 10.0        # count: the scan counts as this many independent points in the likelihood (mean per-point log score x this value; 0 = plain sum over max_points, the previous behaviour)
-    ndt_min_sigma: 0.10               # m: absolute floor on the std deviation of every NDT cell along each axis (0 = relative floor only, the previous behaviour)
+    ndt_effective_points: 10.0        # count: the scan counts as this many independent points in the likelihood (mean per-point log score x this value; 0 = plain sum over max_points, the previous behaviour; at most max_points)
+    ndt_min_sigma: 0.10               # m: absolute floor on the std deviation of every NDT cell along each axis (0 = relative floor only, the previous behaviour; shapes the likelihood only, match_fraction ignores it; at most ndt_resolution)
     min_particles: 500                # count: lower bound on the particle set size
     max_particles: 2000               # count: upper bound on the particle set size
-    resample_threshold: 0.5           # fraction: resample when Neff < threshold * N
+    resample_threshold: 0.5           # fraction: resample when Neff < threshold * N (weights carry over while resampling is skipped; 0 = never resample, weights accumulate forever)
     kld_err: 0.05                     # fraction: KLD max error bound between true/estimated distribution
     kld_z: 2.33                       # unitless: upper standard-normal quantile for KLD (~0.99)
     kld_bin_xy: 0.5                   # m: KLD histogram bin size in x and y

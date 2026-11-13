@@ -96,10 +96,11 @@ void validateNdtParams(double ndt_resolution, int voxel_min_points,
   require(min_match_fraction >= 0.0 && min_match_fraction <= 1.0, "min_match_fraction",
           min_match_fraction, "in [0, 1]");
   require(match_verify_updates >= 0, "match_verify_updates", match_verify_updates, ">= 0");
-  require(finite(np.effective_points) && np.effective_points >= 0.0, "ndt_effective_points",
-          np.effective_points, ">= 0 and finite (0 = plain sum)");
-  require(finite(ndt_min_sigma) && ndt_min_sigma >= 0.0, "ndt_min_sigma", ndt_min_sigma,
-          ">= 0 and finite (0 = relative floor only)");
+  require(finite(np.effective_points) && np.effective_points >= 0.0 &&
+              np.effective_points <= np.max_points,
+          "ndt_effective_points", np.effective_points, "in [0, max_points] (0 = plain sum)");
+  require(finite(ndt_min_sigma) && ndt_min_sigma >= 0.0 && ndt_min_sigma <= ndt_resolution,
+          "ndt_min_sigma", ndt_min_sigma, "in [0, ndt_resolution] (0 = relative floor only)");
 }
 
 }  // namespace prism_loc
