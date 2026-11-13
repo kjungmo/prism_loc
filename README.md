@@ -273,9 +273,12 @@ Using `ndt_min_sigma` without `ndt_effective_points` is not recommended.
 
 Costs, measured in the synthetic end-to-end world of this repository
 (`scripts/synthetic_e2e.py`, ndt3d):
-- With `ndt_effective_points: 10` the filter converges more slowly after `/initialpose`
-  (seeded with a 0.5 m spread). In four runs the position error in the first 10 s was up to
-  0.25 to 0.54 m, against 0.10 m with 0. After 30 s the error and `match_fraction` were the same.
+- With `ndt_effective_points: 10` the filter converges more slowly after a reseed, and the
+  end-to-end limits leave little margin, which is why it is off by default. `ndt3d_track`,
+  largest position error from 10 s after `/initialpose`: 0.05 to 0.29 m in five runs with 0;
+  0.08 to 0.54 m in four runs with 10 (test limit 0.5 m, exceeded in one run). `ndt3d_strict`,
+  from 6 s after `/initialpose`: 0.04 to 0.15 m in five runs with 0; 0.41 to 0.47 m in four
+  runs with 10 (limit 0.5 m). After 30 s the largest error is 0.02 to 0.03 m with either value.
 - The scoring of a pose for `match_fraction` ignores `ndt_min_sigma`; the estimated pose, and
   so the reported `match_fraction`, can change with it. On a map whose surfaces are thinner
   than the floor the estimate moves a few centimetres, which lowers `match_fraction` at the
