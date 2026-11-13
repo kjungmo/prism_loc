@@ -367,8 +367,8 @@ void LocalizationNode::onDiagnostics() {
   }
   if (!laser && ground_from_map_ && any_update_ && ndt_model_->groundMisses() >= ground_reanchor_after_) {
     std::snprintf(buf, sizeof(buf), "no map ground under the estimate for %d updates: height held at "
-                  "%.3f m (the map may not cover the route, or the only level near is too far from the "
-                  "held height; see ground_resolution, ground_min_points)",
+                  "%.3f m (no mapped ground near, or the only level near is more than 1.5 m from the "
+                  "held height; send /initialpose, its z selects the level)",
                   ndt_model_->groundMisses(), ground_est_);
     warnings.emplace_back(buf);
   }
@@ -789,6 +789,13 @@ void LocalizationNode::followGroundHint(const Pose2D& base_in_map) {
   const prism_loc_core::GroundFollow r = ndt_model_->followGround(base_in_map);
   ground_est_ok_ = r == prism_loc_core::GroundFollow::Followed || r == prism_loc_core::GroundFollow::Reanchored;
   ground_est_ = ndt_model_->heightHint();
+  if (r == prism_loc_core::GroundFollow::NoGround)
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
+                         "ndt3d: no map ground under the estimate for %d updates: the height is held at "
+                         "%.3f m. Either no ground is mapped near the estimate, or the only level near is "
+                         "more than 1.5 m from the held height (ground_height_from_map does not jump "
+                         "that far); send /initialpose, its z selects the level",
+                         ndt_model_->groundMisses(), ground_est_);
   if (r == prism_loc_core::GroundFollow::Reanchored) {
     const double jump = std::fabs(ground_est_ - hint_before);
     // A jump over ground_max_step can be a change of level, not a ramp: say so.
