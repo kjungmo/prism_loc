@@ -47,6 +47,11 @@ struct NdtParams {
   int max_points{500};
   double base_height{0.0};
   double score_floor{1e-6};
+  // 0: the log-likelihood is the sum of log(score + score_floor) over the evaluated points.
+  // > 0: it is the mean of those per-point terms times this count, i.e. the cloud counts as
+  // this many independent points however many were evaluated (a 3D scan's neighbouring
+  // points are strongly correlated, so the plain sum is overconfident).
+  double effective_points{0.0};
 };
 
 // How well the current cloud fits the map at one pose. A diagnostic: the filter does not

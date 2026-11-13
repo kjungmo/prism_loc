@@ -45,11 +45,14 @@ double Ndt3DModel::logLikelihood(const Pose2D& base_in_map) const {
   const int n = static_cast<int>(pts_sensor_.size());
   const int step = std::max(1, n / std::max(1, params_.max_points));
   double log_l = 0.0;
+  int evaluated = 0;
   for (int i = 0; i < n; i += step) {
     const Eigen::Vector3d pm = T * pts_sensor_[i];
     const double s = map_->score(pm);                 // 0 if empty voxel
     log_l += std::log(s + params_.score_floor);
+    ++evaluated;
   }
+  if (params_.effective_points > 0.0) return log_l / evaluated * params_.effective_points;
   return log_l;
 }
 
