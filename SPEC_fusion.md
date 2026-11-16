@@ -242,7 +242,9 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
   exclusive callback groups: the points subscription alone (depth 1), and everything else
   (IMU, GNSS, `/initialpose`, `/tf` watch, timers). `onPoints` takes the guess `T_g` and the lidar
   mount under `mutex_`, releases it, converts, filters and registers, then takes it again.
-  The guess is the state at the stamp of the cloud, interpolated from a 2 s history that `onImu`
+  The cloud time is its header stamp plus `points_time_offset` (a driver that stamps the start
+  of a sweep and does not deskew: half the sweep period, the time the registration fits).
+  The guess is the state at that time, interpolated from a 2 s history that `onImu`
   records after every prediction (the current state when the stamp is outside it). The IMU has
   moved the state on by then, so the measurement is `z' = z · D(t_c)⁻¹ · D(t_n)` (`compensateForMotion`),
   where `D` is the dead-reckoned pose: the chain of the IMU prediction increments only, so GNSS
@@ -284,6 +286,7 @@ the frames and used every input as measured at `base_frame`.
 `map_pcd_path`, `ndt_resolution`(1.0), `ndt_step_size`(0.1), `ndt_epsilon`(0.0001),
 `ndt_max_iter`(30), `points_voxel_leaf`(1.0), `ndt_max_fitness`(0.06),
 `ndt_fitness_max_range`(1.0), `ndt_min_inlier_fraction`(0.5), `points_max_age`(0.5),
+`points_time_offset`(0.0),
 `imu_topic`/`points_topic`/`gnss_topic`, `global_frame`/`odom_frame`/`base_frame`,
 `points_frame`/`imu_frame`/`gnss_frame`(empty = `header.frame_id`),
 `sigma_acc`/`sigma_gyro`/`sigma_acc_bias`/`sigma_gyro_bias`,

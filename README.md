@@ -275,7 +275,8 @@ start; with `ndt_fitness_max_range: 0` the old limit 2.0 applies as before. `/di
 shows the last fitness, inlier fraction, iterations and align time, and the rejected count by
 reason. Clouds more than `points_max_age` (0.5 s) behind the IMU are dropped
 (`points_dropped_stale_total`); if `ndt_last_align_ms` is above the scan period, raise
-`points_voxel_leaf`.
+`points_voxel_leaf`. A driver that stamps the start of a sweep without deskewing needs `points_time_offset`
+at half the sweep period (0.05 at 10 Hz); otherwise the estimate runs ahead along the track.
 
 **ndt3d likelihood.** Two parameters shape the NDT likelihood (details in
 [`PARAMS.md`](PARAMS.md)). Both are off by default (0), which is the plain likelihood.

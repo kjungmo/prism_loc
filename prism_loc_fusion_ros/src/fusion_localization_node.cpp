@@ -48,6 +48,7 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
       declare_parameter<double>("ndt_min_inlier_fraction", dflt.ndt_min_inlier_fraction);
   points_voxel_leaf_ = declare_parameter<double>("points_voxel_leaf", dflt.points_voxel_leaf);
   points_max_age_ = declare_parameter<double>("points_max_age", dflt.points_max_age);
+  points_time_offset_ = declare_parameter<double>("points_time_offset", dflt.points_time_offset);
   pose_pos_std_ = declare_parameter<double>("pose_pos_std", 0.1);
   pose_rot_std_ = declare_parameter<double>("pose_rot_std", 0.05);
   gnss_min_status_ = declare_parameter<int>("gnss_min_status", 0);
@@ -89,6 +90,7 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   vp.ndt_min_inlier_fraction = ndt_min_inlier_fraction_;
   vp.points_voxel_leaf = points_voxel_leaf_;
   vp.points_max_age = points_max_age_;
+  vp.points_time_offset = points_time_offset_;
   vp.pose_pos_std = pose_pos_std_;
   vp.pose_rot_std = pose_rot_std_;
   vp.gnss_max_pos_cov = gnss_max_pos_cov_;
@@ -555,7 +557,9 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
     }
     // A cloud that is already older than points_max_age behind the IMU would be corrected from
     // a pose the filter left long ago: drop it. (An unstamped cloud is kept: cloudIsStale.)
-    const double cloud_t = rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()).seconds();
+    // The time the registration stands for (header stamp + points_time_offset; see cloudTime).
+    const double cloud_t = cloudTime(
+        rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()).seconds(), points_time_offset_);
     if (last_imu_valid_ && cloudIsStale(cloud_t, last_imu_time_.seconds(), points_max_age_)) {
       ++points_dropped_stale_;
       ++stale_in_a_row_;

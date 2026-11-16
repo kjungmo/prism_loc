@@ -47,7 +47,8 @@ class FusionLocalizationNode : public rclcpp::Node {
 
   std::string global_frame_, odom_frame_, base_frame_;
   std::string imu_topic_, points_topic_, gnss_topic_;
-  double ndt_max_fitness_, ndt_min_inlier_fraction_, points_voxel_leaf_, points_max_age_, transform_tolerance_;
+  double ndt_max_fitness_, ndt_min_inlier_fraction_, points_voxel_leaf_, points_max_age_, points_time_offset_,
+      transform_tolerance_;
   double pose_pos_std_, pose_rot_std_, gnss_max_pos_cov_, initial_yaw_{0.0};
   int gnss_min_status_{0};
   bool map_to_base_fallback_{true};

@@ -47,6 +47,7 @@ TEST(FusionParamValidation, NewDefaults) {
   EXPECT_DOUBLE_EQ(p.ndt_epsilon, 1e-4);
   EXPECT_DOUBLE_EQ(p.points_voxel_leaf, 1.0);
   EXPECT_DOUBLE_EQ(p.points_max_age, 0.5);
+  EXPECT_DOUBLE_EQ(p.points_time_offset, 0.0);
 }
 
 TEST(FusionParamValidation, FitnessRangeInlierFractionAndAgeRanges) {
@@ -70,6 +71,13 @@ TEST(FusionParamValidation, FitnessRangeInlierFractionAndAgeRanges) {
   expectRejects([&] { validateFusionParams(p, ep); }, "points_max_age");
   p.points_max_age = std::nan("");
   expectRejects([&] { validateFusionParams(p, ep); }, "points_max_age");
+  p = {};
+  p.points_time_offset = 1.5;
+  expectRejects([&] { validateFusionParams(p, ep); }, "points_time_offset");
+  p.points_time_offset = std::nan("");
+  expectRejects([&] { validateFusionParams(p, ep); }, "points_time_offset");
+  p.points_time_offset = -0.05;
+  EXPECT_NO_THROW(validateFusionParams(p, ep));
   p = {};
   p.ndt_fitness_max_range = 0.0;  // unlimited
   p.ndt_min_inlier_fraction = 0.0;

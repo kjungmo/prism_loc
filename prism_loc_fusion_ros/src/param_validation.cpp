@@ -31,6 +31,8 @@ void validateFusionParams(const FusionNodeParams& p, const prism_loc_fusion::Esk
   require(p.points_voxel_leaf > 0.0, "points_voxel_leaf", p.points_voxel_leaf, "> 0");
   require(std::isfinite(p.points_max_age) && p.points_max_age >= 0.0, "points_max_age",
           p.points_max_age, "finite and >= 0 (0 = off)");
+  require(std::isfinite(p.points_time_offset) && std::fabs(p.points_time_offset) <= 1.0,
+          "points_time_offset", p.points_time_offset, "finite and within [-1, 1] s");
   require(p.pose_pos_std > 0.0, "pose_pos_std", p.pose_pos_std, "> 0");
   require(p.pose_rot_std > 0.0, "pose_rot_std", p.pose_rot_std, "> 0");
   require(p.gnss_max_pos_cov > 0.0, "gnss_max_pos_cov", p.gnss_max_pos_cov, "> 0");

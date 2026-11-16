@@ -18,6 +18,15 @@ inline Eigen::Isometry3d compensateForMotion(const Eigen::Isometry3d& z,
   return z * map_from_guess.inverse() * map_from_now;
 }
 
+// The time a scan's registration stands for: the header stamp plus points_time_offset. A
+// driver that stamps the start of a sweep and does not deskew gives a registration that fits
+// the pose at about the middle of the sweep (+ half the sweep period). A zero stamp (a driver
+// that sets none) stays 0, so the checks that treat 0 as unstamped still see it.
+inline double cloudTime(double header_stamp_s, double offset_s) {
+  if (header_stamp_s == 0.0) return 0.0;
+  return header_stamp_s + offset_s;
+}
+
 // True when a cloud stamped cloud_stamp_s is more than max_age_s older than the latest IMU
 // sample (imu_stamp_s). False when max_age_s <= 0 (check off), when either stamp is 0 or not
 // finite (a driver that sets no stamp, or no IMU sample yet), or when the cloud is newer.

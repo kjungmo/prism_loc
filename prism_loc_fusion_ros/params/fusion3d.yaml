@@ -19,6 +19,7 @@
     ndt_min_inlier_fraction: 0.5      # fraction 0..1: reject NDT results when fewer of the scan's points lie within ndt_fitness_max_range of the map
     points_voxel_leaf: 1.0            # m: voxel-grid downsample leaf size for incoming scans (0.5 costs about twice the align time for a few cm)
     points_max_age: 0.5               # s: drop a cloud stamped more than this behind the latest IMU sample (a registration that cannot keep up); 0 = off
+    points_time_offset: 0.0           # s: added to the cloud stamp, the time its registration stands for; a driver that stamps the start of a sweep and does not deskew: half the sweep period (0.05 at 10 Hz)
     pose_pos_std: 0.1                 # m: assumed std-dev of the NDT position measurement
     pose_rot_std: 0.05                # rad: assumed std-dev of the NDT orientation measurement
     sigma_acc: 0.01                   # m/s^2: accelerometer white-noise std-dev (ESKF process)

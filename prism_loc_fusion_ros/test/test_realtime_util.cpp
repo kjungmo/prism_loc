@@ -169,3 +169,16 @@ TEST(ClockOffset, SuspectedWhenCloudsAreDroppedAlthoughTheAlignIsFast) {
   EXPECT_FALSE(clockOffsetSuspected(true, 30.0, 0.5, 2));   // not yet
   EXPECT_FALSE(clockOffsetSuspected(true, 400.0, 0.5, 9));  // a slow align explains the drops
 }
+
+TEST(CloudTime, TheOffsetMovesTheStampToTheTimeTheScanRepresents) {
+  // A driver that stamps the start of a 0.1 s sweep: the registration of the unskewed scan is
+  // the pose at about the middle of the sweep.
+  EXPECT_DOUBLE_EQ(cloudTime(100.0, 0.05), 100.05);
+  EXPECT_DOUBLE_EQ(cloudTime(100.0, 0.0), 100.0);
+  EXPECT_DOUBLE_EQ(cloudTime(100.0, -0.05), 99.95);  // a driver that stamps the end
+}
+
+TEST(CloudTime, AnUnstampedCloudStaysUnstamped) {
+  EXPECT_DOUBLE_EQ(cloudTime(0.0, 0.05), 0.0);
+  EXPECT_FALSE(std::isfinite(cloudTime(std::nan(""), 0.05)));
+}

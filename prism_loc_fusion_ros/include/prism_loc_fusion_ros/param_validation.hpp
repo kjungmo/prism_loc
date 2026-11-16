@@ -16,6 +16,7 @@ struct FusionNodeParams {
   double ndt_max_fitness{0.06}, ndt_fitness_max_range{1.0}, ndt_min_inlier_fraction{0.5};
   double points_voxel_leaf{1.0};
   double points_max_age{0.5};  // s; a cloud older than this behind the latest IMU sample is dropped; 0 = off
+  double points_time_offset{0.0};  // s; added to a cloud's header stamp: the time its registration stands for
   double pose_pos_std{0.1}, pose_rot_std{0.05};
   double gnss_max_pos_cov{25.0};
   int imu_queue_depth{5};
