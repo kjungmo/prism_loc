@@ -12,10 +12,13 @@
     map_pcd_path: ""                  # str: absolute path to the .pcd map (REQUIRED; empty aborts startup)
     ndt_resolution: 1.0               # m: NDT voxel (cell) edge length for the map
     ndt_step_size: 0.1                # m: NDT line-search maximum step length
-    ndt_epsilon: 0.01                 # m: NDT convergence threshold on the transform delta
+    ndt_epsilon: 0.0001               # m: NDT convergence threshold on the transform delta (0.01 stopped after one iteration and kept a guess 0.5 m off)
     ndt_max_iter: 30                  # count: NDT max optimization iterations per align
-    ndt_max_fitness: 2.0              # score: reject NDT results whose fitness exceeds this
-    points_voxel_leaf: 0.5            # m: voxel-grid downsample leaf size for incoming scans
+    ndt_max_fitness: 0.06             # m^2: reject NDT results whose fitness exceeds this; the fitness is the mean squared distance of the scan points within ndt_fitness_max_range of the map (with ndt_fitness_max_range 0 the matching limit is 2.0)
+    ndt_fitness_max_range: 1.0        # m: scan points farther than this from the map are left out of the fitness (unmapped space); 0 = every point (PCL's score)
+    ndt_min_inlier_fraction: 0.5      # fraction 0..1: reject NDT results when fewer of the scan's points lie within ndt_fitness_max_range of the map
+    points_voxel_leaf: 1.0            # m: voxel-grid downsample leaf size for incoming scans (0.5 costs about twice the align time for a few cm)
+    points_max_age: 0.5               # s: drop a cloud stamped more than this behind the latest IMU sample (a registration that cannot keep up); 0 = off
     pose_pos_std: 0.1                 # m: assumed std-dev of the NDT position measurement
     pose_rot_std: 0.05                # rad: assumed std-dev of the NDT orientation measurement
     sigma_acc: 0.01                   # m/s^2: accelerometer white-noise std-dev (ESKF process)

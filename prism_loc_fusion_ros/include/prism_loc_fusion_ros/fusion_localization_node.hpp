@@ -1,5 +1,6 @@
 #pragma once
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -19,6 +20,7 @@
 #include "prism_loc_fusion/geodetic.hpp"
 #include "prism_loc_fusion_ros/mount.hpp"
 #include "prism_loc_fusion_ros/ndt_registration.hpp"
+#include "prism_loc_fusion_ros/realtime_util.hpp"
 namespace prism_loc_fusion_ros {
 class FusionLocalizationNode : public rclcpp::Node {
  public:
@@ -44,7 +46,7 @@ class FusionLocalizationNode : public rclcpp::Node {
 
   std::string global_frame_, odom_frame_, base_frame_;
   std::string imu_topic_, points_topic_, gnss_topic_;
-  double ndt_max_fitness_, points_voxel_leaf_, transform_tolerance_;
+  double ndt_max_fitness_, ndt_min_inlier_fraction_, points_voxel_leaf_, points_max_age_, transform_tolerance_;
   double pose_pos_std_, pose_rot_std_, gnss_max_pos_cov_, initial_yaw_{0.0};
   int gnss_min_status_{0};
   bool map_to_base_fallback_{true};
@@ -68,7 +70,25 @@ class FusionLocalizationNode : public rclcpp::Node {
   bool capped_active_{false};
   long ndt_since_init_{0};           // NDT corrections since the filter started
   prism_loc_fusion::GeodeticConverter geo_;
+  // Threads. The node runs on a multi-threaded executor with two mutually exclusive callback
+  // groups: points_group_ holds only the points subscription (a scan registers for longer
+  // than the 0.1 s scan period), the node's default group holds everything else (IMU, GNSS,
+  // /initialpose, /tf watch, both timers), so the IMU keeps flowing during an align.
+  // mutex_ guards every member below except ndt_ and the members that are set once in the
+  // constructor and only read afterwards (parameters, frames, topics, publishers, tf_*).
+  // ndt_ is touched only by onPoints, in the mutually exclusive points_group_, with mutex_
+  // NOT held (an align takes tens of milliseconds to seconds).
+  rclcpp::CallbackGroup::SharedPtr points_group_;
   std::unique_ptr<NdtRegistration> ndt_;
+  // Counts the filter (re)initializations and /initialpose reseeds. A scan that was registered
+  // while this changed is discarded: its guess belongs to a state that no longer exists.
+  std::uint64_t filter_generation_{0};
+  // NDT bookkeeping for /diagnostics (guarded by mutex_).
+  long ndt_rejected_not_converged_{0}, ndt_rejected_fitness_{0}, ndt_rejected_inliers_{0};
+  long ndt_discarded_reseed_{0}, points_dropped_stale_{0};
+  bool ndt_any_align_{false};
+  double ndt_last_fitness_{0.0}, ndt_last_inlier_fraction_{0.0}, ndt_last_align_ms_{0.0};
+  int ndt_last_iterations_{0};
 
   bool filter_init_{false}, have_attitude_{false}, have_position_{false}, last_imu_valid_{false};
   // Startup watchdog: track whether each required input has been seen at least once.

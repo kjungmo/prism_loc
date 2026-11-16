@@ -202,11 +202,11 @@ prism_loc_fusion/                       # pure C++17 + Eigen, no ROS/PCL
 
 prism_loc_fusion_ros/                   # ROS 2 Humble node, depends prism_loc_fusion + PCL
   package.xml  CMakeLists.txt
-  include/prism_loc_fusion_ros/{ndt_registration,fusion_localization_node}.hpp
+  include/prism_loc_fusion_ros/{ndt_registration,realtime_util,fusion_localization_node}.hpp
   src/{ndt_registration,fusion_localization_node,fusion_main}.cpp
   launch/fusion3d.launch.py
   params/fusion3d.yaml
-  test/{test_tf_compose,test_ndt_registration}.cpp
+  test/{test_tf_compose,test_ndt_registration,test_realtime_util}.cpp
 ```
 
 ## 8. I/O contract (fusion3d node)
@@ -227,6 +227,25 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
 
 - **LiDAR, 6 DoF.** NDT registers the cloud in its own frame, so the initial guess is
   `T_map_base · T_bs` and the measurement fed to `updatePose` is `T_map_sensor · T_bs⁻¹`.
+- **NDT registration and its gate.** The map is turned into NDT cells and a kd-tree once, at
+  start-up (`NdtRegistration::setTarget`); every scan reuses them. Building them per scan took
+  seconds for a map of millions of points, so the single thread never caught up with the IMU.
+  A result is accepted when it converged, its fitness is at most `ndt_max_fitness` and at least
+  `ndt_min_inlier_fraction` of the scan's points lie within `ndt_fitness_max_range` of the map.
+  The fitness is the mean squared distance from each aligned scan point to its nearest map
+  point, over the points within `ndt_fitness_max_range` only (range 0: every point, PCL's
+  `getFitnessScore`). Without the range, a scan that partly sees space the map lacks scores
+  badly although its pose is right, and a wrong pose can score as well as a right one.
+  `ndt_epsilon` is 0.0001 because PCL stops when one step moves the pose less than epsilon:
+  at 0.01 a guess 0.5 m off was returned after one iteration, "converged".
+- **Threads.** The node runs on a `MultiThreadedExecutor` with two threads and two mutually
+  exclusive callback groups: the points subscription alone (depth 1), and everything else
+  (IMU, GNSS, `/initialpose`, `/tf` watch, timers). `onPoints` takes the guess `T_g` and the lidar
+  mount under `mutex_`, releases it, converts, filters and registers, then takes it again.
+  The IMU has moved the state to `T_n` by then, so the measurement is `z' = z · T_g⁻¹ · T_n`
+  (`compensateForMotion`). A result is discarded when `/initialpose` or a filter restart happened
+  during the align (a generation counter). A cloud stamped more than `points_max_age` behind the
+  latest IMU sample is dropped before it is registered.
 - **IMU, rotation.** `ω_b = R_bs ω_s`, `f_b = R_bs f_s`. The lever-arm terms
   `α × r + ω × (ω × r)` are not compensated.
 - **GNSS, translation.** The fix is fused with `updatePositionLever` (§4) at the lever
@@ -257,8 +276,9 @@ the frames and used every input as measured at `base_frame`.
 
 ## 9. Parameters (fusion3d)
 
-`map_pcd_path`, `ndt_resolution`(1.0), `ndt_step_size`(0.1), `ndt_epsilon`(0.01),
-`ndt_max_iter`(30), `points_voxel_leaf`(0.5), `ndt_max_fitness`(2.0),
+`map_pcd_path`, `ndt_resolution`(1.0), `ndt_step_size`(0.1), `ndt_epsilon`(0.0001),
+`ndt_max_iter`(30), `points_voxel_leaf`(1.0), `ndt_max_fitness`(0.06),
+`ndt_fitness_max_range`(1.0), `ndt_min_inlier_fraction`(0.5), `points_max_age`(0.5),
 `imu_topic`/`points_topic`/`gnss_topic`, `global_frame`/`odom_frame`/`base_frame`,
 `points_frame`/`imu_frame`/`gnss_frame`(empty = `header.frame_id`),
 `sigma_acc`/`sigma_gyro`/`sigma_acc_bias`/`sigma_gyro_bias`,

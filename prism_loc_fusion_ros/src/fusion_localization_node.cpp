@@ -38,8 +38,16 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   odom_frame_ = declare_parameter<std::string>("odom_frame", "odom");
   base_frame_ = declare_parameter<std::string>("base_frame", "base_link");
   transform_tolerance_ = declare_parameter<double>("transform_tolerance", 0.1);
-  ndt_max_fitness_ = declare_parameter<double>("ndt_max_fitness", 2.0);
-  points_voxel_leaf_ = declare_parameter<double>("points_voxel_leaf", 0.5);
+  // The defaults here are those of FusionNodeParams (param_validation.hpp), which are the
+  // documented ones.
+  const FusionNodeParams dflt{};
+  ndt_max_fitness_ = declare_parameter<double>("ndt_max_fitness", dflt.ndt_max_fitness);
+  const double ndt_fitness_max_range =
+      declare_parameter<double>("ndt_fitness_max_range", dflt.ndt_fitness_max_range);
+  ndt_min_inlier_fraction_ =
+      declare_parameter<double>("ndt_min_inlier_fraction", dflt.ndt_min_inlier_fraction);
+  points_voxel_leaf_ = declare_parameter<double>("points_voxel_leaf", dflt.points_voxel_leaf);
+  points_max_age_ = declare_parameter<double>("points_max_age", dflt.points_max_age);
   pose_pos_std_ = declare_parameter<double>("pose_pos_std", 0.1);
   pose_rot_std_ = declare_parameter<double>("pose_rot_std", 0.05);
   gnss_min_status_ = declare_parameter<int>("gnss_min_status", 0);
@@ -77,13 +85,16 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   FusionNodeParams vp;
   vp.transform_tolerance = transform_tolerance_;
   vp.ndt_max_fitness = ndt_max_fitness_;
+  vp.ndt_fitness_max_range = ndt_fitness_max_range;
+  vp.ndt_min_inlier_fraction = ndt_min_inlier_fraction_;
   vp.points_voxel_leaf = points_voxel_leaf_;
+  vp.points_max_age = points_max_age_;
   vp.pose_pos_std = pose_pos_std_;
   vp.pose_rot_std = pose_rot_std_;
   vp.gnss_max_pos_cov = gnss_max_pos_cov_;
-  // IMU messages queue while a point cloud is being registered on the same executor.
+  // The IMU has its own thread, so a scan being registered does not hold its samples back.
   // The default keeps SensorDataQoS's depth (5); raise it (e.g. 200) when /diagnostics
-  // reports IMU gaps, so the queue holds one NDT align's worth of samples.
+  // reports IMU gaps (a slow machine, a burst from the driver).
   vp.imu_queue_depth = declare_parameter<int>("imu_queue_depth", vp.imu_queue_depth);
   // /diagnostics: startup grace, IMU silence threshold (larger of input_timeout_s and
   // input_timeout_periods x the IMU period) and the age of the last accepted NDT
@@ -99,11 +110,13 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   const std::string pcd = declare_parameter<std::string>("map_pcd_path", "");
   vp.ndt_resolution = declare_parameter<double>("ndt_resolution", 1.0);
   vp.ndt_step_size = declare_parameter<double>("ndt_step_size", 0.1);
-  vp.ndt_epsilon = declare_parameter<double>("ndt_epsilon", 0.01);
+  vp.ndt_epsilon = declare_parameter<double>("ndt_epsilon", dflt.ndt_epsilon);
   vp.ndt_max_iter = declare_parameter<int>("ndt_max_iter", 30);
   validateFusionParams(vp, ep);
+  const std::string gate_warning = fitnessGateWarning(vp);
+  if (!gate_warning.empty()) RCLCPP_WARN(get_logger(), "%s", gate_warning.c_str());
   ndt_ = std::make_unique<NdtRegistration>(vp.ndt_resolution, vp.ndt_step_size, vp.ndt_epsilon,
-                                           vp.ndt_max_iter);
+                                           vp.ndt_max_iter, vp.ndt_fitness_max_range);
   pcl::PointCloud<pcl::PointXYZ>::Ptr map(new pcl::PointCloud<pcl::PointXYZ>());
   if (pcd.empty()) {
     RCLCPP_ERROR(get_logger(), "fusion3d: map_pcd_path is empty");
@@ -117,6 +130,7 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
         "fusion3d: could not load a non-empty PCD map from '" + pcd +
         "' - check the file exists, is readable, and is a valid non-empty point cloud");
   }
+  // Builds the NDT cells and the search tree once (seconds for a large map); every scan reuses them.
   ndt_->setTarget(map);
   RCLCPP_INFO(get_logger(), "fusion3d: NDT map loaded (%zu pts)", map->size());
 
@@ -149,9 +163,14 @@ FusionLocalizationNode::FusionLocalizationNode(const rclcpp::NodeOptions& option
   imu_sub_ = create_subscription<sensor_msgs::msg::Imu>(
       imu_topic_, rclcpp::SensorDataQoS().keep_last(static_cast<size_t>(vp.imu_queue_depth)),
       std::bind(&FusionLocalizationNode::onImu, this, std::placeholders::_1));
+  // Depth 1: while a scan registers, the newest cloud waits and older ones are replaced, so a
+  // slow align never leaves stale clouds queued. Own callback group: see points_group_.
+  points_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  rclcpp::SubscriptionOptions points_options;
+  points_options.callback_group = points_group_;
   points_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
-      points_topic_, rclcpp::SensorDataQoS(),
-      std::bind(&FusionLocalizationNode::onPoints, this, std::placeholders::_1));
+      points_topic_, rclcpp::SensorDataQoS().keep_last(1),
+      std::bind(&FusionLocalizationNode::onPoints, this, std::placeholders::_1), points_options);
   gnss_sub_ = create_subscription<sensor_msgs::msg::NavSatFix>(
       gnss_topic_, rclcpp::SensorDataQoS(),
       std::bind(&FusionLocalizationNode::onGnss, this, std::placeholders::_1));
@@ -363,6 +382,15 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("seconds_since_ndt_correction", any_ndt_ ? num(secs(last_ndt_wall_), "%.2f") : "never");
   kv("seconds_since_gnss_correction", any_gnss_fix_ ? num(secs(last_gnss_wall_), "%.2f") : "never");
   kv("ndt_rejected_total", std::to_string(ndt_rejected_));
+  kv("ndt_rejected_not_converged_total", std::to_string(ndt_rejected_not_converged_));
+  kv("ndt_rejected_fitness_total", std::to_string(ndt_rejected_fitness_));
+  kv("ndt_rejected_inliers_total", std::to_string(ndt_rejected_inliers_));
+  kv("ndt_discarded_reseed_total", std::to_string(ndt_discarded_reseed_));
+  kv("points_dropped_stale_total", std::to_string(points_dropped_stale_));
+  kv("ndt_last_fitness", ndt_any_align_ ? num(ndt_last_fitness_, "%.4f") : "n/a");
+  kv("ndt_last_inlier_fraction", ndt_any_align_ ? num(ndt_last_inlier_fraction_, "%.3f") : "n/a");
+  kv("ndt_last_iterations", ndt_any_align_ ? std::to_string(ndt_last_iterations_) : "n/a");
+  kv("ndt_last_align_ms", ndt_any_align_ ? num(ndt_last_align_ms_, "%.1f") : "n/a");
   // The covariance of the published pose: with a lever arm it includes the heading spread that the bound holds back (covarianceHonest).
   kv("covariance_trace_position",
      filter_init_ ? num((gnss_mount_.resolved() ? eskf_->covarianceHonest(gnss_mount_.ext().T.translation()) : eskf_->covariance()).block<3, 3>(0, 0).trace(), "%.6f") : "n/a");
@@ -426,6 +454,7 @@ bool FusionLocalizationNode::tryInitialize() {
     tilt_seed_pending_ = true;
   }
   eskf_->initialize(x0, P0);
+  ++filter_generation_;   // a scan registered from the earlier state is discarded
   // A lever arm and no heading source (no /initialpose: the heading is the initial_yaw parameter, a guess): the filter's start spread
   // of 0.71 rad is far too narrow for it, and the first start would run a full update with a heading 1 to 3 rad off. Hold the
   // spread of a heading that is not known; the first start or stop then finds it (Eskf::markHeadingUnknown). initial_yaw_known: the
@@ -478,28 +507,54 @@ void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
   publish(stamp);
 }
 
+// Runs in points_group_, apart from the IMU. Three steps: take the guess under mutex_; convert,
+// filter and register WITHOUT mutex_ (tens of milliseconds to seconds); apply the result under
+// mutex_ again. ndt_ is only used here, and this callback never overlaps itself.
 void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-  std::lock_guard<std::mutex> lk(mutex_);
-  points_seen_ = true;
-  last_points_wall_ = Steady::now();
-  if (!resolveMount(points_mount_, msg->header.frame_id, points_topic_)) {
-    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onPoints: cloud not used - %s",
-                         points_mount_.problem(base_frame_, points_topic_, "points_frame").c_str());
-    return;
+  Eigen::Isometry3d guess_base;     // pose of base_frame in the map the registration starts from
+  Extrinsic mount;                  // base_frame <- sensor frame, as it was when the scan arrived
+  std::uint64_t generation = 0;
+  {
+    std::lock_guard<std::mutex> lk(mutex_);
+    points_seen_ = true;
+    last_points_wall_ = Steady::now();
+    if (!resolveMount(points_mount_, msg->header.frame_id, points_topic_)) {
+      RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000, "onPoints: cloud not used - %s",
+                           points_mount_.problem(base_frame_, points_topic_, "points_frame").c_str());
+      return;
+    }
+    if (!ndt_ || !ndt_->hasTarget()) {
+      RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
+                           "onPoints: NDT target map not set - map_pcd_path failed to load; "
+                           "check map_pcd_path");
+      return;
+    }
+    if (!filter_init_) {
+      RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
+                           "onPoints: waiting for filter initialization - need IMU attitude and a "
+                           "position fix (GNSS or /initialpose); check imu_topic/gnss_topic or "
+                           "publish to /initialpose");
+      return;
+    }
+    // A cloud that is already older than points_max_age behind the IMU would be corrected from
+    // a pose the filter left long ago: drop it. (An unstamped cloud is kept: cloudIsStale.)
+    if (last_imu_valid_ &&
+        cloudIsStale(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()).seconds(),
+                     last_imu_time_.seconds(), points_max_age_)) {
+      ++points_dropped_stale_;
+      RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
+                           "fusion3d: cloud dropped, older than points_max_age %.2f s behind the IMU "
+                           "(the registration cannot keep up with %s; %ld dropped)",
+                           points_max_age_, points_topic_.c_str(), points_dropped_stale_);
+      return;
+    }
+    guess_base = Eigen::Isometry3d::Identity();
+    guess_base.translation() = eskf_->state().p;
+    guess_base.linear() = eskf_->state().q.toRotationMatrix();
+    mount = points_mount_.ext();
+    generation = filter_generation_;
   }
-  if (!ndt_ || !ndt_->hasTarget()) {
-    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
-                         "onPoints: NDT target map not set - map_pcd_path failed to load; "
-                         "check map_pcd_path");
-    return;
-  }
-  if (!filter_init_) {
-    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
-                         "onPoints: waiting for filter initialization - need IMU attitude and a "
-                         "position fix (GNSS or /initialpose); check imu_topic/gnss_topic or "
-                         "publish to /initialpose");
-    return;
-  }
+
   pcl::PointCloud<pcl::PointXYZ>::Ptr raw(new pcl::PointCloud<pcl::PointXYZ>());
   pcl::fromROSMsg(*msg, *raw);
   if (raw->empty()) return;
@@ -509,22 +564,46 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   const float leaf = static_cast<float>(points_voxel_leaf_);
   vg.setLeafSize(leaf, leaf, leaf);
   vg.filter(*src);
-  Eigen::Isometry3d guess = Eigen::Isometry3d::Identity();
-  guess.translation() = eskf_->state().p;
-  guess.linear() = eskf_->state().q.toRotationMatrix();
-  // The cloud is in the sensor frame: registration starts from, and returns, the pose of
-  // the sensor in the map; the filter state is the pose of base_frame.
-  NdtResult r = ndt_->align(src, sensorPoseFromBasePose(points_mount_.ext(), guess));
-  if (!r.converged || r.fitness > ndt_max_fitness_) {
+  if (src->empty()) return;
+  // The cloud is in the sensor frame: registration starts from, and returns, the pose of the
+  // sensor in the map; the filter state is the pose of base_frame.
+  const auto t0 = Steady::now();
+  const NdtResult r = ndt_->align(src, sensorPoseFromBasePose(mount, guess_base));
+  const double align_ms = std::chrono::duration<double, std::milli>(Steady::now() - t0).count();
+
+  std::lock_guard<std::mutex> lk(mutex_);
+  ndt_any_align_ = true;
+  ndt_last_fitness_ = r.fitness;
+  ndt_last_inlier_fraction_ = r.inlier_fraction;
+  ndt_last_iterations_ = r.iterations;
+  ndt_last_align_ms_ = align_ms;
+  // A reseed (/initialpose) or a filter (re)start happened while aligning: the guess belongs to a
+  // state that is gone. A result from it would pull the new state back to the old place.
+  if (generation != filter_generation_ || !filter_init_) {
+    ++ndt_discarded_reseed_;
+    return;
+  }
+  const char* reason = nullptr;
+  if (!r.converged) { reason = "not converged"; ++ndt_rejected_not_converged_; }
+  else if (r.fitness > ndt_max_fitness_) { reason = "fitness"; ++ndt_rejected_fitness_; }
+  else if (r.inlier_fraction < ndt_min_inlier_fraction_) { reason = "inliers"; ++ndt_rejected_inliers_; }
+  if (reason) {
     ++ndt_rejected_;
-    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 2000, "fusion3d: NDT rejected (conv=%d fit=%.3f)",
-                         static_cast<int>(r.converged), r.fitness);
+    RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 2000,
+                         "fusion3d: NDT rejected: %s (conv=%d fit=%.4f inliers=%.2f iter=%d, %.0f ms)",
+                         reason, static_cast<int>(r.converged), r.fitness, r.inlier_fraction,
+                         r.iterations, align_ms);
     return;
   }
   Eigen::Matrix<double, 6, 6> R = Eigen::Matrix<double, 6, 6>::Identity();
   R.topLeftCorner<3, 3>() *= pose_pos_std_ * pose_pos_std_;
   R.bottomRightCorner<3, 3>() *= pose_rot_std_ * pose_rot_std_;
-  const Eigen::Isometry3d base_pose = basePoseFromSensorPose(points_mount_.ext(), r.pose);
+  // The result is the pose at the guess; the IMU moved the state on while aligning.
+  Eigen::Isometry3d now_base = Eigen::Isometry3d::Identity();
+  now_base.translation() = eskf_->state().p;
+  now_base.linear() = eskf_->state().q.toRotationMatrix();
+  const Eigen::Isometry3d base_pose =
+      compensateForMotion(basePoseFromSensorPose(mount, r.pose), guess_base, now_base);
   eskf_->updatePose(base_pose.translation(), Eigen::Quaterniond(base_pose.linear()), R);
   ++ndt_since_init_;
   any_ndt_ = true;
@@ -624,6 +703,7 @@ void FusionLocalizationNode::onInitialPose(
   attitude_from_pose_ = true;
   initialpose_seen_ = true;
   filter_init_ = false;
+  ++filter_generation_;   // a scan being registered now was started from the pose before this one
   heading_source_ = HeadingSource::kInitialPose;
   heading_source_wall_ = Steady::now();
   RCLCPP_INFO(get_logger(), "fusion3d: initialpose set");
