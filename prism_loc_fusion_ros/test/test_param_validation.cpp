@@ -92,3 +92,14 @@ TEST(FusionParamValidation, WarnsWhenTheFitnessLimitGatesNothing) {
   p.ndt_max_fitness = 2.0;
   EXPECT_TRUE(fitnessGateWarning(p).empty());
 }
+
+TEST(FusionParamValidation, WarnsWhenTheUnlimitedScoreIsGivenALimitBelowOne) {
+  FusionNodeParams p;
+  p.ndt_fitness_max_range = 0.0;
+  p.ndt_max_fitness = 0.06;  // the new default with the old (unlimited) score
+  const std::string w = fitnessGateWarning(p);
+  EXPECT_NE(w.find("ndt_fitness_max_range"), std::string::npos) << w;
+  EXPECT_NE(w.find("rejects"), std::string::npos) << w;
+  p.ndt_max_fitness = 1.0;
+  EXPECT_TRUE(fitnessGateWarning(p).empty());
+}

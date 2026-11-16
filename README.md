@@ -253,7 +253,7 @@ Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
 `relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed`, `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
-`ndt_rejected_total` (split in `ndt_rejected_not_converged_total`, `ndt_rejected_fitness_total`, `ndt_rejected_inliers_total`), `ndt_discarded_reseed_total`, `points_dropped_stale_total`, `ndt_last_fitness`, `ndt_last_inlier_fraction`, `ndt_last_iterations`, `ndt_last_align_ms` (fusion3d; `n/a` before the first align), `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
+`ndt_rejected_total` (split in `ndt_rejected_not_converged_total`, `ndt_rejected_fitness_total`, `ndt_rejected_inliers_total`), `ndt_discarded_reseed_total`, `points_dropped_stale_total`, `ndt_guess_fallback_total`, `ndt_last_fitness`, `ndt_last_inlier_fraction`, `ndt_last_iterations`, `ndt_last_align_ms` (fusion3d; `n/a` before the first align), `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
 mount reads `identity (frame base_link)`, `base_link -> lidar xyz ... rpy ...`,
 `missing (frame lidar)`, `missing (empty frame_id)` or `no message yet`). A fusion3d robot without odometry that

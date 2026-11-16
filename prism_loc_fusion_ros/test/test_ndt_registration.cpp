@@ -74,7 +74,9 @@ TEST(NdtRegistration, ReusedObjectGivesTheResultsOfFreshObjects) {
   expectSamePose(a1, a1_again);  // the earlier align leaves no state behind
 }
 
-TEST(NdtRegistration, TargetIsBuiltOncePerSetTargetNotPerAlign) {
+// targetBuilds() counts the calls PCL receives to build its target (cells and search tree),
+// not the calls of setTarget: an align() that rebuilt the target would raise it.
+TEST(NdtRegistration, PclTargetIsBuiltOncePerSetTargetNotPerAlign) {
   auto target = boxCloud();
   NdtRegistration reg(2.0, 0.1, 1e-3, 30);
   EXPECT_EQ(reg.targetBuilds(), 0);

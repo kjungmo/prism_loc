@@ -387,6 +387,7 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("ndt_rejected_inliers_total", std::to_string(ndt_rejected_inliers_));
   kv("ndt_discarded_reseed_total", std::to_string(ndt_discarded_reseed_));
   kv("points_dropped_stale_total", std::to_string(points_dropped_stale_));
+  kv("ndt_guess_fallback_total", std::to_string(ndt_guess_fallback_));
   kv("ndt_last_fitness", ndt_any_align_ ? num(ndt_last_fitness_, "%.4f") : "n/a");
   kv("ndt_last_inlier_fraction", ndt_any_align_ ? num(ndt_last_inlier_fraction_, "%.3f") : "n/a");
   kv("ndt_last_iterations", ndt_any_align_ ? std::to_string(ndt_last_iterations_) : "n/a");
@@ -454,7 +455,8 @@ bool FusionLocalizationNode::tryInitialize() {
     tilt_seed_pending_ = true;
   }
   eskf_->initialize(x0, P0);
-  ++filter_generation_;   // a scan registered from the earlier state is discarded
+  invalidatePoseHistory();   // a scan registered from the earlier state is discarded
+  dead_reckoned_ = Eigen::Isometry3d::Identity();
   // A lever arm and no heading source (no /initialpose: the heading is the initial_yaw parameter, a guess): the filter's start spread
   // of 0.71 rad is far too narrow for it, and the first start would run a full update with a heading 1 to 3 rad off. Hold the
   // spread of a heading that is not known; the first start or stop then finds it (Eskf::markHeadingUnknown). initial_yaw_known: the
@@ -503,7 +505,21 @@ void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
   }
   if (!tryInitialize()) return;
   if (dt <= 0.0 || dt > 0.5) return;
+  Eigen::Isometry3d before = Eigen::Isometry3d::Identity();
+  before.translation() = eskf_->state().p;
+  before.linear() = eskf_->state().q.toRotationMatrix();
   eskf_->predict(acc, gyro, dt);
+  Eigen::Isometry3d after = Eigen::Isometry3d::Identity();
+  after.translation() = eskf_->state().p;
+  after.linear() = eskf_->state().q.toRotationMatrix();
+  dead_reckoned_ = advanceDeadReckoning(dead_reckoned_, before, after);
+  PoseSample sample;
+  sample.t = stamp.seconds();
+  sample.p = eskf_->state().p;
+  sample.q = eskf_->state().q;
+  sample.dr_p = dead_reckoned_.translation();
+  sample.dr_q = Eigen::Quaterniond(dead_reckoned_.linear());
+  recordPose(pose_history_, sample, kPoseHistoryS);
   publish(stamp);
 }
 
@@ -512,6 +528,7 @@ void FusionLocalizationNode::onImu(const sensor_msgs::msg::Imu::SharedPtr msg) {
 // mutex_ again. ndt_ is only used here, and this callback never overlaps itself.
 void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
   Eigen::Isometry3d guess_base;     // pose of base_frame in the map the registration starts from
+  Eigen::Isometry3d dr_guess;       // dead-reckoned pose (IMU predictions only) at the same time
   Extrinsic mount;                  // base_frame <- sensor frame, as it was when the scan arrived
   std::uint64_t generation = 0;
   {
@@ -538,19 +555,42 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
     }
     // A cloud that is already older than points_max_age behind the IMU would be corrected from
     // a pose the filter left long ago: drop it. (An unstamped cloud is kept: cloudIsStale.)
-    if (last_imu_valid_ &&
-        cloudIsStale(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()).seconds(),
-                     last_imu_time_.seconds(), points_max_age_)) {
+    const double cloud_t = rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()).seconds();
+    if (last_imu_valid_ && cloudIsStale(cloud_t, last_imu_time_.seconds(), points_max_age_)) {
       ++points_dropped_stale_;
-      RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
-                           "fusion3d: cloud dropped, older than points_max_age %.2f s behind the IMU "
-                           "(the registration cannot keep up with %s; %ld dropped)",
-                           points_max_age_, points_topic_.c_str(), points_dropped_stale_);
+      ++stale_in_a_row_;
+      const double behind_s = last_imu_time_.seconds() - cloud_t;
+      if (clockOffsetSuspected(ndt_any_align_, ndt_last_align_ms_, points_max_age_, stale_in_a_row_)) {
+        RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
+                             "fusion3d: lidar and IMU clocks differ by about %.1f s: the clouds on %s are "
+                             "dropped as older than points_max_age %.2f s behind the IMU although the "
+                             "align takes %.0f ms (%ld dropped). Fix the time sync, or set points_max_age: 0",
+                             behind_s, points_topic_.c_str(), points_max_age_,
+                             ndt_any_align_ ? ndt_last_align_ms_ : 0.0, points_dropped_stale_);
+      } else {
+        RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
+                             "fusion3d: cloud dropped, %.2f s behind the IMU (points_max_age %.2f s): the "
+                             "registration cannot keep up with %s, or the lidar clock is behind the IMU "
+                             "clock (set points_max_age: 0 to switch the check off) (%ld dropped)",
+                             behind_s, points_max_age_, points_topic_.c_str(), points_dropped_stale_);
+      }
       return;
     }
-    guess_base = Eigen::Isometry3d::Identity();
-    guess_base.translation() = eskf_->state().p;
-    guess_base.linear() = eskf_->state().q.toRotationMatrix();
+    stale_in_a_row_ = 0;
+    // Register from the state at the stamp of the cloud, not the state now: the cloud may have waited
+    // for the previous align. Outside the history (an unstamped cloud, a stamp newer than the IMU, a
+    // history cleared by a restart) the current state is the guess.
+    PoseAtTime at_stamp;
+    if (interpolatePose(pose_history_, cloud_t, at_stamp)) {
+      guess_base = at_stamp.state;
+      dr_guess = at_stamp.dr;
+    } else {
+      ++ndt_guess_fallback_;
+      guess_base = Eigen::Isometry3d::Identity();
+      guess_base.translation() = eskf_->state().p;
+      guess_base.linear() = eskf_->state().q.toRotationMatrix();
+      dr_guess = dead_reckoned_;
+    }
     mount = points_mount_.ext();
     generation = filter_generation_;
   }
@@ -579,38 +619,41 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
   ndt_last_align_ms_ = align_ms;
   // A reseed (/initialpose) or a filter (re)start happened while aligning: the guess belongs to a
   // state that is gone. A result from it would pull the new state back to the old place.
-  if (generation != filter_generation_ || !filter_init_) {
+  if (discardAlignResult(generation, filter_generation_, filter_init_)) {
     ++ndt_discarded_reseed_;
     return;
   }
-  const char* reason = nullptr;
-  if (!r.converged) { reason = "not converged"; ++ndt_rejected_not_converged_; }
-  else if (r.fitness > ndt_max_fitness_) { reason = "fitness"; ++ndt_rejected_fitness_; }
-  else if (r.inlier_fraction < ndt_min_inlier_fraction_) { reason = "inliers"; ++ndt_rejected_inliers_; }
-  if (reason) {
+  const NdtVerdict verdict = ndtVerdict(r.converged, r.fitness, r.inlier_fraction, ndt_max_fitness_,
+                                        ndt_min_inlier_fraction_);
+  if (verdict != NdtVerdict::kAccept) {
     ++ndt_rejected_;
+    if (verdict == NdtVerdict::kNotConverged) ++ndt_rejected_not_converged_;
+    else if (verdict == NdtVerdict::kFitness) ++ndt_rejected_fitness_;
+    else ++ndt_rejected_inliers_;
     RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 2000,
                          "fusion3d: NDT rejected: %s (conv=%d fit=%.4f inliers=%.2f iter=%d, %.0f ms)",
-                         reason, static_cast<int>(r.converged), r.fitness, r.inlier_fraction,
-                         r.iterations, align_ms);
+                         ndtVerdictName(verdict), static_cast<int>(r.converged), r.fitness,
+                         r.inlier_fraction, r.iterations, align_ms);
     return;
   }
   Eigen::Matrix<double, 6, 6> R = Eigen::Matrix<double, 6, 6>::Identity();
   R.topLeftCorner<3, 3>() *= pose_pos_std_ * pose_pos_std_;
   R.bottomRightCorner<3, 3>() *= pose_rot_std_ * pose_rot_std_;
-  // The result is the pose at the guess; the IMU moved the state on while aligning.
-  Eigen::Isometry3d now_base = Eigen::Isometry3d::Identity();
-  now_base.translation() = eskf_->state().p;
-  now_base.linear() = eskf_->state().q.toRotationMatrix();
+  // The result is the pose at the guess (the state at the stamp of the cloud). Add the motion the IMU
+  // predicted since then, from the dead-reckoned poses: the state difference would also hold the GNSS
+  // and lidar updates made meanwhile, which are not motion. A step that is not an update of that kind
+  // (replaceAttitude, the heading alignment) raised filter_generation_ and the result was discarded above.
   const Eigen::Isometry3d base_pose =
-      compensateForMotion(basePoseFromSensorPose(mount, r.pose), guess_base, now_base);
+      compensateForMotion(basePoseFromSensorPose(mount, r.pose), dr_guess, dead_reckoned_);
   eskf_->updatePose(base_pose.translation(), Eigen::Quaterniond(base_pose.linear()), R);
   ++ndt_since_init_;
   any_ndt_ = true;
   last_ndt_wall_ = Steady::now();
   heading_source_ = HeadingSource::kLidar;
   heading_source_wall_ = last_ndt_wall_;
-  publish(rclcpp::Time(msg->header.stamp, get_clock()->get_clock_type()));
+  // No publish here: the state is the one at the last IMU sample, and publish() would look up
+  // odom->base at the (older) stamp of the cloud and move map->odom by the odometry motion in
+  // between. The next IMU sample (100 Hz) publishes the corrected state with its own stamp.
 }
 
 void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr msg) {
@@ -675,12 +718,14 @@ void FusionLocalizationNode::onGnss(const sensor_msgs::msg::NavSatFix::SharedPtr
       Mat15 Pa = Mat15::Zero();
       seedTilt(Pa, q);
       eskf_->replaceAttitude(q, Pa.block<3, 3>(6, 6));
+      invalidatePoseHistory();   // an attitude step, not motion: no scan registered before it may be applied
     }
   }
   const auto now_w = Steady::now();
   if (!any_gnss_fix_ || std::chrono::duration<double>(now_w - last_gnss_wall_).count() > 2.0) capped_active_ = false;   // a gap in the fixes ends the stretch
   eskf_->updatePositionLever(enu, lever, R);
   if (!lever.isZero(0.0) && eskf_->leverAligned()) {   // a start or a stop gave the heading
+    invalidatePoseHistory();   // the heading jumped (Eskf::alignHeading): not motion
     heading_source_ = HeadingSource::kMotion;
     heading_source_wall_ = now_w;
   }

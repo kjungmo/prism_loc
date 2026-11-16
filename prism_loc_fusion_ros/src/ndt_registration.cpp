@@ -5,8 +5,20 @@
 #include <pcl/registration/ndt.h>
 namespace prism_loc_fusion_ros {
 
+namespace {
+using PclNdt = pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ>;
+// Counts the calls that make PCL build its target (NDT cells and, at the next align, the search tree).
+struct CountingNdt : PclNdt {
+  int target_builds{0};
+  void setInputTarget(const PointCloudTargetConstPtr& cloud) override {
+    ++target_builds;
+    PclNdt::setInputTarget(cloud);
+  }
+};
+}  // namespace
+
 struct NdtRegistration::Impl {
-  pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+  CountingNdt ndt;
   pcl::PointCloud<pcl::PointXYZ> aligned;  // reused output buffer
 };
 
@@ -21,6 +33,8 @@ NdtRegistration::NdtRegistration(double resolution, double step_size, double eps
 
 NdtRegistration::~NdtRegistration() = default;
 
+int NdtRegistration::targetBuilds() const { return impl_->ndt.target_builds; }
+
 void NdtRegistration::setTarget(const pcl::PointCloud<pcl::PointXYZ>::Ptr& target) {
   has_target_ = false;
   if (!target || target->empty()) return;
@@ -31,7 +45,6 @@ void NdtRegistration::setTarget(const pcl::PointCloud<pcl::PointXYZ>::Ptr& targe
   probe->emplace_back(target->points.front());
   impl_->ndt.setInputSource(probe);
   impl_->ndt.align(impl_->aligned, Eigen::Matrix4f::Identity());
-  ++target_builds_;
   has_target_ = true;
 }
 

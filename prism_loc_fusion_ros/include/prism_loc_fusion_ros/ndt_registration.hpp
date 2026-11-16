@@ -37,8 +37,8 @@ class NdtRegistration {
   bool hasTarget() const { return has_target_; }
   void setFitnessMaxRange(double range) { fitness_max_range_ = range; }
   double fitnessMaxRange() const { return fitness_max_range_; }
-  // How many times a target was built (test seam: align() must not build one).
-  int targetBuilds() const { return target_builds_; }
+  // How many times PCL was told to build its target (test seam: align() must not).
+  int targetBuilds() const;
 
   NdtResult align(const pcl::PointCloud<pcl::PointXYZ>::Ptr& source, const Eigen::Isometry3d& init);
 
@@ -47,6 +47,5 @@ class NdtRegistration {
   std::unique_ptr<Impl> impl_;
   double fitness_max_range_;
   bool has_target_{false};
-  int target_builds_{0};
 };
 }  // namespace prism_loc_fusion_ros

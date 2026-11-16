@@ -28,6 +28,7 @@ void validateFusionParams(const FusionNodeParams& p, const prism_loc_fusion::Esk
 // "" when the fitness limit can reject something. A limit of at least range^2 (range > 0)
 // never rejects: no scan point counted by the score is farther than the range. Returns the
 // text of a warning for the log in that case (a YAML that kept the old ndt_max_fitness 2.0).
+// Also warns for range 0 with ndt_max_fitness below 1, which rejects almost every scan.
 std::string fitnessGateWarning(const FusionNodeParams& p);
 
 }  // namespace prism_loc_fusion_ros

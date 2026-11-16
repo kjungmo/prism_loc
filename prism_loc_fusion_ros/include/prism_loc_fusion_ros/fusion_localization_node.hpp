@@ -1,6 +1,7 @@
 #pragma once
 #include <chrono>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -87,6 +88,17 @@ class FusionLocalizationNode : public rclcpp::Node {
   long ndt_rejected_not_converged_{0}, ndt_rejected_fitness_{0}, ndt_rejected_inliers_{0};
   long ndt_discarded_reseed_{0}, points_dropped_stale_{0};
   bool ndt_any_align_{false};
+  // The state after each IMU prediction over the last kPoseHistoryS seconds, with the dead-reckoned
+  // pose (the chain of the prediction increments only). Cleared at every filter (re)start and at
+  // every jump that is not motion (replaceAttitude, the heading alignment of a lever-arm update).
+  static constexpr double kPoseHistoryS = 2.0;
+  std::deque<PoseSample> pose_history_;
+  Eigen::Isometry3d dead_reckoned_{Eigen::Isometry3d::Identity()};
+  long ndt_guess_fallback_{0};   // scans registered from the current state: stamp outside the history
+  long stale_in_a_row_{0};       // clouds dropped as stale one after the other
+  // A step of the state that is not motion: results registered before it are discarded and the
+  // history no longer describes the state.
+  void invalidatePoseHistory() { ++filter_generation_; pose_history_.clear(); }
   double ndt_last_fitness_{0.0}, ndt_last_inlier_fraction_{0.0}, ndt_last_align_ms_{0.0};
   int ndt_last_iterations_{0};
 

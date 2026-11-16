@@ -242,8 +242,13 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
   exclusive callback groups: the points subscription alone (depth 1), and everything else
   (IMU, GNSS, `/initialpose`, `/tf` watch, timers). `onPoints` takes the guess `T_g` and the lidar
   mount under `mutex_`, releases it, converts, filters and registers, then takes it again.
-  The IMU has moved the state to `T_n` by then, so the measurement is `z' = z · T_g⁻¹ · T_n`
-  (`compensateForMotion`). A result is discarded when `/initialpose` or a filter restart happened
+  The guess is the state at the stamp of the cloud, interpolated from a 2 s history that `onImu`
+  records after every prediction (the current state when the stamp is outside it). The IMU has
+  moved the state on by then, so the measurement is `z' = z · D(t_c)⁻¹ · D(t_n)` (`compensateForMotion`),
+  where `D` is the dead-reckoned pose: the chain of the IMU prediction increments only, so GNSS
+  and lidar updates made meanwhile do not count as motion. A step that is not motion
+  (`replaceAttitude`, the heading alignment of a lever-arm update) clears the history and
+  discards results registered before it. `onPoints` does not publish; the next IMU sample does. A result is discarded when `/initialpose` or a filter restart happened
   during the align (a generation counter). A cloud stamped more than `points_max_age` behind the
   latest IMU sample is dropped before it is registered.
 - **IMU, rotation.** `ω_b = R_bs ω_s`, `f_b = R_bs f_s`. The lever-arm terms

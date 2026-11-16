@@ -47,13 +47,20 @@ void validateFusionParams(const FusionNodeParams& p, const prism_loc_fusion::Esk
 
 std::string fitnessGateWarning(const FusionNodeParams& p) {
   const double r = p.ndt_fitness_max_range;
-  if (!(r > 0.0) || !(p.ndt_max_fitness >= r * r)) return "";
   std::ostringstream os;
-  os << "fusion3d: ndt_max_fitness " << p.ndt_max_fitness << " >= ndt_fitness_max_range^2 ("
-     << r * r << "): the score only counts points within " << r
-     << " m of the map, so no scan can exceed this limit and the fitness gate rejects nothing. "
-        "Lower ndt_max_fitness (default 0.06), or set ndt_fitness_max_range to 0 to score every "
-        "point (then 2.0 is the matching limit)";
+  if (r > 0.0 && p.ndt_max_fitness >= r * r) {
+    os << "fusion3d: ndt_max_fitness " << p.ndt_max_fitness << " >= ndt_fitness_max_range^2 ("
+       << r * r << "): the score only counts points within " << r
+       << " m of the map, so no scan can exceed this limit and the fitness gate rejects nothing. "
+          "Lower ndt_max_fitness (default 0.06), or set ndt_fitness_max_range to 0 to score every "
+          "point (then 2.0 is the matching limit)";
+  } else if (r == 0.0 && p.ndt_max_fitness < 1.0) {
+    os << "fusion3d: ndt_fitness_max_range is 0 (the score covers every scan point, PCL's "
+          "getFitnessScore) but ndt_max_fitness is " << p.ndt_max_fitness
+       << ": a scan that sees any unmapped space scores above 1, so this rejects almost every "
+          "scan. Raise ndt_max_fitness (2.0 matches the unlimited score) or set "
+          "ndt_fitness_max_range to 1.0";
+  }
   return os.str();
 }
 
