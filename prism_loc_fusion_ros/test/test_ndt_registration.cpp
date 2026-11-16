@@ -5,15 +5,18 @@
 #include "prism_loc_fusion_ros/ndt_registration.hpp"
 using namespace prism_loc_fusion_ros;
 
-static pcl::PointCloud<pcl::PointXYZ>::Ptr boxCloud() {
+// A closed 10 m x 10 m room, walls 3 m high, sampled every `step` m. The tests added with the
+// distance-limited fitness use 0.4 m: a quarter of the points, so the suite stays well inside the
+// test timeout in an unoptimized build.
+static pcl::PointCloud<pcl::PointXYZ>::Ptr boxCloud(double step = 0.2) {
   pcl::PointCloud<pcl::PointXYZ>::Ptr c(new pcl::PointCloud<pcl::PointXYZ>());
-  for (double x = -5; x <= 5; x += 0.2) for (double z = 0; z <= 3; z += 0.2) {
+  for (double x = -5; x <= 5 + 1e-9; x += step) for (double z = 0; z <= 3 + 1e-9; z += step) {
     c->emplace_back(x, 5.0, z); c->emplace_back(x, -5.0, z);
   }
-  for (double y = -5; y <= 5; y += 0.2) for (double z = 0; z <= 3; z += 0.2) {
+  for (double y = -5; y <= 5 + 1e-9; y += step) for (double z = 0; z <= 3 + 1e-9; z += step) {
     c->emplace_back(5.0, y, z); c->emplace_back(-5.0, y, z);
   }
-  for (double x = -5; x <= 5; x += 0.2) for (double y = -5; y <= 5; y += 0.2)
+  for (double x = -5; x <= 5 + 1e-9; x += step) for (double y = -5; y <= 5 + 1e-9; y += step)
     c->emplace_back(x, y, 0.0);
   return c;
 }
@@ -58,7 +61,7 @@ void expectSamePose(const NdtResult& a, const NdtResult& b) {
 }  // namespace
 
 TEST(NdtRegistration, ReusedObjectGivesTheResultsOfFreshObjects) {
-  auto target = boxCloud();
+  auto target = boxCloud(0.4);
   auto s1 = shifted(target, 0.4);
   auto s2 = shifted(target, -0.3, 0.2);
   NdtRegistration reused(2.0, 0.1, 1e-4, 50, 1.0);
@@ -77,7 +80,7 @@ TEST(NdtRegistration, ReusedObjectGivesTheResultsOfFreshObjects) {
 // targetBuilds() counts the calls PCL receives to build its target (cells and search tree),
 // not the calls of setTarget: an align() that rebuilt the target would raise it.
 TEST(NdtRegistration, PclTargetIsBuiltOncePerSetTargetNotPerAlign) {
-  auto target = boxCloud();
+  auto target = boxCloud(0.4);
   NdtRegistration reg(2.0, 0.1, 1e-3, 30);
   EXPECT_EQ(reg.targetBuilds(), 0);
   reg.setTarget(target);
@@ -90,7 +93,7 @@ TEST(NdtRegistration, PclTargetIsBuiltOncePerSetTargetNotPerAlign) {
 }
 
 TEST(NdtRegistration, DistantPointsSpoilTheUnlimitedScoreOnly) {
-  auto room = boxCloud();
+  auto room = boxCloud(0.4);
   auto source = withFarWall(room, 0.3);
   NdtRegistration limited(2.0, 0.1, 1e-4, 30, 1.0);
   limited.setTarget(room);
@@ -109,7 +112,7 @@ TEST(NdtRegistration, DistantPointsSpoilTheUnlimitedScoreOnly) {
 }
 
 TEST(NdtRegistration, UnlimitedFitnessIsTheMeanSquaredNearestNeighbourDistance) {
-  auto room = boxCloud();
+  auto room = boxCloud(0.4);
   auto source = withFarWall(shifted(room, 0.15), 0.3);
   NdtRegistration reg(2.0, 0.1, 1e-4, 30);
   reg.setTarget(room);
@@ -128,7 +131,7 @@ TEST(NdtRegistration, UnlimitedFitnessIsTheMeanSquaredNearestNeighbourDistance) 
 }
 
 TEST(NdtRegistration, WrongPoseScoresWorseWithinTheRange) {
-  auto room = boxCloud();
+  auto room = boxCloud(0.4);
   auto source = withFarWall(shifted(room, 0.5), 0.3);
   // One iteration of at most 0.01 m: the result stays near the wrong start.
   NdtRegistration stuck(2.0, 0.01, 1e-4, 1, 1.0);
@@ -147,8 +150,8 @@ TEST(NdtRegistration, EmptyInputsGiveANotConvergedResult) {
   NdtRegistration reg(2.0, 0.1, 1e-3, 30, 1.0);
   Cloud::Ptr empty(new Cloud());
   EXPECT_FALSE(reg.hasTarget());
-  EXPECT_FALSE(reg.align(boxCloud(), Eigen::Isometry3d::Identity()).converged);  // no target
-  reg.setTarget(boxCloud());
+  EXPECT_FALSE(reg.align(boxCloud(0.4), Eigen::Isometry3d::Identity()).converged);  // no target
+  reg.setTarget(boxCloud(0.4));
   EXPECT_FALSE(reg.align(empty, Eigen::Isometry3d::Identity()).converged);
   EXPECT_FALSE(reg.align(nullptr, Eigen::Isometry3d::Identity()).converged);
 }
