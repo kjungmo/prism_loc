@@ -277,9 +277,9 @@ parents for `base_link`).
 `ndt_effective_points` makes the scan count as a fixed number of independent points instead
 of the full subsample, so one scan does not outweigh the motion model; `ndt_min_sigma` (m)
 puts a floor under the spread of every NDT cell, so a flat cell does not score a point a few
-centimetres off its surface as zero. On a real outdoor recording, `ndt_effective_points`
-around 5 to 10, alone or with `ndt_min_sigma` 0.05 to 0.10 m, reduced position excursions.
-Using `ndt_min_sigma` without `ndt_effective_points` is not recommended.
+centimetres off its surface as zero. Values to try: `ndt_effective_points` around 5 to 10,
+alone or with `ndt_min_sigma` 0.05 to 0.10 m. Use `ndt_min_sigma` together with
+`ndt_effective_points`, not alone.
 
 Costs, measured in the synthetic end-to-end world of this repository
 (`scripts/synthetic_e2e.py`, ndt3d):
