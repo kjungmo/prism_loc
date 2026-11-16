@@ -390,6 +390,7 @@ void FusionLocalizationNode::onDiagnostics() {
   kv("ndt_discarded_reseed_total", std::to_string(ndt_discarded_reseed_));
   kv("points_dropped_stale_total", std::to_string(points_dropped_stale_));
   kv("ndt_guess_fallback_total", std::to_string(ndt_guess_fallback_));
+  kv("points_dropped_before_history_total", std::to_string(points_dropped_before_history_));
   kv("ndt_last_fitness", ndt_any_align_ ? num(ndt_last_fitness_, "%.4f") : "n/a");
   kv("ndt_last_inlier_fraction", ndt_any_align_ ? num(ndt_last_inlier_fraction_, "%.3f") : "n/a");
   kv("ndt_last_iterations", ndt_any_align_ ? std::to_string(ndt_last_iterations_) : "n/a");
@@ -568,24 +569,33 @@ void FusionLocalizationNode::onPoints(const sensor_msgs::msg::PointCloud2::Share
         RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
                              "fusion3d: lidar and IMU clocks differ by about %.1f s: the clouds on %s are "
                              "dropped as older than points_max_age %.2f s behind the IMU although the "
-                             "align takes %.0f ms (%ld dropped). Fix the time sync, or set points_max_age: 0",
+                             "align takes %.0f ms (%ld dropped). Fix the time sync; for a constant offset set "
+                             "points_time_offset to it (the clouds are corrected from the cloud time, so "
+                             "switching the age check off would apply a wrong pose)",
                              behind_s, points_topic_.c_str(), points_max_age_,
                              ndt_any_align_ ? ndt_last_align_ms_ : 0.0, points_dropped_stale_);
       } else {
         RCLCPP_WARN_THROTTLE(get_logger(), steady_clock_, 5000,
                              "fusion3d: cloud dropped, %.2f s behind the IMU (points_max_age %.2f s): the "
                              "registration cannot keep up with %s, or the lidar clock is behind the IMU "
-                             "clock (set points_max_age: 0 to switch the check off) (%ld dropped)",
+                             "clock (fix the time sync, or set points_time_offset to a constant offset) "
+                             "(%ld dropped)",
                              behind_s, points_max_age_, points_topic_.c_str(), points_dropped_stale_);
       }
       return;
     }
     stale_in_a_row_ = 0;
-    // Register from the state at the stamp of the cloud, not the state now: the cloud may have waited
-    // for the previous align. Outside the history (an unstamped cloud, a stamp newer than the IMU, a
-    // history cleared by a restart) the current state is the guess.
+    // Register from the state at the cloud time, not the state now: the cloud may have waited for
+    // the previous align (guessAt). A cloud taken before the oldest sample of the history (cleared
+    // by a restart or a non-motion step, or older than the history) cannot be compensated: drop it.
+    // Without a usable time or history the current state is the guess.
     PoseAtTime at_stamp;
-    if (interpolatePose(pose_history_, cloud_t, at_stamp)) {
+    const GuessSource source = guessAt(pose_history_, cloud_t, at_stamp);
+    if (source == GuessSource::BeforeHistory) {
+      ++points_dropped_before_history_;
+      return;
+    }
+    if (source == GuessSource::Interpolated || source == GuessSource::Newest) {
       guess_base = at_stamp.state;
       dr_guess = at_stamp.dr;
     } else {

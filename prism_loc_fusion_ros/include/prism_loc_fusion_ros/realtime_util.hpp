@@ -84,6 +84,28 @@ inline bool interpolatePose(const std::deque<PoseSample>& h, double t, PoseAtTim
   return true;
 }
 
+// Where the registration guess for a cloud at time t comes from.
+//   Interpolated   t inside the history.
+//   Newest         t at most max_ahead_s after the newest sample (an offset cloud time, an IMU
+//                  sample still in transit): the newest sample, as good as interpolating.
+//   BeforeHistory  t before the oldest sample of a non-empty history: the history was cleared
+//                  (filter restart, attitude replaced, heading aligned) or is shorter than the
+//                  cloud's age, so the motion since t cannot be compensated. The node drops it.
+//   Fallback       no usable time (unstamped, not finite), an empty history, or t further ahead
+//                  than max_ahead_s (a lidar clock ahead of the IMU): the current state.
+enum class GuessSource { Interpolated, Newest, BeforeHistory, Fallback };
+inline GuessSource guessAt(const std::deque<PoseSample>& h, double t, PoseAtTime& out,
+                           double max_ahead_s = 0.1) {
+  if (!std::isfinite(t) || t == 0.0 || h.empty()) return GuessSource::Fallback;
+  if (t < h.front().t) return GuessSource::BeforeHistory;
+  if (interpolatePose(h, t, out)) return GuessSource::Interpolated;
+  if (t <= h.back().t + max_ahead_s) {
+    interpolatePose(h, h.back().t, out);
+    return GuessSource::Newest;
+  }
+  return GuessSource::Fallback;
+}
+
 // One IMU prediction moved the state from `before` to `after` (both in the map): chain its
 // increment, in the body frame, onto the dead-reckoned pose. Whatever changed the state between
 // two predictions (a GNSS or lidar update) is in `before` already and is not in the increment.

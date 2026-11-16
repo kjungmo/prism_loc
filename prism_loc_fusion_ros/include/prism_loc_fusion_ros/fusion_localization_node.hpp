@@ -88,6 +88,7 @@ class FusionLocalizationNode : public rclcpp::Node {
   // NDT bookkeeping for /diagnostics (guarded by mutex_).
   long ndt_rejected_not_converged_{0}, ndt_rejected_fitness_{0}, ndt_rejected_inliers_{0};
   long ndt_discarded_reseed_{0}, points_dropped_stale_{0};
+  long points_dropped_before_history_{0};  // clouds taken before the oldest pose-history sample
   bool ndt_any_align_{false};
   // The state after each IMU prediction over the last kPoseHistoryS seconds, with the dead-reckoned
   // pose (the chain of the prediction increments only). Cleared at every filter (re)start and at

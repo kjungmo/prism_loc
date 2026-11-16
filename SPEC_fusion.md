@@ -252,7 +252,9 @@ the `points_frame` / `imu_frame` / `gnss_frame` parameter when set). If that fra
   (`replaceAttitude`, the heading alignment of a lever-arm update) clears the history and
   discards results registered before it. `onPoints` does not publish; the next IMU sample does. A result is discarded when `/initialpose` or a filter restart happened
   during the align (a generation counter). A cloud stamped more than `points_max_age` behind the
-  latest IMU sample is dropped before it is registered.
+  latest IMU sample is dropped before it is registered; so is one taken before the oldest sample of
+  the 2 s pose history (`points_max_age` is therefore at most 1.8 s). A cloud time up to 0.1 s after
+  the newest sample uses the newest sample (`guessAt`).
 - **IMU, rotation.** `ω_b = R_bs ω_s`, `f_b = R_bs f_s`. The lever-arm terms
   `α × r + ω × (ω × r)` are not compensated.
 - **GNSS, translation.** The fix is fused with `updatePositionLever` (§4) at the lever

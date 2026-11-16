@@ -29,8 +29,9 @@ void validateFusionParams(const FusionNodeParams& p, const prism_loc_fusion::Esk
   require(p.ndt_min_inlier_fraction >= 0.0 && p.ndt_min_inlier_fraction <= 1.0,
           "ndt_min_inlier_fraction", p.ndt_min_inlier_fraction, "in [0, 1]");
   require(p.points_voxel_leaf > 0.0, "points_voxel_leaf", p.points_voxel_leaf, "> 0");
-  require(std::isfinite(p.points_max_age) && p.points_max_age >= 0.0, "points_max_age",
-          p.points_max_age, "finite and >= 0 (0 = off)");
+  require(std::isfinite(p.points_max_age) && p.points_max_age >= 0.0 && p.points_max_age <= 1.8,
+          "points_max_age", p.points_max_age,
+          "in [0, 1.8] s (0 = off; the pose history the clouds are corrected from holds 2 s)");
   require(std::isfinite(p.points_time_offset) && std::fabs(p.points_time_offset) <= 1.0,
           "points_time_offset", p.points_time_offset, "finite and within [-1, 1] s");
   require(p.pose_pos_std > 0.0, "pose_pos_std", p.pose_pos_std, "> 0");

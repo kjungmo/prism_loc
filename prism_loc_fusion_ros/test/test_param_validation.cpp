@@ -71,6 +71,10 @@ TEST(FusionParamValidation, FitnessRangeInlierFractionAndAgeRanges) {
   expectRejects([&] { validateFusionParams(p, ep); }, "points_max_age");
   p.points_max_age = std::nan("");
   expectRejects([&] { validateFusionParams(p, ep); }, "points_max_age");
+  p.points_max_age = 2.0;  // longer than the pose history
+  expectRejects([&] { validateFusionParams(p, ep); }, "points_max_age");
+  p.points_max_age = 1.8;
+  EXPECT_NO_THROW(validateFusionParams(p, ep));
   p = {};
   p.points_time_offset = 1.5;
   expectRejects([&] { validateFusionParams(p, ep); }, "points_time_offset");

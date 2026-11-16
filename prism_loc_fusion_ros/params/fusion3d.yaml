@@ -18,7 +18,7 @@
     ndt_fitness_max_range: 1.0        # m: scan points farther than this from the map are left out of the fitness (unmapped space); 0 = every point (PCL's score)
     ndt_min_inlier_fraction: 0.5      # fraction 0..1: reject NDT results when fewer of the scan's points lie within ndt_fitness_max_range of the map
     points_voxel_leaf: 1.0            # m: voxel-grid downsample leaf size for incoming scans (0.5 costs about twice the align time for a few cm)
-    points_max_age: 0.5               # s: drop a cloud stamped more than this behind the latest IMU sample (a registration that cannot keep up); 0 = off
+    points_max_age: 0.5               # s: drop a cloud stamped more than this behind the latest IMU sample (a registration that cannot keep up); 0 = off; at most 1.8 (the pose history holds 2 s)
     points_time_offset: 0.0           # s: added to the cloud stamp, the time its registration stands for; a driver that stamps the start of a sweep and does not deskew: half the sweep period (0.05 at 10 Hz)
     pose_pos_std: 0.1                 # m: assumed std-dev of the NDT position measurement
     pose_rot_std: 0.05                # rad: assumed std-dev of the NDT orientation measurement

@@ -70,9 +70,9 @@ TEST(CloudStale, AnUnstampedCloudOrAnUnknownImuTimeIsKept) {
   EXPECT_FALSE(cloudIsStale(std::nan(""), 10.0, 0.5));
 }
 
-// Order of the product: z * g^-1 * n and not n * g^-1 * z. g turned 90 deg, z shifted along x
-// with no turn, n 1 m ahead of g along its own heading (which is +y... here g is at the origin,
-// n at +x). Right order: translation (5, -1, 0). Swapped order: (6, 0, 0).
+// Order of the product: z * g^-1 * n and not n * g^-1 * z. g at the origin heading +y, n 1 m to
+// the right of g's heading (at +x, same heading), z shifted along x with no turn. Right order:
+// translation (5, -1, 0). Swapped order: (6, 0, 0).
 TEST(MotionCompensation, OrderOfTheProductMatters) {
   const Eigen::Isometry3d g = pose({0, 0, 0}, M_PI / 2);
   const Eigen::Isometry3d n = pose({1, 0, 0}, M_PI / 2);
@@ -181,4 +181,64 @@ TEST(CloudTime, TheOffsetMovesTheStampToTheTimeTheScanRepresents) {
 TEST(CloudTime, AnUnstampedCloudStaysUnstamped) {
   EXPECT_DOUBLE_EQ(cloudTime(0.0, 0.05), 0.0);
   EXPECT_FALSE(std::isfinite(cloudTime(std::nan(""), 0.05)));
+}
+
+TEST(PoseHistory, ThreeSamplesPickTheRightBracket) {
+  std::deque<PoseSample> h;
+  recordPose(h, sampleAt(1.0, 0.0, 0.0, 0.0), 2.0);
+  recordPose(h, sampleAt(1.1, 1.0, 0.0, 0.0), 2.0);
+  recordPose(h, sampleAt(1.2, 3.0, 0.0, 0.0), 2.0);
+  PoseAtTime out;
+  ASSERT_TRUE(interpolatePose(h, 1.1, out));  // the middle sample exactly
+  EXPECT_NEAR(out.state.translation().x(), 1.0, 1e-12);
+  ASSERT_TRUE(interpolatePose(h, 1.15, out));  // between the second and the third
+  EXPECT_NEAR(out.state.translation().x(), 2.0, 1e-12);
+  ASSERT_TRUE(interpolatePose(h, 1.05, out));  // between the first and the second
+  EXPECT_NEAR(out.state.translation().x(), 0.5, 1e-12);
+}
+
+TEST(ClockOffset, NoAlignYetOrAFastAlignPointsAtTheClocks) {
+  EXPECT_TRUE(clockOffsetSuspected(false, 400.0, 0.5, 3));   // nothing registered yet: not the align
+  EXPECT_TRUE(clockOffsetSuspected(true, 249.0, 0.5, 3));    // under half of points_max_age
+  EXPECT_FALSE(clockOffsetSuspected(true, 250.0, 0.5, 3));   // at the boundary: the align may explain it
+  EXPECT_FALSE(clockOffsetSuspected(false, 0.0, 0.5, 2));    // not yet three in a row
+}
+
+TEST(GuessAt, InsideTheHistoryInterpolates) {
+  std::deque<PoseSample> h;
+  recordPose(h, sampleAt(1.0, 0.0, 0.0, 0.0), 2.0);
+  recordPose(h, sampleAt(1.2, 2.0, 0.0, 0.0), 2.0);
+  PoseAtTime out;
+  EXPECT_EQ(guessAt(h, 1.1, out), GuessSource::Interpolated);
+  EXPECT_NEAR(out.state.translation().x(), 1.0, 1e-12);
+}
+
+TEST(GuessAt, ALittleAfterTheNewestSampleUsesTheNewest) {
+  // A cloud time a few ms after the newest IMU sample (offset, IMU delivery): the newest state.
+  std::deque<PoseSample> h;
+  recordPose(h, sampleAt(1.0, 0.0, 0.0, 0.0), 2.0);
+  recordPose(h, sampleAt(1.2, 2.0, 0.0, 0.5), 2.0);
+  PoseAtTime out;
+  EXPECT_EQ(guessAt(h, 1.25, out), GuessSource::Newest);
+  EXPECT_NEAR(out.state.translation().x(), 2.0, 1e-12);
+  EXPECT_NEAR(out.dr.translation().x(), 0.5, 1e-12);
+  EXPECT_EQ(guessAt(h, 1.31, out), GuessSource::Fallback);  // more than 0.1 s ahead
+}
+
+TEST(GuessAt, BeforeTheOldestSampleIsReported) {
+  // The history was cleared (filter restart, attitude replaced, heading aligned) after the cloud
+  // was taken: its motion since then cannot be compensated.
+  std::deque<PoseSample> h;
+  recordPose(h, sampleAt(1.0, 0.0, 0.0, 0.0), 2.0);
+  PoseAtTime out;
+  EXPECT_EQ(guessAt(h, 0.9, out), GuessSource::BeforeHistory);
+}
+
+TEST(GuessAt, UnstampedOrEmptyFallsBack) {
+  std::deque<PoseSample> h;
+  PoseAtTime out;
+  EXPECT_EQ(guessAt(h, 1.0, out), GuessSource::Fallback);  // empty history
+  recordPose(h, sampleAt(1.0, 0.0, 0.0, 0.0), 2.0);
+  EXPECT_EQ(guessAt(h, 0.0, out), GuessSource::Fallback);  // unstamped cloud
+  EXPECT_EQ(guessAt(h, std::nan(""), out), GuessSource::Fallback);
 }
