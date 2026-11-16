@@ -105,9 +105,8 @@ jobs:
       # are not part of it: run them with --long or --scenario. The core test HeadingSigmaStaysAtTheBoundForFifteenMinutes
       # covers the same mechanism in CI.
       # The workspace above is built without optimization; one NDT registration then takes
-      # over a second on the thread that also takes the IMU and /diagnostics reports
-      # "IMU stopped". The two fusion packages are rebuilt optimized for this step so that
-      # the check can demand an OK status. --tolerate-imu-gaps: on this two-core runner
+      # over a second, far longer than the scan period. The two fusion packages are rebuilt
+      # optimized for this step so that the check can demand an OK status. --tolerate-imu-gaps: on this two-core runner
       # the script's own 100 Hz loop can stall for a few samples (a WARN about IMU gaps
       # only; "IMU stopped" and every other status still fail).
       - name: fusion3d sensor mounts
