@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run_nclt.sh DATA_DIR OUT_DIR [JOBS]
 # ndt3d on the public NCLT dataset: a prior map from session 2012-01-08, localization in session
-# 2012-02-04 (four 1000 s segments, three seeds), for the likelihood, ground-height and motion
+# 2012-02-04 (four 1000 s segments starting at 400, 1400, 2400 and 3400 s, three seeds), for the likelihood, ground-height and motion
 # noise settings below. DATA_DIR holds the extracted sessions (DATA_DIR/2012-01-08/velodyne_sync,
 # ...), groundtruth_<date>.csv and <date>/odometry_mu_100hz.csv from the sensor archive.
 # Run from the repository root. Needs python3 + numpy, g++, Eigen.
@@ -26,7 +26,9 @@ CONFIGS=(
   "ground_ep10|--param ground=1 --param effective_points=10"
   "ground_ep5_ms10_a05|--param ground=1 --param effective_points=5 --param min_sigma=0.10 --param alpha1=0.05 --param alpha2=0.05 --param alpha3=0.05 --param alpha4=0.05"
 )
-SEGMENTS="0 1200 2400 3600"
+# The first ~250 s of 2012-02-04 drive where 2012-01-08 did not (no prior map there): the
+# segments start at 400 s.
+SEGMENTS="400 1400 2400 3400"
 SEEDS="42 1 2"
 jobs_file=$OUT/jobs.txt
 : > "$jobs_file"

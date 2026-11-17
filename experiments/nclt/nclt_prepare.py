@@ -71,10 +71,12 @@ def read_sync(path, max_range):
 
 
 def voxel(points, size):
+    """One point (the first) per cubic cell of edge `size`."""
     if len(points) == 0:
         return points
-    key = np.floor(points / size).astype(np.int64)
-    _, idx = np.unique(key, axis=0, return_index=True)
+    k = np.floor(points / size).astype(np.int64) + (1 << 20)
+    key = (k[:, 0] << 42) | (k[:, 1] << 21) | k[:, 2]
+    _, idx = np.unique(key, return_index=True)
     return points[np.sort(idx)]
 
 
