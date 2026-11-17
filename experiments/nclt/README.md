@@ -46,8 +46,9 @@ are `ndt_effective_points` / `ndt_min_sigma`; "ground" is `ground_height_from_ma
   start at 1400 and 3400 s are lost (tens to hundreds of metres) whatever the likelihood setting;
   with the ground-height grid the largest error of any run is 8.35 m (one run; 4.81 m and 1.50 m
   with the likelihood settings added).
-- On the flat segment (2400 s) every setting tracks; the likelihood settings lower the RMSE there
-  from 0.27-0.28 m (defaults) to 0.23-0.24 m.
+- On the flat segment (2400 s) the settings without the ground grid all track; the likelihood
+  settings lower the RMSE there from 0.27-0.28 m (defaults) to 0.23-0.24 m. The ground grid alone
+  has one 40 s excursion there (one seed); with the likelihood settings added it has none.
 - With the ground grid, the tempered likelihood removes most excursions, and with the cell floor
   and lower motion noise the remaining three are 3.2-4.8 s long and under 1.5 m.
 - `update_min_period` (time-based updates) and fusion3d were not run here.
