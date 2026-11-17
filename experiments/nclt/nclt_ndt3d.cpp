@@ -41,6 +41,7 @@
 #include "prism_loc_core/particle_filter.hpp"
 #include "prism_loc_core/rng.hpp"
 #include "prism_loc_core/types.hpp"
+#include "init_offset.hpp"
 using namespace prism_loc_core;
 
 namespace {
@@ -92,6 +93,8 @@ struct Params {
   int seed = 42;
   double start_s = 0.0;      // skip this much of the session before seeding
   double duration_s = 0.0;   // 0 = to the end
+  // INIT_PROTOCOL.md: start moved by init_d (m) / init_a (deg), spread max(0.5, d) m, max(15, a) deg.
+  double init_d = 0.0, init_a = 0.0;
 };
 
 bool setParam(Params& p, const std::string& k, double v) {
@@ -102,7 +105,8 @@ bool setParam(Params& p, const std::string& k, double v) {
       {"alpha2", &p.alpha2}, {"alpha3", &p.alpha3}, {"alpha4", &p.alpha4},
       {"effective_points", &p.effective_points}, {"min_sigma", &p.min_sigma},
       {"ground_resolution", &p.ground_resolution}, {"ground_layer_gap", &p.ground_layer_gap},
-      {"ground_max_step", &p.ground_max_step}, {"start_s", &p.start_s}, {"duration_s", &p.duration_s}};
+      {"ground_max_step", &p.ground_max_step}, {"start_s", &p.start_s}, {"duration_s", &p.duration_s},
+      {"init_d", &p.init_d}, {"init_a", &p.init_a}};
   std::map<std::string, int*> i = {
       {"voxel_min_points", &p.voxel_min_points}, {"max_points", &p.max_points},
       {"min_particles", &p.min_particles}, {"max_particles", &p.max_particles}, {"ground", &p.ground},
@@ -196,10 +200,14 @@ int main(int argc, char** argv) {
       np.max_points = prm.max_points;
       np.base_height = g.z;
       np.effective_points = prm.effective_points;
-      const Pose2D seed{g.x, g.y, g.yaw};
+      const InitOffset off = initOffset(prm.seed, prm.start_s, prm.init_d, prm.init_a);
+      const Pose2D seed{g.x + off.dx, g.y + off.dy, normalizeAngle(g.yaw + off.dyaw)};
+      const bool offset_seed = prm.init_d > 0.0 || prm.init_a > 0.0;
       if (ground) {
+        // base_height is a property of the robot (body above the ground under it, at the true pose);
+        // the ground hint starts on the level of that ground at the (possibly offset) seed.
         const auto g0 = ground->heightNearest(g.x, g.y, g.z - 0.5);
-        if (!g0) { std::fprintf(stderr, "no map ground under the seed\n"); return 2; }
+        if (!g0) { std::fprintf(stderr, "no map ground under the start\n"); return 2; }
         np.base_height = g.z - *g0;
         model = std::make_unique<Ndt3DModel>(ndt_map, np);
         model->setGroundMap(ground);
@@ -207,7 +215,8 @@ int main(int argc, char** argv) {
       } else {
         model = std::make_unique<Ndt3DModel>(ndt_map, np);
       }
-      pf.initializeGaussian(seed, Pose2D{0.5, 0.5, 0.2617}, 2000);
+      const double sxy = std::max(0.5, prm.init_d), syaw = offset_seed ? std::max(15.0, prm.init_a) * M_PI / 180.0 : 0.2617;
+      pf.initializeGaussian(seed, Pose2D{sxy, sxy, syaw}, 2000);
       init = force = true;
       last_odom = odom_base;
       t_seed = t;

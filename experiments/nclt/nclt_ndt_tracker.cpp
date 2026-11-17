@@ -29,6 +29,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "init_offset.hpp"
 
 namespace {
 using Cloud = pcl::PointCloud<pcl::PointXYZ>;
@@ -75,7 +76,8 @@ int main(int argc, char** argv) {
   if (argc < 4) { std::fprintf(stderr, "usage: nclt_ndt_tracker MAP_DIR QUERY_DIR OUT_PREFIX [--param k=v]...\n"); return 2; }
   const std::string map_dir = argv[1], query_dir = argv[2], prefix = argv[3];
   std::map<std::string, double> p = {{"ndt_resolution", 1.0}, {"step_size", 0.1}, {"epsilon", 1e-4}, {"max_iter", 30},
-                                     {"leaf", 1.0}, {"crop_m", 150.0}, {"start_s", 0.0}, {"duration_s", 0.0}};
+                                     {"leaf", 1.0}, {"crop_m", 150.0}, {"start_s", 0.0}, {"duration_s", 0.0},
+                                     {"seed", 42}, {"init_d", 0.0}, {"init_a", 0.0}};
   for (int k = 4; k < argc; ++k) {
     if (std::strcmp(argv[k], "--param") != 0 || k + 1 >= argc) { std::fprintf(stderr, "bad argument %s\n", argv[k]); return 2; }
     const std::string kv = argv[++k];
@@ -151,7 +153,10 @@ int main(int argc, char** argv) {
     const Eigen::Isometry3d T_odom = iso(o);
     if (!init) {
       if (!have_gt) continue;
-      T = iso(g);
+      const InitOffset off = initOffset(static_cast<int>(p["seed"]), p["start_s"], p["init_d"], p["init_a"]);
+      Row s = g;
+      s.x += off.dx; s.y += off.dy; s.yaw = wrap(g.yaw + off.dyaw);  // INIT_PROTOCOL.md
+      T = iso(s);
       T_odom_prev = T_odom;
       init = true;
     }
