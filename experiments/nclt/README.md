@@ -70,3 +70,33 @@ The tracker is more accurate here. It estimates a 6-DoF pose and registers every
 its points, while ndt3d estimates a planar pose and corrects every 0.2 m of travel with a
 500-point subsample. Not measured here: recovery from a wrong initial pose (the tracker starts
 at the ground truth; ndt3d from particles spread 0.5 m / 15 degrees around it).
+
+## laser2d on NCLT projected to 2D
+
+`nclt_laser2d.cpp` runs the laser2d update loop of `LocalizationNode` (likelihood field, `laser2d.yaml`
+defaults: 60 beams, sigma 0.2 m, alpha 0.2, 500-2000 particles) and its BBS global localization on the
+same NCLT map and query as above, projected to 2D. It is for the initialization-robustness protocol
+(`INIT_PROTOCOL.md`); no results yet.
+
+- Map: occupied cells (0.1 m) hold a map point 1.0-2.5 m above the local ground (lowest map point of
+  the 1 m cell); the grid covers the bounding box of the segment's 180 s ground-truth path plus 80 m.
+- Scan: the cloud is levelled with the odometry roll and pitch; points with z 0.8-2.3 m in the body
+  frame become a 360 degree scan of 720 bins (0.5 degree, nearest range per bin, 0.5-40 m).
+- The two bands were picked among 16 combinations by the L0 error (seed 42) on the four segments,
+  so L0 is not an independent test of them. Lower bands let ground returns and low vegetation in and
+  the filter lost the pose. With the chosen bands L0 (seed 42, 180 s) tracked the segments at 400,
+  1400 and 2400 s (median error 0.31, 0.18, 0.13 m) but not the one at 3400 s (median 6.1 m, 90th
+  percentile 11.2 m): the descent there is where the 2D projection fails.
+- Seed: levels L0-L6 start at the ground truth moved by `initOffset(seed, segment_start_s, d, a)` from
+  `init_offset.hpp` (direction uniform in [0, 2 pi) and yaw sign from `std::mt19937_64(seed * 1000003 +
+  segment_start_s)`; first draw the direction, second `bernoulli_distribution(0.5)` for the sign),
+  Gaussian with sigma `max(0.5, d)` m and `max(15, a)` degrees, 2000 particles, filter seed = run seed.
+- Level U (`--param level=7`): as the node, `RelocalizationVerifier` (laser2d.yaml defaults: 8 modes, 9
+  odometry-chained scans, posterior 0.9) starts with a map-wide BBS search of the first scan and is
+  fed every following scan; on accept the filter is seeded at (0.2 m, 0.2 m, 0.1 rad); on ambiguous
+  it starts over. The node's 50 m window cap is raised to cover the cropped map (it would not be
+  global on this 215 x 323 m grid). Rows before the accept have `nan` estimate and error, which the
+  scorer counts as not below 1 m.
+- Run: `bash experiments/nclt/run_nclt_init_laser2d.sh DATA_DIR OUT_DIR JOBS` (96 runs, 180 s each),
+  scored per level with `nclt_init_score.py`. One run takes 4 s (L0-L6, 230 MB peak) to 24 s (U, 410
+  MB peak) on one core, about 3 s of it reading the 31.6 M-point map.
