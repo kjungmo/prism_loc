@@ -12,7 +12,7 @@
         width=0.9\linewidth, height=0.47\linewidth,
         xmin=0, xmax=65, xtick={0,10,20,30,40,50,60},
         tick label style={font=\scriptsize}, label style={font=\scriptsize},
-        legend style={font=\scriptsize, at={(0.98,0.97)}, anchor=north east,
+        legend style={font=\scriptsize, at={(0.5,1.04)}, anchor=south,
                       draw=black!40, fill=white, fill opacity=0.85, text opacity=1,
                       /tikz/every even column/.append style={column sep=4pt}},
         legend columns=3, legend cell align=left,
@@ -47,9 +47,9 @@
         legend cell align=left, axis on top, grid=major, grid style={gray!20},
       ]
       \addplot[black!55, dash dot, line width=0.8pt, forget plot] coordinates {(0,2000) (65,2000)};
-      \node[anchor=south east, font=\scriptsize, text=black!60] at (axis cs:64.5,2010) {\code{max\_particles}};
+      \node[anchor=south east, font=\scriptsize, text=black!60, fill=white, inner sep=1.5pt] at (axis cs:64.5,2010) {\code{max\_particles}};
       \addplot[black!55, dash dot, line width=0.8pt, forget plot] coordinates {(0,500) (65,500)};
-      \node[anchor=north east, font=\scriptsize, text=black!60] at (axis cs:64.5,490) {\code{min\_particles}};
+      \node[anchor=north east, font=\scriptsize, text=black!60, fill=white, inner sep=1.5pt] at (axis cs:64.5,490) {\code{min\_particles}};
       \addplot[black, solid, line width=0.5pt] table [col sep=comma, x=t, y=n_s0] {data/mcl_particles.csv};
       \addlegendentry{seed 101}
       \addplot[blue!70!black, dashed, line width=0.5pt] table [col sep=comma, x=t, y=n_s1] {data/mcl_particles.csv};
