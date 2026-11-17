@@ -1,0 +1,1 @@
+map 2038x1364 at 0.050 m, origin (-22.42, 104.06), 59210 occupied cells, from 13986921 endpoints
