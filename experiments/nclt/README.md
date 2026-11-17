@@ -52,3 +52,21 @@ are `ndt_effective_points` / `ndt_min_sigma`; "ground" is `ground_height_from_ma
 - With the ground grid, the tempered likelihood removes most excursions, and with the cell floor
   and lower motion noise the remaining three are 3.2-4.8 s long and under 1.5 m.
 - `update_min_period` (time-based updates) and fusion3d were not run here.
+
+## Baseline: scan-to-map NDT tracker
+
+`nclt_ndt_tracker.cpp` is the common alternative to a particle filter: predict the 6-DoF pose with
+the wheel-odometry increment, register every scan to the map with PCL's NDT (resolution 1 m,
+step 0.1, epsilon 1e-4, 30 iterations, 1 m scan voxels; map cropped to 150 m around the segment's
+path) and take the result when PCL reports convergence. Seeded at the ground-truth pose; one run
+per segment (deterministic). Scores in `experiments/results/nclt/score_ndt_tracker.txt`.
+
+| method | runs with an excursion | max error | median planar RMSE |
+|---|---|---|---|
+| scan-to-map NDT tracker | 0 of 4 | 0.62 m | 0.153 m |
+| ndt3d, best setting above | 3 of 12 | 1.50 m | 0.263 m |
+
+The tracker is more accurate here. It estimates a 6-DoF pose and registers every scan with all
+its points, while ndt3d estimates a planar pose and corrects every 0.2 m of travel with a
+500-point subsample. Not measured here: recovery from a wrong initial pose (the tracker starts
+at the ground truth; ndt3d from particles spread 0.5 m / 15 degrees around it).
