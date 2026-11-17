@@ -1,0 +1,196 @@
+== ndt3d L0
+ndt3d_L0_t1400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.346
+ndt3d_L0_t1400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.349
+ndt3d_L0_t1400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.356
+ndt3d_L0_t2400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.202
+ndt3d_L0_t2400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.195
+ndt3d_L0_t2400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.190
+ndt3d_L0_t3400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.331
+ndt3d_L0_t3400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.322
+ndt3d_L0_t3400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.323
+ndt3d_L0_t400_s1.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.275
+ndt3d_L0_t400_s2.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.283
+ndt3d_L0_t400_s42.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.283
+summary: converged 12 / 12, median convergence time 0.0 s, median RMSE after convergence 0.303 m
+== ndt3d L1
+ndt3d_L1_t1400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.372
+ndt3d_L1_t1400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.350
+ndt3d_L1_t1400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.356
+ndt3d_L1_t2400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.190
+ndt3d_L1_t2400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.181
+ndt3d_L1_t2400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.205
+ndt3d_L1_t3400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.314
+ndt3d_L1_t3400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.298
+ndt3d_L1_t3400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.316
+ndt3d_L1_t400_s1.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.282
+ndt3d_L1_t400_s2.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.273
+ndt3d_L1_t400_s42.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.289
+summary: converged 12 / 12, median convergence time 0.0 s, median RMSE after convergence 0.294 m
+== ndt3d L2
+ndt3d_L2_t1400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.359
+ndt3d_L2_t1400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.369
+ndt3d_L2_t1400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.352
+ndt3d_L2_t2400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.263
+ndt3d_L2_t2400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.224
+ndt3d_L2_t2400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.245
+ndt3d_L2_t3400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.329
+ndt3d_L2_t3400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.357
+ndt3d_L2_t3400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.316
+ndt3d_L2_t400_s1.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.293
+ndt3d_L2_t400_s2.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.274
+ndt3d_L2_t400_s42.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.303
+summary: converged 12 / 12, median convergence time 0.0 s, median RMSE after convergence 0.310 m
+== ndt3d L3
+ndt3d_L3_t1400_s1.csv                                   converged 1 conv_time_s    0.4 rmse_after 0.456
+ndt3d_L3_t1400_s2.csv                                   converged 1 conv_time_s    9.8 rmse_after 0.338
+ndt3d_L3_t1400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.369
+ndt3d_L3_t2400_s1.csv                                   converged 1 conv_time_s    6.0 rmse_after 0.370
+ndt3d_L3_t2400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.201
+ndt3d_L3_t2400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.371
+ndt3d_L3_t3400_s1.csv                                   converged 1 conv_time_s    2.8 rmse_after 0.350
+ndt3d_L3_t3400_s2.csv                                   converged 1 conv_time_s    1.2 rmse_after 0.362
+ndt3d_L3_t3400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.315
+ndt3d_L3_t400_s1.csv                                    converged 1 conv_time_s    4.4 rmse_after 0.316
+ndt3d_L3_t400_s2.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.290
+ndt3d_L3_t400_s42.csv                                   converged 1 conv_time_s    1.2 rmse_after 0.286
+summary: converged 12 / 12, median convergence time 0.8 s, median RMSE after convergence 0.344 m
+== ndt3d L4
+ndt3d_L4_t1400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.362
+ndt3d_L4_t1400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.347
+ndt3d_L4_t1400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.359
+ndt3d_L4_t2400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.210
+ndt3d_L4_t2400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.197
+ndt3d_L4_t2400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.203
+ndt3d_L4_t3400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.339
+ndt3d_L4_t3400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.339
+ndt3d_L4_t3400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.317
+ndt3d_L4_t400_s1.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.301
+ndt3d_L4_t400_s2.csv                                    converged 1 conv_time_s    0.8 rmse_after 0.292
+ndt3d_L4_t400_s42.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.270
+summary: converged 12 / 12, median convergence time 0.0 s, median RMSE after convergence 0.309 m
+== ndt3d L5
+ndt3d_L5_t1400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.365
+ndt3d_L5_t1400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.357
+ndt3d_L5_t1400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.358
+ndt3d_L5_t2400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.209
+ndt3d_L5_t2400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.196
+ndt3d_L5_t2400_s42.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.194
+ndt3d_L5_t3400_s1.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.304
+ndt3d_L5_t3400_s2.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.346
+ndt3d_L5_t3400_s42.csv                                  converged 1 conv_time_s    3.2 rmse_after 0.375
+ndt3d_L5_t400_s1.csv                                    converged 1 conv_time_s    0.0 rmse_after 0.310
+ndt3d_L5_t400_s2.csv                                    converged 1 conv_time_s    4.6 rmse_after 0.304
+ndt3d_L5_t400_s42.csv                                   converged 1 conv_time_s    0.0 rmse_after 0.288
+summary: converged 12 / 12, median convergence time 0.0 s, median RMSE after convergence 0.307 m
+== ndt3d L6
+ndt3d_L6_t1400_s1.csv                                   converged 1 conv_time_s   14.6 rmse_after 0.311
+ndt3d_L6_t1400_s2.csv                                   converged 1 conv_time_s   12.8 rmse_after 0.333
+ndt3d_L6_t1400_s42.csv                                  converged 1 conv_time_s   12.8 rmse_after 0.319
+ndt3d_L6_t2400_s1.csv                                   converged 1 conv_time_s   20.0 rmse_after 0.313
+ndt3d_L6_t2400_s2.csv                                   converged 1 conv_time_s    7.2 rmse_after 0.253
+ndt3d_L6_t2400_s42.csv                                  converged 1 conv_time_s    2.2 rmse_after 0.359
+ndt3d_L6_t3400_s1.csv                                   converged 1 conv_time_s    8.8 rmse_after 0.362
+ndt3d_L6_t3400_s2.csv                                   converged 1 conv_time_s    9.4 rmse_after 0.369
+ndt3d_L6_t3400_s42.csv                                  converged 1 conv_time_s    0.2 rmse_after 0.338
+ndt3d_L6_t400_s1.csv                                    converged 1 conv_time_s    6.6 rmse_after 0.331
+ndt3d_L6_t400_s2.csv                                    converged 1 conv_time_s    0.4 rmse_after 0.293
+ndt3d_L6_t400_s42.csv                                   converged 0 conv_time_s    nan rmse_after nan
+summary: converged 11 / 12, median convergence time 8.8 s, median RMSE after convergence 0.331 m
+== tracker L0
+tracker_L0_t1400_s1.csv                                 converged 1 conv_time_s    0.0 rmse_after 0.177
+tracker_L0_t1400_s2.csv                                 converged 1 conv_time_s    0.0 rmse_after 0.177
+tracker_L0_t1400_s42.csv                                converged 1 conv_time_s    0.0 rmse_after 0.177
+tracker_L0_t2400_s1.csv                                 converged 1 conv_time_s    0.0 rmse_after 0.131
+tracker_L0_t2400_s2.csv                                 converged 1 conv_time_s    0.0 rmse_after 0.131
+tracker_L0_t2400_s42.csv                                converged 1 conv_time_s    0.0 rmse_after 0.131
+tracker_L0_t3400_s1.csv                                 converged 1 conv_time_s    0.0 rmse_after 0.124
+tracker_L0_t3400_s2.csv                                 converged 1 conv_time_s    0.0 rmse_after 0.124
+tracker_L0_t3400_s42.csv                                converged 1 conv_time_s    0.0 rmse_after 0.124
+tracker_L0_t400_s1.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.166
+tracker_L0_t400_s2.csv                                  converged 1 conv_time_s    0.0 rmse_after 0.166
+tracker_L0_t400_s42.csv                                 converged 1 conv_time_s    0.0 rmse_after 0.166
+summary: converged 12 / 12, median convergence time 0.0 s, median RMSE after convergence 0.148 m
+== tracker L1
+tracker_L1_t1400_s1.csv                                 converged 1 conv_time_s    3.8 rmse_after 0.181
+tracker_L1_t1400_s2.csv                                 converged 1 conv_time_s    1.0 rmse_after 0.180
+tracker_L1_t1400_s42.csv                                converged 1 conv_time_s    1.8 rmse_after 0.178
+tracker_L1_t2400_s1.csv                                 converged 1 conv_time_s    1.8 rmse_after 0.131
+tracker_L1_t2400_s2.csv                                 converged 1 conv_time_s   10.0 rmse_after 0.136
+tracker_L1_t2400_s42.csv                                converged 1 conv_time_s    1.6 rmse_after 0.133
+tracker_L1_t3400_s1.csv                                 converged 1 conv_time_s    2.0 rmse_after 0.127
+tracker_L1_t3400_s2.csv                                 converged 1 conv_time_s    1.8 rmse_after 0.127
+tracker_L1_t3400_s42.csv                                converged 1 conv_time_s    2.6 rmse_after 0.129
+tracker_L1_t400_s1.csv                                  converged 1 conv_time_s    1.2 rmse_after 0.167
+tracker_L1_t400_s2.csv                                  converged 1 conv_time_s    2.0 rmse_after 0.165
+tracker_L1_t400_s42.csv                                 converged 1 conv_time_s    2.2 rmse_after 0.166
+summary: converged 12 / 12, median convergence time 1.9 s, median RMSE after convergence 0.151 m
+== tracker L2
+tracker_L2_t1400_s1.csv                                 converged 1 conv_time_s    3.0 rmse_after 0.178
+tracker_L2_t1400_s2.csv                                 converged 1 conv_time_s    4.2 rmse_after 0.179
+tracker_L2_t1400_s42.csv                                converged 1 conv_time_s    4.8 rmse_after 0.179
+tracker_L2_t2400_s1.csv                                 converged 1 conv_time_s    3.0 rmse_after 0.131
+tracker_L2_t2400_s2.csv                                 converged 1 conv_time_s   19.6 rmse_after 0.136
+tracker_L2_t2400_s42.csv                                converged 1 conv_time_s    6.2 rmse_after 0.132
+tracker_L2_t3400_s1.csv                                 converged 1 conv_time_s    1.6 rmse_after 0.124
+tracker_L2_t3400_s2.csv                                 converged 1 conv_time_s    7.8 rmse_after 0.133
+tracker_L2_t3400_s42.csv                                converged 1 conv_time_s    2.6 rmse_after 0.131
+tracker_L2_t400_s1.csv                                  converged 1 conv_time_s    1.2 rmse_after 0.165
+tracker_L2_t400_s2.csv                                  converged 1 conv_time_s    3.4 rmse_after 0.169
+tracker_L2_t400_s42.csv                                 converged 1 conv_time_s    3.6 rmse_after 0.166
+summary: converged 12 / 12, median convergence time 3.5 s, median RMSE after convergence 0.151 m
+== tracker L3
+tracker_L3_t1400_s1.csv                                 converged 1 conv_time_s   10.6 rmse_after 0.182
+tracker_L3_t1400_s2.csv                                 converged 1 conv_time_s    4.8 rmse_after 0.179
+tracker_L3_t1400_s42.csv                                converged 1 conv_time_s    6.2 rmse_after 0.179
+tracker_L3_t2400_s1.csv                                 converged 1 conv_time_s   74.4 rmse_after 0.145
+tracker_L3_t2400_s2.csv                                 converged 1 conv_time_s   75.2 rmse_after 0.146
+tracker_L3_t2400_s42.csv                                converged 1 conv_time_s   75.2 rmse_after 0.146
+tracker_L3_t3400_s1.csv                                 converged 1 conv_time_s   13.0 rmse_after 0.127
+tracker_L3_t3400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L3_t3400_s42.csv                                converged 1 conv_time_s    9.8 rmse_after 0.128
+tracker_L3_t400_s1.csv                                  converged 1 conv_time_s    3.2 rmse_after 0.166
+tracker_L3_t400_s2.csv                                  converged 1 conv_time_s    4.6 rmse_after 0.166
+tracker_L3_t400_s42.csv                                 converged 1 conv_time_s    8.2 rmse_after 0.167
+summary: converged 11 / 12, median convergence time 9.8 s, median RMSE after convergence 0.166 m
+== tracker L4
+tracker_L4_t1400_s1.csv                                 converged 1 conv_time_s   21.2 rmse_after 0.185
+tracker_L4_t1400_s2.csv                                 converged 1 conv_time_s   43.8 rmse_after 0.164
+tracker_L4_t1400_s42.csv                                converged 1 conv_time_s   34.2 rmse_after 0.174
+tracker_L4_t2400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L4_t2400_s2.csv                                 converged 1 conv_time_s   34.4 rmse_after 0.140
+tracker_L4_t2400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L4_t3400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L4_t3400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L4_t3400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L4_t400_s1.csv                                  converged 0 conv_time_s    nan rmse_after nan
+tracker_L4_t400_s2.csv                                  converged 0 conv_time_s    nan rmse_after nan
+tracker_L4_t400_s42.csv                                 converged 0 conv_time_s    nan rmse_after nan
+summary: converged 4 / 12, median convergence time 34.3 s, median RMSE after convergence 0.169 m
+== tracker L5
+tracker_L5_t1400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t1400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t1400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t2400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t2400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t2400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t3400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t3400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t3400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t400_s1.csv                                  converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t400_s2.csv                                  converged 0 conv_time_s    nan rmse_after nan
+tracker_L5_t400_s42.csv                                 converged 0 conv_time_s    nan rmse_after nan
+summary: converged 0 / 12, median convergence time - s, median RMSE after convergence - m
+== tracker L6
+tracker_L6_t1400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t1400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t1400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t2400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t2400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t2400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t3400_s1.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t3400_s2.csv                                 converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t3400_s42.csv                                converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t400_s1.csv                                  converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t400_s2.csv                                  converged 0 conv_time_s    nan rmse_after nan
+tracker_L6_t400_s42.csv                                 converged 0 conv_time_s    nan rmse_after nan
+summary: converged 0 / 12, median convergence time - s, median RMSE after convergence - m
