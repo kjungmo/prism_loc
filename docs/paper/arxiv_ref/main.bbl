@@ -51,6 +51,7 @@ J.~L. Blanco-Claraco.
 N.~Carlevaris-Bianco, A.~K. Ushani, and R.~M. Eustice.
 \newblock University of {Michigan} {North Campus} long-term vision and lidar dataset.
 \newblock \emph{The International Journal of Robotics Research}, 35\penalty0 (9):\penalty0 1023--1035, 2016.
+\newblock \doi{10.1177/0278364915614638}.
 
 \bibitem[Dellaert et~al.(1999)Dellaert, Fox, Burgard, and Thrun]{dellaert1999montecarlo}
 F.~Dellaert, D.~Fox, W.~Burgard, and S.~Thrun.
@@ -68,6 +69,7 @@ F.~Dellaert, D.~Fox, W.~Burgard, and S.~Thrun.
 M.~Fallon, H.~Johannsson, M.~Kaess, and J.~J. Leonard.
 \newblock The {MIT} {Stata} {Center} dataset.
 \newblock \emph{The International Journal of Robotics Research}, 32\penalty0 (14):\penalty0 1695--1699, 2013.
+\newblock \doi{10.1177/0278364913509035}.
 
 \bibitem[Felzenszwalb and Huttenlocher(2012)]{felzenszwalb2012distance}
 P.~F. Felzenszwalb and D.~P. Huttenlocher.
@@ -182,6 +184,7 @@ G.~Puga, N.~Espinosa, M.~Hidalgo, O.~Garc{\'i}a, and I.~Paunovic.
 R.~B. Rusu and S.~Cousins.
 \newblock {3D} is here: {Point Cloud Library} ({PCL}).
 \newblock In \emph{IEEE International Conference on Robotics and Automation (ICRA)}, pages 1--4, 2011.
+\newblock \doi{10.1109/ICRA.2011.5980567}.
 
 \bibitem[Saarinen et~al.(2013)Saarinen, Andreasson, Stoyanov, and Lilienthal]{saarinen2013ndtmcl}
 J.~Saarinen, H.~Andreasson, T.~Stoyanov, and A.~J. Lilienthal.
