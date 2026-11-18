@@ -1,4 +1,4 @@
-\begin{thebibliography}{40}
+\begin{thebibliography}{43}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -47,6 +47,11 @@ J.~L. Blanco-Claraco.
 \newblock \emph{The International Journal of Robotics Research}, 44\penalty0 (9):\penalty0 1553--1599, 2025.
 \newblock \doi{10.1177/02783649251316881}.
 
+\bibitem[Carlevaris-Bianco et~al.(2016)Carlevaris-Bianco, Ushani, and Eustice]{carlevarisbianco2016nclt}
+N.~Carlevaris-Bianco, A.~K. Ushani, and R.~M. Eustice.
+\newblock University of {Michigan} {North Campus} long-term vision and lidar dataset.
+\newblock \emph{The International Journal of Robotics Research}, 35\penalty0 (9):\penalty0 1023--1035, 2016.
+
 \bibitem[Dellaert et~al.(1999)Dellaert, Fox, Burgard, and Thrun]{dellaert1999montecarlo}
 F.~Dellaert, D.~Fox, W.~Burgard, and S.~Thrun.
 \newblock Monte {C}arlo localization for mobile robots.
@@ -58,6 +63,11 @@ F.~Dellaert, D.~Fox, W.~Burgard, and S.~Thrun.
 \newblock Beluga.
 \newblock GitHub repository \texttt{Ekumen-OS/beluga}, \url{https://github.com/Ekumen-OS/beluga}, 2022.
 \newblock Generic C++17 MCL library with ROS AMCL nodes that provide interface parity with \texttt{nav2\_amcl} (and \texttt{amcl}); includes likelihood-field, beam, and NDT sensor models and 2D and 3D NDT AMCL nodes for ROS~2; accessed 2026-09-30.
+
+\bibitem[Fallon et~al.(2013)Fallon, Johannsson, Kaess, and Leonard]{fallon2013stata}
+M.~Fallon, H.~Johannsson, M.~Kaess, and J.~J. Leonard.
+\newblock The {MIT} {Stata} {Center} dataset.
+\newblock \emph{The International Journal of Robotics Research}, 32\penalty0 (14):\penalty0 1695--1699, 2013.
 
 \bibitem[Felzenszwalb and Huttenlocher(2012)]{felzenszwalb2012distance}
 P.~F. Felzenszwalb and D.~P. Huttenlocher.
@@ -167,6 +177,11 @@ G.~Puga, N.~Espinosa, M.~Hidalgo, O.~Garc{\'i}a, and I.~Paunovic.
 \newblock Beluga: A modern {M}onte {C}arlo localization package for {ROS} and {ROS}~2.
 \newblock In \emph{European Robotics Forum 2024}, Springer Proceedings in Advanced Robotics, pages 126--130, Cham, 2024. Springer Nature Switzerland.
 \newblock \doi{10.1007/978-3-031-76424-0_23}.
+
+\bibitem[Rusu and Cousins(2011)]{rusu2011pcl}
+R.~B. Rusu and S.~Cousins.
+\newblock {3D} is here: {Point Cloud Library} ({PCL}).
+\newblock In \emph{IEEE International Conference on Robotics and Automation (ICRA)}, pages 1--4, 2011.
 
 \bibitem[Saarinen et~al.(2013)Saarinen, Andreasson, Stoyanov, and Lilienthal]{saarinen2013ndtmcl}
 J.~Saarinen, H.~Andreasson, T.~Stoyanov, and A.~J. Lilienthal.

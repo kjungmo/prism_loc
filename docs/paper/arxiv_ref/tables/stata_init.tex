@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{MIT Stata Center: \code{laser2d} and \code{nav2\_amcl}.} Map: session 2012-04-06; queries: four start times of session 2012-04-02, three seeds, 180\,s each. Cells as in \Cref{tab:nclt3d}. Odometry is synthesized from the ground truth plus fixed errors (\Cref{sec:public}). At level U, \code{laser2d} runs branch-and-bound relocalization with multi-scan verification and then tracks; AMCL runs its own global localization (U-20k: 2000--20000 particles).}\label{tab:stata}
+\small
+\begin{tabular}{@{}llcc@{}}
+\toprule
+Level & Offset & \code{laser2d} & AMCL \\
+\midrule
+L0 & 0 / 0 & 12/12 (0.0, 0.48) & 12/12 (0.0, 0.99) \\
+L1 & 2 / 15 & 11/12 (0.0, 0.84) & 12/12 (3.2, 1.08) \\
+L2 & 5 / 15 & 11/12 (0.0, 0.16) & 12/12 (15.5, 1.29) \\
+L3 & 10 / 15 & 6/12 (0.3, 0.89) & 9/12 (18.7, 1.66) \\
+L4 & 2 / 45 & 11/12 (0.0, 0.17) & 12/12 (5.8, 1.05) \\
+L5 & 2 / 90 & 9/12 (0.0, 0.15) & 12/12 (13.3, 1.12) \\
+L6 & 10 / 90 & 2/12 (4.7, 0.88) & 2/12 (24.4, 1.50) \\
+U & unknown & 9/12 (0.4, 0.89) & 3/12 (49.3, 1.46); U-20k: 4/12 (7.1, 1.40) \\
+\bottomrule
+\end{tabular}
+\end{table}
