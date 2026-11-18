@@ -180,8 +180,8 @@ TOLERATE_IMU_GAPS = False                           # --tolerate-imu-gaps
 # a fifth of its area (a large flat floor pulls the registration toward the cell lattice),
 # and the room placed so that no wall or floor lies on a cell border.
 SURF_NOISE, FLOOR_SHARE = 0.05, 0.2
-# Kept small on purpose: the node registers a cloud on the thread that also takes the IMU,
-# so a large map or a fast cloud stream starves the IMU on a slow machine.
+# Kept small on purpose: the node registers a cloud on its own thread (the IMU, GNSS and timers
+# run on another), but a large map or a fast cloud stream still loads a slow machine.
 MAP_POINTS, CLOUD_POINTS = 20000, 3000   # and one cloud per second
 IP_OFFSET = (0.04, -0.03, 0.01)                     # /initialpose off the truth: x, y (m), yaw (rad)
 

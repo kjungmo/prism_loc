@@ -263,7 +263,7 @@ Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
 `relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed` (motion updates only, not timed ones), `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
-`ndt_rejected_total`, `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
+`ndt_rejected_total` (split in `ndt_rejected_not_converged_total`, `ndt_rejected_fitness_total`, `ndt_rejected_inliers_total`), `ndt_discarded_reseed_total`, `points_dropped_stale_total`, `ndt_guess_fallback_total`, `ndt_last_fitness`, `ndt_last_inlier_fraction`, `ndt_last_iterations`, `ndt_last_align_ms` (fusion3d; `n/a` before the first align), `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
 mount reads `identity (frame base_link)`, `base_link -> lidar xyz ... rpy ...`,
 `missing (frame lidar)`, `missing (empty frame_id)` or `no message yet`). A fusion3d robot without odometry that
@@ -271,6 +271,25 @@ runs on the `map→base_link` fallback by design reports OK with
 `map_to_base_fallback_active=true`; it WARNs only when `odom→base_link` was seen and
 then lost, or when odometry appears while the fallback was being broadcast (two
 parents for `base_link`).
+
+**fusion3d NDT gate.** The node builds the NDT map once at start-up and registers each scan on its
+own thread, so the IMU keeps flowing during an align. It accepts a result when PCL reports
+convergence (`ndt_epsilon` 0.0001), the mean squared distance of the scan points that lie within
+`ndt_fitness_max_range` (1.0 m) of the map is at most `ndt_max_fitness` (0.06), and at least
+`ndt_min_inlier_fraction` (0.5) of the scan's points lie within that range. Earlier versions
+rebuilt the map for every scan, used `ndt_epsilon` 0.01 (one iteration, a guess 0.5 m off came
+back almost unchanged) and gated on the mean squared distance over all points with limit 2.0,
+which rejects correct results for a scan that partly sees unmapped space. A YAML that keeps
+`ndt_max_fitness: 2.0` while the range is above 0 gates nothing: the node logs a WARN at
+start; with `ndt_fitness_max_range: 0` the old limit 2.0 applies as before. `/diagnostics`
+shows the last fitness, inlier fraction, iterations and align time, and the rejected count by
+reason. Clouds more than `points_max_age` (0.5 s) behind the IMU are dropped
+(`points_dropped_stale_total`); if `ndt_last_align_ms` is above the scan period, raise
+`points_voxel_leaf`. `ndt_guess_fallback_total` counts scans registered from the current state because their time
+was unusable (unstamped, no IMU history, or more than 0.1 s ahead of the IMU: a lidar clock
+ahead of it); `points_dropped_before_history_total` counts scans taken before the 2 s pose
+history, which cannot be motion-compensated. A driver that stamps the start of a sweep without deskewing needs `points_time_offset`
+at half the sweep period (0.05 at 10 Hz); otherwise the estimate runs ahead along the track.
 
 **ndt3d likelihood.** Two parameters shape the NDT likelihood (details in
 [`PARAMS.md`](PARAMS.md)). Both are off by default (0), which is the plain likelihood.
