@@ -22,6 +22,8 @@ bool finite(double v) { return std::isfinite(v); }
 void validateNodeParams(const NodeParams& np) {
   require(finite(np.update_min_d) && np.update_min_d >= 0.0, "update_min_d", np.update_min_d, ">= 0");
   require(finite(np.update_min_a) && np.update_min_a >= 0.0, "update_min_a", np.update_min_a, ">= 0");
+  require(finite(np.update_min_period) && np.update_min_period >= 0.0, "update_min_period",
+          np.update_min_period, ">= 0");
   require(finite(np.transform_tolerance) && np.transform_tolerance >= 0.0, "transform_tolerance",
           np.transform_tolerance, ">= 0");
   require(np.startup_timeout_s > 0.0, "startup_timeout_s", np.startup_timeout_s, "> 0");

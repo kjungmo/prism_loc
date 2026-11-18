@@ -20,7 +20,8 @@ namespace prism_loc {
 // A reseed also makes the pose "not verified": a wrong initial pose can match well for
 // several updates before the match collapses (measured in the replay, experiments/ndt3d_replay.cpp:
 // 9 to 15 judged updates in a row above the threshold while 0.8 to 2.5 m off). verified(n) is false until n updates have been judged since
-// the last reseed; the node reports WARN "pose not verified" meanwhile (unless the match
+// the last reseed (updates triggered by motion; timed updates from update_min_period feed
+// the mean but are not counted, so the count stays a measure of travel); the node reports WARN "pose not verified" meanwhile (unless the match
 // is low, which is reported instead).
 //   updates judged since the reseed   verified(n)
 //   fewer than n                      false
@@ -48,8 +49,10 @@ class MatchMonitor {
   static constexpr std::size_t kWindow = 5;
 
   // One filter update. reseeded: the update was forced by a reseed; its fraction is not
-  // judged and everything before it is forgotten.
-  void update(bool reseeded, double fraction) {
+  // judged and everything before it is forgotten. counts_toward_verified: false for a
+  // timed update (update_min_period), which feeds the running mean but does not advance
+  // the since-reseed count (that count stands for travel, see verified()).
+  void update(bool reseeded, double fraction, bool counts_toward_verified = true) {
     if (reseeded) {
       count_ = 0;
       next_ = 0;
@@ -59,9 +62,10 @@ class MatchMonitor {
     values_[next_] = fraction;
     next_ = (next_ + 1) % kWindow;
     if (count_ < kWindow) ++count_;
-    if (since_reseed_ < kMaxCounted) ++since_reseed_;
+    if (counts_toward_verified && since_reseed_ < kMaxCounted) ++since_reseed_;
   }
-  // Updates judged since the last reseed (saturates at kMaxCounted).
+  // Motion updates judged since the last reseed (saturates at kMaxCounted); timed updates
+  // are not counted.
   std::size_t sinceReseed() const { return since_reseed_; }
   bool verified(std::size_t needed) const { return since_reseed_ >= needed; }
   static constexpr std::size_t kMaxCounted = 1000000;
