@@ -1,5 +1,6 @@
 #pragma once
 #include "prism_loc_core/bbs.hpp"
+#include "prism_loc_core/ground_height_map.hpp"
 #include "prism_loc_core/measurement_model.hpp"
 #include "prism_loc_core/motion_model.hpp"
 #include "prism_loc_core/particle_filter.hpp"
@@ -29,5 +30,9 @@ void validateNdtParams(double ndt_resolution, int voxel_min_points,
                        double min_match_fraction = kDefaultMinMatchFraction,
                        int match_verify_updates = kDefaultMatchVerifyUpdates,
                        double ndt_min_sigma = 0.0);
+
+// ground_resolution, ground_min_points, ground_layer_gap, ground_max_step
+// (ndt3d, ground_height_from_map). Messages name the YAML keys.
+void validateGroundParams(const prism_loc_core::GroundHeightParams& gp);
 
 }  // namespace prism_loc

@@ -45,6 +45,16 @@ already know.
 | **`ndt3d`** | 3D LiDAR + wheel odometry (TF) | `.pcd` point cloud | NDT-MCL (same particle-filter core) | planar (x, y, yaw) | — (`/initialpose`) |
 | **`fusion3d`** | 3D LiDAR + IMU + RTK-GNSS | `.pcd` point cloud | 15-state error-state Kalman filter | full 6-DoF + IMU biases | auto-init from IMU attitude + first valid RTK fix |
 
+**`ndt3d` height and tilt limits** — the filter state is planar, and the model places each
+cloud level at a height that is not estimated. By default that height is the constant map z
+`base_height`, and the roll, pitch and z of the `base_frame → cloud frame` transform are
+not used. Two optional parameters, both off by default, relax this (see [PARAMS.md](PARAMS.md)):
+`ground_height_from_map` places each particle's cloud at the map's ground height under that
+particle plus `base_height` (then `base_height` is the lidar's height above the local ground;
+the map needs points on the ground under the route, and on a multi-level map the initial pose
+z selects the level); `use_sensor_tilt` levels each cloud with the roll and pitch of the static
+mount. The body's own roll and pitch on a slope are not handled by either.
+
 **Why "PRISM"** — **P**article-filter · **R**TK · **I**nertial ·
 **S**can-matching: the four ingredients this stack fuses to localize against a
 prior map. The name also nods to the optics: a prism splits one beam into its

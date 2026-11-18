@@ -108,4 +108,14 @@ void validateNdtParams(double ndt_resolution, int voxel_min_points,
           "ndt_min_sigma", ndt_min_sigma, "in [0, ndt_resolution] (0 = relative floor only)");
 }
 
+void validateGroundParams(const prism_loc_core::GroundHeightParams& gp) {
+  require(finite(gp.resolution) && gp.resolution > 0.0, "ground_resolution", gp.resolution,
+          "finite and > 0");
+  require(gp.min_points >= 1, "ground_min_points", gp.min_points, ">= 1");
+  require(finite(gp.layer_gap) && gp.layer_gap > 0.0, "ground_layer_gap", gp.layer_gap,
+          "finite and > 0");
+  require(finite(gp.max_step) && gp.max_step > 0.0, "ground_max_step", gp.max_step,
+          "finite and > 0");
+}
+
 }  // namespace prism_loc
