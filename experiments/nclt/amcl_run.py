@@ -273,7 +273,7 @@ def main():
             d.scan_pub.publish(sc)
             to = 0
             with d.cv:
-                if not d.cv.wait_for(lambda: d.n_tf > n_before, timeout=args.wait_s):
+                if not d.cv.wait_for(lambda: d.n_tf > n_before, timeout=(30.0 if i == i0 else args.wait_s)):
                     to = 1
                     n_timeout += 1
                 mo = d.map_odom

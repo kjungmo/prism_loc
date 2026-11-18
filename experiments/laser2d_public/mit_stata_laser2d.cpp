@@ -377,6 +377,66 @@ int runInit(const GridMap& map, const std::vector<Scan>& S, const std::vector<Gt
   return 0;
 }
 
+// ---- MODE dump ----
+// For the AMCL baseline (experiments/nclt/INIT_PROTOCOL_AMCL.md): writes the map in map_server format
+// (OUT.pgm, OUT.yaml), the synthetic odometry of each seed (OUT_odom_s<seed>.csv: utime,x,y,yaw) and the
+// initial poses of the init mode (OUT_jobs.csv: start_s,level,seed,i0,i1,x,y,yaw,sx,sy,sa), computed by the
+// same code as runInit, so that AMCL starts from exactly the poses laser2d did.
+int runDump(const GridMap& map, const std::vector<Scan>& S, const std::vector<GtPose>& G, const std::string& out) {
+  {
+    FILE* pg = std::fopen((out + ".pgm").c_str(), "wb");
+    std::fprintf(pg, "P5\n%d %d\n255\n", map.width, map.height);
+    std::vector<unsigned char> row(static_cast<size_t>(map.width));
+    for (int r = 0; r < map.height; ++r) {
+      const int gy = map.height - 1 - r;
+      for (int c = 0; c < map.width; ++c) row[static_cast<size_t>(c)] = map.data[static_cast<size_t>(gy) * map.width + c] > 50 ? 0 : 254;
+      std::fwrite(row.data(), 1, row.size(), pg);
+    }
+    std::fclose(pg);
+    const std::string base = out.substr(out.find_last_of('/') + 1);
+    FILE* ym = std::fopen((out + ".yaml").c_str(), "w");
+    std::fprintf(ym, "image: %s.pgm\nmode: trinary\nresolution: %.4f\norigin: [%.4f, %.4f, 0.0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n",
+                 base.c_str(), map.resolution, map.origin_x, map.origin_y);
+    std::fclose(ym);
+  }
+  for (unsigned seed : {42u, 1u, 2u}) {
+    const auto odom = makeOdom(G, seed);
+    FILE* f = std::fopen((out + "_odom_s" + std::to_string(seed) + ".csv").c_str(), "w");
+    for (size_t i = 0; i < odom.size(); ++i)
+      std::fprintf(f, "%ld,%.6f,%.6f,%.8f\n", static_cast<long>(S[i].t), odom[i].x, odom[i].y, odom[i].yaw);
+    std::fclose(f);
+  }
+  const Level levels[] = {{"L0", 0, 0}, {"L1", 2, 15}, {"L2", 5, 15}, {"L3", 10, 15}, {"L4", 2, 45}, {"L5", 2, 90}, {"L6", 10, 90}};
+  std::vector<double> starts;
+  const char* env = std::getenv("INIT_STARTS");
+  std::stringstream ss(env ? env : "400,800,1200,1600");
+  for (std::string tok; std::getline(ss, tok, ',');) starts.push_back(std::atof(tok.c_str()));
+  const double run_s = P("run_s");
+  FILE* f = std::fopen((out + "_jobs.csv").c_str(), "w");
+  std::fprintf(f, "start_s,level,seed,i0,i1,x,y,yaw,sx,sy,sa\n");
+  for (double st : starts) {
+    size_t i0 = 0;
+    while (i0 < S.size() && (S[i0].t - S[0].t) * 1e-6 < st) ++i0;
+    if (i0 >= S.size()) continue;
+    size_t i1 = i0;
+    while (i1 < S.size() && (S[i1].t - S[i0].t) * 1e-6 < run_s) ++i1;
+    for (const Level& lv : levels)
+      for (unsigned seed : {42u, 1u, 2u}) {
+        std::mt19937 rng(seed * 100003u + static_cast<unsigned>(st) * 31u + 7u);
+        std::uniform_real_distribution<double> ang(-M_PI, M_PI);
+        const double dir = ang(rng);
+        const double sgn = (ang(rng) > 0) ? 1.0 : -1.0;
+        const Pose2D g = G[i0].p;
+        Pose2D start{g.x + lv.d * std::cos(dir), g.y + lv.d * std::sin(dir), normalizeAngle(g.yaw + sgn * lv.a_deg * M_PI / 180.0)};
+        if (lv.d == 0) start = g;
+        const double sxy = std::max(0.5, lv.d), sa = std::max(15.0, lv.a_deg) * M_PI / 180.0;
+        std::fprintf(f, "%.0f,%s,%u,%zu,%zu,%.6f,%.6f,%.8f,%.4f,%.4f,%.6f\n", st, lv.name, seed, i0, i1, start.x, start.y, start.yaw, sxy, sxy, sa);
+      }
+  }
+  std::fclose(f);
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -401,6 +461,7 @@ int main(int argc, char** argv) {
     if (mode == "track") return runTrack(map, S, G, argv[5]);
     if (mode == "reloc") return runReloc(map, S, G, argv[5]);
     if (mode == "init") return runInit(map, S, G, argv[5]);
+    if (mode == "dump") return runDump(map, S, G, argv[5]);
     std::fprintf(stderr, "unknown mode %s\n", mode.c_str());
     return 2;
   } catch (const std::exception& e) {
