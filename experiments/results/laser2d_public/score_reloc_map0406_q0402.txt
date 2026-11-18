@@ -1,0 +1,4 @@
+verifier (node defaults), 50 queries: correct 43, wrong accepted 7, rejected 0 (ambiguous 0, no candidate 0)
+single-scan rule: correct 43, wrong accepted 7, rejected 0
+time first scan (global BBS): median 1592 ms, p90 1903, max 2097; verifier total (9 scans): median 1613 ms, max 2121
+accepted-correct pose error: median 0.051 m / 0.47 deg

@@ -398,7 +398,11 @@ recomputable from those drivers ([`experiments/`](experiments/)); a committed
 guard script ([`docs/paper/check_numbers.py`](docs/paper/check_numbers.py))
 asserts the quoted statistics still trace to the CSVs. This is a correctness
 and behavior demonstration on synthetic data — **not** a field-accuracy
-benchmark; evaluation on public datasets is on the [roadmap](#-roadmap).
+benchmark. A separate, narrow public-dataset evaluation (paper section
+"Public-Dataset Evaluation") tests only starts from a wrong initial pose on
+NCLT and the MIT Stata Center dataset: `ndt3d` against a 6-DoF NDT tracker,
+and `laser2d` against `nav2_amcl`, 12 runs per setting. It does not measure
+trajectory accuracy, which stays on the [roadmap](#-roadmap).
 
 | | |
 |:---:|:---:|
@@ -647,7 +651,7 @@ odometry-chained scans, and the pose is committed only when one hypothesis
 dominates the posterior; otherwise the node reports the place as ambiguous
 instead of re-seeding (`bbs_verify_*` params). Planned:
 
-- [ ] Quantitative field evaluation (ATE/RPE) on public datasets
+- [ ] Quantitative trajectory evaluation (ATE/RPE) on public datasets (a narrow wrong-initial-pose evaluation is done; see above)
 - [ ] 3D global localization for `ndt3d` / `fusion3d`
 - [ ] Tight LiDAR–IMU time-offset estimation
 - [ ] Sample map + bag pair for a known-good first run

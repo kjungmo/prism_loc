@@ -1,0 +1,5 @@
+ndt_tracker_t1400.csv                              scans   4991 ( 1000 s) rmse 0.165 max    0.61 >0.3m 0.0701 >1m 0.0000 excursions 0 (0.0 s) neff/N 100.00%
+ndt_tracker_t2400.csv                              scans   4994 ( 1000 s) rmse 0.145 max    0.57 >0.3m 0.0342 >1m 0.0000 excursions 0 (0.0 s) neff/N 100.00%
+ndt_tracker_t3400.csv                              scans   4991 ( 1000 s) rmse 0.148 max    0.62 >0.3m 0.0393 >1m 0.0000 excursions 0 (0.0 s) neff/N 100.00%
+ndt_tracker_t400.csv                               scans   4984 ( 1000 s) rmse 0.157 max    0.56 >0.3m 0.0488 >1m 0.0000 excursions 0 (0.0 s) neff/N 100.00%
+pooled 4 runs: rmse median 0.153, max 0.62, excursions 0 (0.0 s), runs with an excursion 0, neff/N median 100.00%
