@@ -121,6 +121,8 @@ class LocalizationNode : public rclcpp::Node {
   MatchMonitor match_;
   int last_match_points_{0};       // scan points scored at the last motion update
   double base_height_{0.0};
+  double ndt_effective_points_{kDefaultNdtEffectivePoints};  // ndt3d parameters, reported in /diagnostics
+  double ndt_min_sigma_{kDefaultNdtMinSigma};
   std::string sensor_tf_checked_;  // cloud frame whose transform has been checked
   std::string reloc_state_{"idle"};
   rclcpp::Time last_ros_now_{0, 0, RCL_ROS_TIME};

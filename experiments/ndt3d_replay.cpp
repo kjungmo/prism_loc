@@ -12,6 +12,11 @@
 // table in the README, which came from an integration harness outside this repository.
 //
 //   ndt3d_replay MAP.bin FRAMES.bin OUT.csv [--base-height H] [--seed S] [--thr T] [--sens]
+//                [--effective-points E] [--min-sigma S]
+//
+// --effective-points and --min-sigma are the node's ndt_effective_points and ndt_min_sigma.
+// Their defaults here are 0 and 0, the plain likelihood, the same as the node's defaults.
+// The committed results in experiments/results/ndt3d_replay used the plain likelihood.
 //
 // One row per filter update: time, forced (reseed), particles, n_eff, estimate, errors
 // against the truth, match fraction, points scored, mean of the last 5, low flag, share of
@@ -50,7 +55,7 @@ bool rd(std::ifstream& f, T* v, size_t n = 1) {
 
 int main(int argc, char** argv) {
   if (argc < 4) return 2;
-  double base_height = 0.5, temper = 0.0, thr = 0.65;
+  double base_height = 0.5, temper = 0.0, thr = 0.65, eff_points = 0.0, min_sigma = 0.0;
   std::uint64_t seed = 42;
   std::string hex;
   bool sens = false;
@@ -62,6 +67,8 @@ int main(int argc, char** argv) {
     else if (a == "--hex") hex = argv[++i];
     else if (a == "--sens") sens = true;
     else if (a == "--thr") thr = atof(argv[++i]);
+    else if (a == "--effective-points") eff_points = atof(argv[++i]);
+    else if (a == "--min-sigma") min_sigma = atof(argv[++i]);
   }
   std::ifstream fm(argv[1], std::ios::binary);
   std::int32_t nm = 0;
@@ -70,10 +77,11 @@ int main(int argc, char** argv) {
   rd(fm, raw.data(), raw.size());
   std::vector<Eigen::Vector3d> mp(nm);
   for (int i = 0; i < nm; ++i) mp[i] = Eigen::Vector3d(raw[3 * i], raw[3 * i + 1], raw[3 * i + 2]);
-  auto map = std::make_shared<NdtMap>(mp, 1.0, 5);
+  auto map = std::make_shared<NdtMap>(mp, 1.0, 5, min_sigma);
   NdtParams np;
   np.max_points = 500;
   np.base_height = base_height;
+  np.effective_points = eff_points;
   Ndt3DModel model(map, np);
   ParticleFilterParams pp;
   MotionParams mpz;

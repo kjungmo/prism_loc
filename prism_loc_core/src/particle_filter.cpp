@@ -35,14 +35,24 @@ void ParticleFilter::normalizeWeights() {
 
 void ParticleFilter::correct(const MeasurementModel& model) {
   if (particles_.empty()) return;
+  // New weight = previous weight x likelihood, in log space. resample() leaves the weights
+  // as they are when Neff is healthy, so they must carry over to the next update. A particle
+  // with weight 0 or a non-finite log-likelihood gets weight 0; if none is left, the weights
+  // become uniform (normalizeWeights).
+  constexpr double kNegInf = -std::numeric_limits<double>::infinity();
   std::vector<double> logw(particles_.size());
-  double max_log = -std::numeric_limits<double>::infinity();
+  double max_log = kNegInf;
   for (size_t i = 0; i < particles_.size(); ++i) {
-    logw[i] = model.logLikelihood(particles_[i].pose);
+    const double ll = model.logLikelihood(particles_[i].pose);
+    const double w = particles_[i].weight;
+    logw[i] = (w > 0.0 && std::isfinite(ll)) ? std::log(w) + ll : kNegInf;
     max_log = std::max(max_log, logw[i]);
   }
-  for (size_t i = 0; i < particles_.size(); ++i)
-    particles_[i].weight = std::exp(logw[i] - max_log);
+  if (!std::isfinite(max_log)) {
+    for (auto& p : particles_) p.weight = 0.0;
+  } else {
+    for (size_t i = 0; i < particles_.size(); ++i) particles_[i].weight = std::exp(logw[i] - max_log);
+  }
   normalizeWeights();
 }
 

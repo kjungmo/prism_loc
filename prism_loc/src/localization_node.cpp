@@ -145,13 +145,20 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
     prism_loc_core::NdtParams np3;
     np3.max_points = declare_parameter<int>("max_points", 500);
     base_height_ = np3.base_height = declare_parameter<double>("base_height", 0.0);
+    // The cloud counts as this many independent points in the likelihood (0 = plain sum over
+    // the max_points subsample); an absolute floor (m) on the standard deviation of every
+    // NDT cell (0 = relative floor only).
+    ndt_effective_points_ = np3.effective_points =
+        declare_parameter<double>("ndt_effective_points", kDefaultNdtEffectivePoints);
+    ndt_min_sigma_ = declare_parameter<double>("ndt_min_sigma", kDefaultNdtMinSigma);
     // /diagnostics: WARN while the mean share of scan points that lie on mapped surfaces,
     // over the last motion updates, is below this (0 disables the check).
     min_match_fraction_ = declare_parameter<double>("min_match_fraction", min_match_fraction_);
     // /diagnostics: after a reseed, WARN "pose not verified" until this many filter updates
     // have been judged (0 disables; nothing is reported either when min_match_fraction is 0).
     match_verify_updates_ = declare_parameter<int>("match_verify_updates", match_verify_updates_);
-    validateNdtParams(res, minpts, np3, min_match_fraction_, match_verify_updates_);
+    validateNdtParams(res, minpts, np3, min_match_fraction_, match_verify_updates_,
+                      ndt_min_sigma_);
     if (pcd.empty()) {
       RCLCPP_ERROR(get_logger(), "ndt3d: map_pcd_path is empty");
       throw std::runtime_error(
@@ -165,7 +172,7 @@ LocalizationNode::LocalizationNode(const rclcpp::NodeOptions& options)
           "ndt3d: could not load a non-empty PCD map from '" + pcd +
           "' - check the file exists, is readable, and is a valid non-empty point cloud");
     }
-    ndt_map_ = std::make_shared<prism_loc_core::NdtMap>(pts, res, minpts);
+    ndt_map_ = std::make_shared<prism_loc_core::NdtMap>(pts, res, minpts, ndt_min_sigma_);
     ndt_model_ = std::make_shared<prism_loc_core::Ndt3DModel>(ndt_map_, np3);
     map_ready_ = true;
     RCLCPP_INFO(get_logger(), "ndt3d: NDT map built (%zu voxels)", ndt_map_->numVoxels());
@@ -373,6 +380,8 @@ void LocalizationNode::onDiagnostics() {
   if (!laser) {
     kv("match_fraction", match_.size() > 0 ? num(match_.mean(), "%.3f") : std::string("n/a"));
     kv("match_updates_since_reseed", std::to_string(match_.sinceReseed()));
+    kv("ndt_effective_points", num(ndt_effective_points_, "%.3f"));
+    kv("ndt_min_sigma", num(ndt_min_sigma_, "%.3f"));
   }
   diagnostic_msgs::msg::DiagnosticArray arr;
   arr.header.stamp = ros_now;

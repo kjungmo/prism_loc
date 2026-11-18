@@ -47,10 +47,18 @@ struct NdtParams {
   int max_points{500};
   double base_height{0.0};
   double score_floor{1e-6};
+  // 0: the log-likelihood is the sum of log(score + score_floor) over the evaluated points.
+  // > 0: it is the mean of those per-point terms times this count, i.e. the cloud counts as
+  // this many independent points however many were evaluated (a 3D scan's neighbouring
+  // points are strongly correlated, so the plain sum is overconfident).
+  double effective_points{0.0};
 };
+// The NDT map's min_sigma (NdtMap constructor) is the other likelihood shaping knob. It is not
+// part of NdtParams, and matchStats() does not use it.
 
 // How well the current cloud fits the map at one pose. A diagnostic: the filter does not
-// use it, and computing it changes nothing in the model.
+// use it, and computing it changes nothing in the model. It scores with NdtMap::matchScore,
+// i.e. without the map's min_sigma floor, so "on a surface" does not depend on min_sigma.
 struct NdtMatchStats {
   int points{0};   // points evaluated: the subsample logLikelihood() scores
   int matched{0};  // of those, within kNdtMatchSigma standard deviations of the map cell they fall in
