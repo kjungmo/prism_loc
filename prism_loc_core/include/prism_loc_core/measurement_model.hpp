@@ -1,10 +1,12 @@
 #pragma once
 #include <memory>
+#include <optional>
 #include <vector>
 #include <Eigen/Core>
 #include "prism_loc_core/types.hpp"
 #include "prism_loc_core/occupancy_grid.hpp"
 #include "prism_loc_core/ndt_map.hpp"
+#include "prism_loc_core/ground_height_map.hpp"
 namespace prism_loc_core {
 
 class MeasurementModel {
@@ -45,6 +47,9 @@ class Laser2DLikelihoodField : public MeasurementModel {
 
 struct NdtParams {
   int max_points{500};
+  // Height of the cloud frame (the sensor, level) in the map frame. Without a ground map
+  // (Ndt3DModel::setGroundMap) it is a constant map z. With one it is the height of the
+  // cloud frame above the local ground: the cloud sits at ground(x, y) + base_height.
   double base_height{0.0};
   double score_floor{1e-6};
   // 0: the log-likelihood is the sum of log(score + score_floor) over the evaluated points.
@@ -52,6 +57,14 @@ struct NdtParams {
   // this many independent points however many were evaluated (a 3D scan's neighbouring
   // points are strongly correlated, so the plain sum is overconfident).
   double effective_points{0.0};
+  // Ground height option (Ndt3DModel::setGroundMap): after this many consecutive filter
+  // updates without a ground answer at the estimate, followGround() looks for the nearest
+  // level instead of holding the hint. >= 1. Core field only (not a node parameter).
+  int ground_reanchor_after{5};
+  // followGround() re-anchors only to a level within this many metres of the hint (a seed that
+  // found no ground cell excepted): a hint on the upper floor must not jump to the floor below
+  // a gap. Core field only (not a node parameter).
+  double ground_reanchor_max_jump{1.5};
 };
 // The NDT map's min_sigma (NdtMap constructor) is the other likelihood shaping knob. It is not
 // part of NdtParams, and matchStats() does not use it.
@@ -70,6 +83,17 @@ struct NdtMatchStats {
 // (score 0) never does.
 constexpr double kNdtMatchSigma = 3.0;
 
+// Result of Ndt3DModel::followGround().
+enum class GroundFollow {
+  Followed,    // the grid answered at the estimate on the hint's level: hint = that height
+  Kept,        // no answer; fewer than ground_reanchor_after misses in a row: hint unchanged
+  Reanchored,  // after ground_reanchor_after misses the nearest level (within ground_reanchor_max_jump) answered: hint = it
+  NoGround,    // no map ground (no map set, no cell near the estimate, or the nearest level is
+               // further than ground_reanchor_max_jump from the hint): hint unchanged, retried
+               // at the next update
+  Seeded       // set by seedGround(); the first followGround() replaces it
+};
+
 class Ndt3DModel : public MeasurementModel {
  public:
   Ndt3DModel(std::shared_ptr<const NdtMap> map, NdtParams params);
@@ -79,11 +103,62 @@ class Ndt3DModel : public MeasurementModel {
   // Scores the same points as logLikelihood(base_in_map), placed the same way.
   NdtMatchStats matchStats(const Pose2D& base_in_map) const;
 
+  // --- optional: height of each particle from a ground height grid of the map ---
+  // Without a ground map (the default, or null) every particle's cloud sits at the constant
+  // map z base_height and the model is exactly the one without this feature.
+  // With one, the cloud of a particle at (x, y) sits at map z = ground(x, y) + base_height,
+  // where ground() is GroundHeightMap::heightAt(x, y, height hint). When that has no answer
+  // (no ground cell near (x, y), or none within max_step of the hint) the particle keeps the
+  // height of the current estimate: hint + base_height. logLikelihood() and matchStats()
+  // both place the cloud with sensorInMap(), so they cannot differ.
+  void setGroundMap(std::shared_ptr<const GroundHeightMap> ground) { ground_ = std::move(ground); }
+  bool hasGroundMap() const { return ground_ != nullptr; }
+  // Ground height (map z) under the current estimate; the hint of every particle's query in
+  // the next evaluations. The caller sets it after each filter update and at a reseed.
+  // Ignored without a ground map.
+  void setHeightHint(double z_ground) { height_hint_ = z_ground; }
+  double heightHint() const { return height_hint_; }
+  // Ground height under base_in_map with the current hint; nullopt without a ground map or
+  // when the grid has no answer there.
+  std::optional<double> groundHeightAt(const Pose2D& base_in_map) const;
+  // Reseed query: GroundHeightMap::heightNearest, the level nearest to z_guess with no
+  // limit on the distance. nullopt without a ground map or when the grid has no cell there.
+  std::optional<double> groundHeightNearest(const Pose2D& base_in_map, double z_guess) const;
+  // Reseed: set the hint to the ground height of the level nearest to z_guess under at
+  // (groundHeightNearest), reset the miss counter, set the state to Seeded. With no answer the
+  // hint becomes z_guess and is only a guess: the first ground the estimate meets is then
+  // accepted whatever its distance. Returns whether the grid answered. Without a ground map
+  // it only sets the hint.
+  bool seedGround(const Pose2D& at, double z_guess);
+  // After a filter update, move the hint to the ground under the new estimate:
+  //  1. groundHeightAt(estimate) (the hint's level) answers: hint = it, misses = 0: Followed.
+  //  2. No answer: misses += 1. Below ground_reanchor_after: hint unchanged: Kept.
+  //  3. At ground_reanchor_after misses or more: groundHeightNearest(estimate, hint). It
+  //     answers within ground_reanchor_max_jump of the hint (or the hint is only a guess from
+  //     a seed without a ground cell): hint = it, misses = 0: Reanchored. Otherwise the hint
+  //     is held: NoGround (the next update tries again).
+  // Re-anchoring takes the level nearest to the stale hint. With several levels over the
+  // same xy that can be the wrong one, within the jump limit; holding a hint that no level
+  // answers to for ever would be worse: every particle would keep one fixed height.
+  // Without a ground map: NoGround, nothing changes.
+  GroundFollow followGround(const Pose2D& estimate);
+  GroundFollow lastGroundFollow() const { return last_follow_; }  // NoGround until the first call
+  int groundMisses() const { return ground_misses_; }  // consecutive updates without an answer
+  // Map z of the cloud frame for a particle at base_in_map (what the next evaluation uses).
+  double cloudHeightAt(const Pose2D& base_in_map) const;
+  // Pose of the (level) cloud frame in the map for a particle at base_in_map.
+  Eigen::Isometry3d sensorInMap(const Pose2D& base_in_map) const;
+
  private:
   std::shared_ptr<const NdtMap> map_;
   NdtParams params_;
   std::vector<Eigen::Vector3d> pts_sensor_;
   Pose2D sensor_in_base_;
+  std::shared_ptr<const GroundHeightMap> ground_;
+  double height_hint_{0.0};
+  int ground_misses_{0};
+  GroundFollow last_follow_{GroundFollow::NoGround};
+  bool hint_is_guess_{false};  // the last seed found no ground cell
 };
 
 }  // namespace prism_loc_core

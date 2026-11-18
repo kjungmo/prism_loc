@@ -177,7 +177,7 @@ Component & Closest prior work & In \prismloc{} \\
 \midrule
 One particle-filter core for 2D likelihood-field and NDT models
   & Beluga~\cite{puga2024beluga}; NDT-MCL~\cite{saarinen2013ndtmcl}
-  & No methodological difference. \texttt{ndt3d} samples a planar pose
+  & Same method as the prior work. \texttt{ndt3d} samples a planar pose
     (Beluga's 3D NDT node estimates $SE(3)$~\cite{ekumen2022belugarepo})
     and scores raw points against the NDT map. \\
 Several estimators behind one interface
@@ -188,7 +188,7 @@ Several estimators behind one interface
     contract chosen at launch. \\
 Middleware-free estimator core
   & Beluga~\cite{puga2024beluga}; \texttt{iris\_lama}~\cite{pedrosa2019lama}
-  & No methodological difference; one seeded generator makes the tests
+  & Same practice as the prior work; one seeded generator makes the tests
     and experiments bit-reproducible. \\
 Branch-and-bound relocalization against a prior map
   & Hess et al.~\cite{hess2016realtime};
@@ -196,15 +196,22 @@ Branch-and-bound relocalization against a prior map
     \texttt{lidar\_localization\_ros2}~\cite{sasaki2026globalloc};
     3D-BBS~\cite{aoki2024bbs3d}; Adurthi~\cite{adurthi2023scan};
     MH-AMCL~\cite{garcia2023mhamcl}; Akai~\cite{akai2023reliable}
-  & Lattice-exact 2D branch-and-bound over the configured search window,
-    whose accepted result re-seeds the shared MCL core once; feeding
-    global matches into a particle filter is itself established. \\
+  & Lattice-exact 2D branch-and-bound over the non-occupied cells of a
+    map-sized window (up to a configurable size cap), verified over several
+    scans before a single re-seed of the shared MCL core; feeding global
+    matches into a particle filter is itself established. \\
+Hypotheses verified before commitment
+  & Gao et al.~\cite{gao2019global}; MH-AMCL~\cite{garcia2023mhamcl};
+    Adurthi~\cite{adurthi2023scan}; concurrent:
+    \cite{zhang2026movefirst}
+  & First-scan top-$K$ branch-and-bound modes, odometric propagation,
+    local re-scoring, and an explicit ambiguous outcome before re-seeding;
+    the evidence score is heuristic. \\
 Error-state Kalman fusion of LiDAR, IMU, and GNSS
   & Sol\`a~\cite{sola2017quaternion}; Wan et al.~\cite{wan2018robust}
-  & No methodological difference; the filter is exposed under the same
-    contract as the MCL backends and is released as experimental,
-    because the consistency of its covariance has not been established
-    (Section~\ref{sec:limitations}). \\
+  & Same formulation as the prior work; the filter is exposed under the same
+    contract as the MCL backends, and its covariance is overconfident in our
+    test (Section~\ref{sec:limitations}). \\
 \bottomrule
 \end{tabular}
 \end{table*}
