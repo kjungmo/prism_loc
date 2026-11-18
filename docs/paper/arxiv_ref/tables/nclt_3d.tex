@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{NCLT: recovery from a wrong initial pose, \code{ndt3d} against a 6-DoF scan-to-map NDT tracker.} Cells: runs converged out of 12 (median convergence time in s, median planar RMSE after convergence in m; the last two are over the converged runs). \code{ndt3d} runs with the ground grid and the tempered-likelihood settings of \Cref{sec:public}. The particle filter is given the offset pose with the spread $(\max(0.5,d)\,\mathrm{m},\ \max(15,a)^\circ)$; the tracker takes the offset pose as its start and cannot use a spread. Level U (unknown pose) is not supported by either method.}\label{tab:nclt3d}
+\small
+\begin{tabular}{@{}llcc@{}}
+\toprule
+Level & Offset $d$\,(m) / $a$\,($^\circ$) & \code{ndt3d} & 6-DoF tracker \\
+\midrule
+L0 & 0 / 0 & 12/12 (0.0, 0.30) & 12/12 (0.0, 0.15) \\
+L1 & 2 / 15 & 12/12 (0.0, 0.29) & 12/12 (1.9, 0.15) \\
+L2 & 5 / 15 & 12/12 (0.0, 0.31) & 12/12 (3.5, 0.15) \\
+L3 & 10 / 15 & 12/12 (0.8, 0.34) & 11/12 (9.8, 0.17) \\
+L4 & 2 / 45 & 12/12 (0.0, 0.31) & 4/12 (34.3, 0.17) \\
+L5 & 2 / 90 & 12/12 (0.0, 0.31) & 0/12 \\
+L6 & 10 / 90 & 11/12 (8.8, 0.33) & 0/12 \\
+\bottomrule
+\end{tabular}
+\end{table}

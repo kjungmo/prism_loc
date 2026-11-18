@@ -1,0 +1,112 @@
+== laser2d L0
+laser2d_L0_t1400_s1.csv                         converged 1 conv_time_s    0.0 rmse_after 0.346
+laser2d_L0_t1400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.337
+laser2d_L0_t1400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.298
+laser2d_L0_t2400_s1.csv                         converged 1 conv_time_s    0.0 rmse_after 0.166
+laser2d_L0_t2400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.160
+laser2d_L0_t2400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.159
+laser2d_L0_t3400_s1.csv                         converged 1 conv_time_s    0.0 rmse_after 6.917
+laser2d_L0_t3400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 68.444
+laser2d_L0_t3400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 6.587
+laser2d_L0_t400_s1.csv                          converged 1 conv_time_s    0.0 rmse_after 0.935
+laser2d_L0_t400_s2.csv                          converged 1 conv_time_s    0.0 rmse_after 0.879
+laser2d_L0_t400_s42.csv                         converged 1 conv_time_s    0.0 rmse_after 0.452
+summary: converged 12 / 12, median convergence time 0.0 s, median RMSE after convergence 0.399 m
+== laser2d L1
+laser2d_L1_t1400_s1.csv                         converged 1 conv_time_s    0.2 rmse_after 0.326
+laser2d_L1_t1400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.295
+laser2d_L1_t1400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.287
+laser2d_L1_t2400_s1.csv                         converged 1 conv_time_s    0.0 rmse_after 0.190
+laser2d_L1_t2400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.158
+laser2d_L1_t2400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.226
+laser2d_L1_t3400_s1.csv                         converged 1 conv_time_s    3.2 rmse_after 75.730
+laser2d_L1_t3400_s2.csv                         converged 1 conv_time_s    1.2 rmse_after 1.372
+laser2d_L1_t3400_s42.csv                        converged 1 conv_time_s    0.4 rmse_after 68.134
+laser2d_L1_t400_s1.csv                          converged 1 conv_time_s    7.8 rmse_after 0.452
+laser2d_L1_t400_s2.csv                          converged 1 conv_time_s    5.0 rmse_after 0.457
+laser2d_L1_t400_s42.csv                         converged 1 conv_time_s    0.0 rmse_after 0.732
+summary: converged 12 / 12, median convergence time 0.1 s, median RMSE after convergence 0.389 m
+== laser2d L2
+laser2d_L2_t1400_s1.csv                         converged 1 conv_time_s    1.0 rmse_after 0.339
+laser2d_L2_t1400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.323
+laser2d_L2_t1400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.284
+laser2d_L2_t2400_s1.csv                         converged 1 conv_time_s    1.2 rmse_after 0.245
+laser2d_L2_t2400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.189
+laser2d_L2_t2400_s42.csv                        converged 1 conv_time_s    1.2 rmse_after 0.205
+laser2d_L2_t3400_s1.csv                         converged 1 conv_time_s    3.4 rmse_after 15.165
+laser2d_L2_t3400_s2.csv                         converged 1 conv_time_s    3.0 rmse_after 3.055
+laser2d_L2_t3400_s42.csv                        converged 1 conv_time_s    1.0 rmse_after 6.473
+laser2d_L2_t400_s1.csv                          converged 1 conv_time_s    3.4 rmse_after 0.486
+laser2d_L2_t400_s2.csv                          converged 1 conv_time_s    5.8 rmse_after 0.749
+laser2d_L2_t400_s42.csv                         converged 1 conv_time_s    4.2 rmse_after 0.880
+summary: converged 12 / 12, median convergence time 1.2 s, median RMSE after convergence 0.413 m
+== laser2d L3
+laser2d_L3_t1400_s1.csv                         converged 1 conv_time_s    3.2 rmse_after 0.307
+laser2d_L3_t1400_s2.csv                         converged 1 conv_time_s    2.0 rmse_after 0.325
+laser2d_L3_t1400_s42.csv                        converged 1 conv_time_s    1.6 rmse_after 0.359
+laser2d_L3_t2400_s1.csv                         converged 0 conv_time_s    nan rmse_after nan
+laser2d_L3_t2400_s2.csv                         converged 1 conv_time_s    7.8 rmse_after 0.194
+laser2d_L3_t2400_s42.csv                        converged 1 conv_time_s   14.8 rmse_after 0.309
+laser2d_L3_t3400_s1.csv                         converged 1 conv_time_s    4.0 rmse_after 63.959
+laser2d_L3_t3400_s2.csv                         converged 1 conv_time_s    4.2 rmse_after 1.401
+laser2d_L3_t3400_s42.csv                        converged 1 conv_time_s    2.8 rmse_after 1.873
+laser2d_L3_t400_s1.csv                          converged 1 conv_time_s    4.4 rmse_after 0.485
+laser2d_L3_t400_s2.csv                          converged 0 conv_time_s    nan rmse_after nan
+laser2d_L3_t400_s42.csv                         converged 0 conv_time_s    nan rmse_after nan
+summary: converged 9 / 12, median convergence time 4.0 s, median RMSE after convergence 0.359 m
+== laser2d L4
+laser2d_L4_t1400_s1.csv                         converged 1 conv_time_s    0.2 rmse_after 0.347
+laser2d_L4_t1400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.306
+laser2d_L4_t1400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.354
+laser2d_L4_t2400_s1.csv                         converged 1 conv_time_s    0.0 rmse_after 0.212
+laser2d_L4_t2400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.202
+laser2d_L4_t2400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.211
+laser2d_L4_t3400_s1.csv                         converged 1 conv_time_s    3.0 rmse_after 1.416
+laser2d_L4_t3400_s2.csv                         converged 1 conv_time_s    1.6 rmse_after 68.106
+laser2d_L4_t3400_s42.csv                        converged 1 conv_time_s    0.6 rmse_after 5.400
+laser2d_L4_t400_s1.csv                          converged 1 conv_time_s    1.0 rmse_after 0.986
+laser2d_L4_t400_s2.csv                          converged 1 conv_time_s    1.6 rmse_after 0.848
+laser2d_L4_t400_s42.csv                         converged 1 conv_time_s    4.4 rmse_after 0.409
+summary: converged 12 / 12, median convergence time 0.4 s, median RMSE after convergence 0.382 m
+== laser2d L5
+laser2d_L5_t1400_s1.csv                         converged 1 conv_time_s    0.4 rmse_after 0.283
+laser2d_L5_t1400_s2.csv                         converged 1 conv_time_s    0.0 rmse_after 0.295
+laser2d_L5_t1400_s42.csv                        converged 1 conv_time_s    0.0 rmse_after 0.300
+laser2d_L5_t2400_s1.csv                         converged 1 conv_time_s    1.2 rmse_after 0.204
+laser2d_L5_t2400_s2.csv                         converged 1 conv_time_s    1.2 rmse_after 0.175
+laser2d_L5_t2400_s42.csv                        converged 1 conv_time_s    1.2 rmse_after 0.216
+laser2d_L5_t3400_s1.csv                         converged 1 conv_time_s    1.4 rmse_after 4.314
+laser2d_L5_t3400_s2.csv                         converged 1 conv_time_s    2.2 rmse_after 6.185
+laser2d_L5_t3400_s42.csv                        converged 1 conv_time_s    0.8 rmse_after 2.941
+laser2d_L5_t400_s1.csv                          converged 1 conv_time_s    4.4 rmse_after 0.521
+laser2d_L5_t400_s2.csv                          converged 1 conv_time_s    4.6 rmse_after 0.444
+laser2d_L5_t400_s42.csv                         converged 1 conv_time_s    7.6 rmse_after 0.740
+summary: converged 12 / 12, median convergence time 1.2 s, median RMSE after convergence 0.372 m
+== laser2d L6
+laser2d_L6_t1400_s1.csv                         converged 1 conv_time_s   16.8 rmse_after 0.308
+laser2d_L6_t1400_s2.csv                         converged 1 conv_time_s    2.8 rmse_after 0.302
+laser2d_L6_t1400_s42.csv                        converged 1 conv_time_s    2.0 rmse_after 0.277
+laser2d_L6_t2400_s1.csv                         converged 0 conv_time_s    nan rmse_after nan
+laser2d_L6_t2400_s2.csv                         converged 0 conv_time_s    nan rmse_after nan
+laser2d_L6_t2400_s42.csv                        converged 0 conv_time_s    nan rmse_after nan
+laser2d_L6_t3400_s1.csv                         converged 1 conv_time_s    7.6 rmse_after 87.558
+laser2d_L6_t3400_s2.csv                         converged 1 conv_time_s    5.0 rmse_after 70.134
+laser2d_L6_t3400_s42.csv                        converged 1 conv_time_s    1.4 rmse_after 10.603
+laser2d_L6_t400_s1.csv                          converged 0 conv_time_s    nan rmse_after nan
+laser2d_L6_t400_s2.csv                          converged 0 conv_time_s    nan rmse_after nan
+laser2d_L6_t400_s42.csv                         converged 0 conv_time_s    nan rmse_after nan
+summary: converged 6 / 12, median convergence time 3.9 s, median RMSE after convergence 5.456 m
+== laser2d U
+laser2d_U_t1400_s1.csv                          converged 1 conv_time_s    1.6 rmse_after 0.257
+laser2d_U_t1400_s2.csv                          converged 1 conv_time_s    1.6 rmse_after 0.311
+laser2d_U_t1400_s42.csv                         converged 1 conv_time_s    1.6 rmse_after 0.328
+laser2d_U_t2400_s1.csv                          converged 1 conv_time_s    3.4 rmse_after 0.158
+laser2d_U_t2400_s2.csv                          converged 1 conv_time_s    3.4 rmse_after 0.159
+laser2d_U_t2400_s42.csv                         converged 1 conv_time_s    3.4 rmse_after 0.170
+laser2d_U_t3400_s1.csv                          converged 1 conv_time_s    5.2 rmse_after 94.557
+laser2d_U_t3400_s2.csv                          converged 1 conv_time_s    5.2 rmse_after 1.515
+laser2d_U_t3400_s42.csv                         converged 1 conv_time_s    5.2 rmse_after 2.952
+laser2d_U_t400_s1.csv                           converged 1 conv_time_s    3.6 rmse_after 0.961
+laser2d_U_t400_s2.csv                           converged 1 conv_time_s    3.6 rmse_after 0.889
+laser2d_U_t400_s42.csv                          converged 1 conv_time_s    3.6 rmse_after 0.445
+summary: converged 12 / 12, median convergence time 3.5 s, median RMSE after convergence 0.387 m

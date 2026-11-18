@@ -20,7 +20,8 @@ namespace prism_loc {
 // A reseed also makes the pose "not verified": a wrong initial pose can match well for
 // several updates before the match collapses (measured in the replay, experiments/ndt3d_replay.cpp:
 // 9 to 15 judged updates in a row above the threshold while 0.8 to 2.5 m off). verified(n) is false until n updates have been judged since
-// the last reseed; the node reports WARN "pose not verified" meanwhile (unless the match
+// the last reseed (updates triggered by motion; timed updates from update_min_period feed
+// the mean but are not counted, so the count stays a measure of travel); the node reports WARN "pose not verified" meanwhile (unless the match
 // is low, which is reported instead).
 //   updates judged since the reseed   verified(n)
 //   fewer than n                      false
@@ -48,8 +49,10 @@ class MatchMonitor {
   static constexpr std::size_t kWindow = 5;
 
   // One filter update. reseeded: the update was forced by a reseed; its fraction is not
-  // judged and everything before it is forgotten.
-  void update(bool reseeded, double fraction) {
+  // judged and everything before it is forgotten. counts_toward_verified: false for a
+  // timed update (update_min_period), which feeds the running mean but does not advance
+  // the since-reseed count (that count stands for travel, see verified()).
+  void update(bool reseeded, double fraction, bool counts_toward_verified = true) {
     if (reseeded) {
       count_ = 0;
       next_ = 0;
@@ -59,9 +62,10 @@ class MatchMonitor {
     values_[next_] = fraction;
     next_ = (next_ + 1) % kWindow;
     if (count_ < kWindow) ++count_;
-    if (since_reseed_ < kMaxCounted) ++since_reseed_;
+    if (counts_toward_verified && since_reseed_ < kMaxCounted) ++since_reseed_;
   }
-  // Updates judged since the last reseed (saturates at kMaxCounted).
+  // Motion updates judged since the last reseed (saturates at kMaxCounted); timed updates
+  // are not counted.
   std::size_t sinceReseed() const { return since_reseed_; }
   bool verified(std::size_t needed) const { return since_reseed_ >= needed; }
   static constexpr std::size_t kMaxCounted = 1000000;
@@ -80,8 +84,10 @@ class MatchMonitor {
 };
 
 // ndt3d is planar: of the transform base_frame -> cloud frame it uses x, y and yaw only.
-// The sensor is placed level, at height base_height in the map frame; the transform's z,
-// roll and pitch are ignored. This reports which ignored parts are not negligible: a tilt
+// The sensor is placed level, at height base_height in the map frame (with the optional
+// ground_height_from_map: base_height above the local ground); the transform's z is
+// ignored, and so are its roll and pitch unless the optional use_sensor_tilt levels the
+// cloud with them (then the node informs instead of warning). This reports which ignored parts are not negligible: a tilt
 // over angle_tol (always a mismatch: the node warns), or a z that differs from base_height
 // by more than height_tol. The latter is not an error by itself: base_height is a height
 // in the map frame and z one above base_frame, so they differ on every robot whose

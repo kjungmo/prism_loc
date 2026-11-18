@@ -1,0 +1,13 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{MIT Stata Center: global relocalization of \code{laser2d} from a single unknown pose.} 50 queries spread over the 1403\,s query session (2012-04-02), no prior. Cells: correct / wrong accepted / rejected. Correct means within 0.5\,m and $10^\circ$ of the ground truth at the scan on which the method decided. ``Verifier'' is the multi-scan verifier of \Cref{sec:verify} with node defaults; ``single scan'' accepts the first scan's best match if its score fraction is at least 0.4.}\label{tab:statareloc}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Map session & Verifier & Single scan \\
+\midrule
+2012-04-06 (4 days before the query) & 43 / 7 / 0 & 43 / 7 / 0 \\
+2012-01-18 (3 months before) & 30 / 8 / 12 & 31 / 19 / 0 \\
+\bottomrule
+\end{tabular}
+\end{table}

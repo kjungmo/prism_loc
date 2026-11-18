@@ -22,6 +22,8 @@ bool finite(double v) { return std::isfinite(v); }
 void validateNodeParams(const NodeParams& np) {
   require(finite(np.update_min_d) && np.update_min_d >= 0.0, "update_min_d", np.update_min_d, ">= 0");
   require(finite(np.update_min_a) && np.update_min_a >= 0.0, "update_min_a", np.update_min_a, ">= 0");
+  require(finite(np.update_min_period) && np.update_min_period >= 0.0, "update_min_period",
+          np.update_min_period, ">= 0");
   require(finite(np.transform_tolerance) && np.transform_tolerance >= 0.0, "transform_tolerance",
           np.transform_tolerance, ">= 0");
   require(np.startup_timeout_s > 0.0, "startup_timeout_s", np.startup_timeout_s, "> 0");
@@ -106,6 +108,16 @@ void validateNdtParams(double ndt_resolution, int voxel_min_points,
   }
   require(finite(ndt_min_sigma) && ndt_min_sigma >= 0.0 && ndt_min_sigma <= ndt_resolution,
           "ndt_min_sigma", ndt_min_sigma, "in [0, ndt_resolution] (0 = relative floor only)");
+}
+
+void validateGroundParams(const prism_loc_core::GroundHeightParams& gp) {
+  require(finite(gp.resolution) && gp.resolution > 0.0, "ground_resolution", gp.resolution,
+          "finite and > 0");
+  require(gp.min_points >= 1, "ground_min_points", gp.min_points, ">= 1");
+  require(finite(gp.layer_gap) && gp.layer_gap > 0.0, "ground_layer_gap", gp.layer_gap,
+          "finite and > 0");
+  require(finite(gp.max_step) && gp.max_step > 0.0, "ground_max_step", gp.max_step,
+          "finite and > 0");
 }
 
 }  // namespace prism_loc

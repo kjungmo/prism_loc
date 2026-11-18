@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{NCLT projected to 2D: \code{laser2d} and \code{nav2\_amcl}.} Same cells and protocol as \Cref{tab:nclt3d}. \code{laser2d} uses the height band chosen after seeing L0 results (``band 1''), and a band fixed in advance (``band 2''). AMCL runs with Nav2 defaults on band 1. At level U, \code{laser2d} runs branch-and-bound relocalization and AMCL its own global localization (500--2000 particles; U-20k: 2000--20000). AMCL fails at L0, so it is not used as a baseline on this dataset.}\label{tab:nclt2d}
+\small
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Level & Offset & \code{laser2d} band 1 & \code{laser2d} band 2 & AMCL \\
+\midrule
+L0 & 0 / 0 & 12/12 (0.0, 0.40) & 12/12 (0.0, 0.56) & 6/12 (9.4, 23.81) \\
+L1 & 2 / 15 & 12/12 (0.1, 0.39) & 12/12 (0.0, 0.56) & 4/12 (15.8, 1.97) \\
+L2 & 5 / 15 & 12/12 (1.2, 0.41) & 12/12 (0.2, 0.45) & 3/12 (98.8, 1.85) \\
+L3 & 10 / 15 & 9/12 (4.0, 0.36) & 8/12 (2.6, 0.52) & 3/12 (98.0, 2.17) \\
+L4 & 2 / 45 & 12/12 (0.4, 0.38) & 12/12 (0.1, 0.43) & 5/12 (18.8, 2.27) \\
+L5 & 2 / 90 & 12/12 (1.2, 0.37) & 12/12 (0.1, 0.49) & 5/12 (17.0, 2.29) \\
+L6 & 10 / 90 & 6/12 (3.9, 5.46) & 6/12 (5.5, 32.00) & 3/12 (97.8, 1.91) \\
+U & unknown & 12/12 (3.5, 0.39) & 9/12 (1.6, 0.60) & 0/12; U-20k: 0/12 \\
+\bottomrule
+\end{tabular}
+\end{table}

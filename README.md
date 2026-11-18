@@ -45,6 +45,16 @@ already know.
 | **`ndt3d`** | 3D LiDAR + wheel odometry (TF) | `.pcd` point cloud | NDT-MCL (same particle-filter core) | planar (x, y, yaw) | — (`/initialpose`) |
 | **`fusion3d`** | 3D LiDAR + IMU + RTK-GNSS | `.pcd` point cloud | 15-state error-state Kalman filter | full 6-DoF + IMU biases | auto-init from IMU attitude + first valid RTK fix |
 
+**`ndt3d` height and tilt limits** — the filter state is planar, and the model places each
+cloud level at a height that is not estimated. By default that height is the constant map z
+`base_height`, and the roll, pitch and z of the `base_frame → cloud frame` transform are
+not used. Two optional parameters, both off by default, relax this (see [PARAMS.md](PARAMS.md)):
+`ground_height_from_map` places each particle's cloud at the map's ground height under that
+particle plus `base_height` (then `base_height` is the lidar's height above the local ground;
+the map needs points on the ground under the route, and on a multi-level map the initial pose
+z selects the level); `use_sensor_tilt` levels each cloud with the roll and pitch of the static
+mount. The body's own roll and pitch on a slope are not handled by either.
+
 **Why "PRISM"** — **P**article-filter · **R**TK · **I**nertial ·
 **S**can-matching: the four ingredients this stack fuses to localize against a
 prior map. The name also nods to the optics: a prism splits one beam into its
@@ -251,7 +261,7 @@ ROS clock is stuck. Status names are `prism_loc: localization` and
 Values carried for monitors: `n_eff`, `particles`, `covariance_trace_xy`,
 `covariance_yaw`, `input_rate_hz`, `seconds_since_last_input`,
 `seconds_since_last_update`, `relocalization`, `relocalization_scans_used`,
-`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed`, `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
+`relocalization_scans_skipped` (laser2d/ndt3d), `match_fraction`, `match_updates_since_reseed` (motion updates only, not timed ones), `ndt_effective_points`, `ndt_min_sigma` (ndt3d only); `imu_rate_hz`,
 `imu_gaps_total`, `seconds_since_ndt_correction`, `seconds_since_gnss_correction`,
 `ndt_rejected_total` (split in `ndt_rejected_not_converged_total`, `ndt_rejected_fitness_total`, `ndt_rejected_inliers_total`), `ndt_discarded_reseed_total`, `points_dropped_stale_total`, `ndt_guess_fallback_total`, `ndt_last_fitness`, `ndt_last_inlier_fraction`, `ndt_last_iterations`, `ndt_last_align_ms` (fusion3d; `n/a` before the first align), `covariance_trace_position` (the position trace of the covariance that the published pose carries), `tf_child_frame`,
 `map_to_base_fallback_active`, `points_mount`, `imu_mount`, `gnss_mount` (fusion3d; each
@@ -320,7 +330,7 @@ the last 5 filter updates. Three states follow from it:
 | Status | When |
 |---|---|
 | WARN `low scan-to-map match: ...` | `match_fraction` below `min_match_fraction` (0.65) |
-| WARN `pose not verified since the last reseed: N of 15 ...` | after `/initialpose` (or `set_initial_pose`), until `match_verify_updates` (15) filter updates have been judged, about 3 m of travel; a robot that stands still stays here. A wrong initial pose can match well for its first updates |
+| WARN `pose not verified since the last reseed: N of 15 ...` | after `/initialpose` (or `set_initial_pose`), until `match_verify_updates` (15) motion-triggered filter updates have been judged, about 3 m of travel; a robot that stands still stays here. A wrong initial pose can match well for its first updates |
 | OK `localizing` | otherwise |
 
 **OK is not proof that the pose is right.** The signal is a classifier with these measured
@@ -407,7 +417,11 @@ recomputable from those drivers ([`experiments/`](experiments/)); a committed
 guard script ([`docs/paper/check_numbers.py`](docs/paper/check_numbers.py))
 asserts the quoted statistics still trace to the CSVs. This is a correctness
 and behavior demonstration on synthetic data — **not** a field-accuracy
-benchmark; evaluation on public datasets is on the [roadmap](#-roadmap).
+benchmark. A separate, narrow public-dataset evaluation (paper section
+"Public-Dataset Evaluation") tests only starts from a wrong initial pose on
+NCLT and the MIT Stata Center dataset: `ndt3d` against a 6-DoF NDT tracker,
+and `laser2d` against `nav2_amcl`, 12 runs per setting. It does not measure
+trajectory accuracy, which stays on the [roadmap](#-roadmap).
 
 | | |
 |:---:|:---:|
@@ -656,7 +670,7 @@ odometry-chained scans, and the pose is committed only when one hypothesis
 dominates the posterior; otherwise the node reports the place as ambiguous
 instead of re-seeding (`bbs_verify_*` params). Planned:
 
-- [ ] Quantitative field evaluation (ATE/RPE) on public datasets
+- [ ] Quantitative trajectory evaluation (ATE/RPE) on public datasets (a narrow wrong-initial-pose evaluation is done; see above)
 - [ ] 3D global localization for `ndt3d` / `fusion3d`
 - [ ] Tight LiDAR–IMU time-offset estimation
 - [ ] Sample map + bag pair for a known-good first run

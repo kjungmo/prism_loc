@@ -1,0 +1,14 @@
+\begin{table}[t]
+\centering
+\caption{\textbf{NCLT, tracking from the true start pose: effect of the ground grid on \code{ndt3d}.} Four segments of 1000\,s, three seeds each. An excursion is a planar error above 1\,m for more than 2\,s. The session climbs and descends about 18\,m.}\label{tab:elev}
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{5.4cm}cccc@{}}
+\toprule
+Height model & Runs with excursion & Excursions & Max error (m) & Median RMSE (m) \\
+\midrule
+constant base height (\code{ndt3d} defaults) & 9/12 & 40 & 354.88 & 0.536 \\
+ground grid & 10/12 & 17 & 8.35 & 0.360 \\
+ground grid, tempered likelihood, lower motion noise & 3/12 & 3 & 1.50 & 0.263 \\
+\bottomrule
+\end{tabular}
+\end{table}

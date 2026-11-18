@@ -83,10 +83,68 @@ where `T_odom_base` is read from tf2 at the scan stamp. Publishing
 
 ### 3.1 State & particle
 2D-planar pose is sufficient for both backends on a ground robot (`ndt3d` scores
-3D points but the filter samples `x,y,yaw`; the lidar is taken to be level at the
-height `base_height` in the map frame, and the `z`, roll and pitch of the TF
-`base_frame → cloud frame` are not used — documented limitation; full 6-DoF is
-future work). Each particle: `Pose2D{ x, y, yaw }` + `weight`.
+3D points but the filter samples `x,y,yaw`). Each particle: `Pose2D{ x, y, yaw }` +
+`weight`.
+
+`ndt3d` height and tilt assumptions. The model places the cloud level, at a height
+that is not part of the particle state:
+- Default: at the constant map z `base_height`. The `z`, roll and pitch of the TF
+  `base_frame → cloud frame` are not used.
+- `ground_height_from_map` (optional, off by default): at map z = ground(x, y) +
+  `base_height`, where `base_height` is then the height of the cloud frame above the
+  local ground. `ground(x, y)` comes from a grid built once from the map points. Per xy
+  cell (`ground_resolution`): sort the points by z and split them into surfaces wherever
+  two consecutive z differ by more than `ground_layer_gap` (an empty vertical gap: a
+  floor and a ceiling underside, two floors). Per surface with at least
+  `ground_min_points` points: split the cell into 4 × 4 sub-columns; each sub-column's
+  value is the median z of its points within 0.3 m above its lowest point
+  (`GroundHeightParams::band`, core only), at the centroid of those points. Fit a plane to
+  the values; drop the sub-columns more than max(0.05 m, 2.5 × MAD of the residuals) above
+  it (walls, pillars and objects only lift; the plane used to judge is refitted through
+  the lower half of the sub-columns first, so a strip of objects at the cell edge cannot
+  pull it; with 8 or more sub-columns only); refit. A group in a thin strip taller than 0.6 m (the foot of a wall in a cell without ground) gives no ground height. Store the plane: its value at the cell centre and its slope (the mean
+  with slope 0 when fewer than 3 well-spread sub-columns remain). A query takes, in each of
+  the four cells around (x, y), the surface nearest to a hint (the ground height under the
+  current estimate) evaluated at (x, y), keeps those within `ground_max_step` of the
+  hint, drops those more than `ground_layer_gap` from the one nearest to the hint, and
+  blends the rest with bilinear weights. A constant slope is exact, also across missing
+  cells. With no answer a particle keeps the height of the estimate. The hint is set at
+  every reseed (the level nearest to the initial pose z in the cell of the seed, no
+  distance limit) and after each filter update to the ground under the new estimate. When
+  the estimate gets no answer for 5 updates in a row the hint re-anchors to the nearest
+  level if that lies within 1.5 m of it (core constants), so a hint on an upper floor does
+  not jump to the floor below a gap; after a seed that found no ground cell the first ground
+  met is accepted at any distance. With several levels over the same x, y a re-anchor can
+  pick the wrong level. Limits: it needs map points on the ground under the robot's path;
+  on a multi-level map the hint selects the level, so a wrong level at a reseed stays
+  until the next reseed or a re-anchor; the remaining height error is the curvature of the
+  ground inside a cell, objects that cover about half the sub-columns of a cell or more,
+  and, at the edge of the mapped ground (the last cell's plane answers from its centre up
+  to half a cell beyond its border, none further out), up to about slope × `ground_resolution` / 2
+  when that cell had too few well-spread points for a plane. A change of ground height of
+  more than 1.5 m across a stretch without mapped ground needs a reseed (`/initialpose`).
+  The published pose stays planar.
+  Measured on synthetic maps (1 m cells, defaults): needs dense ground; with about 30 or
+  more ground points per cell the error is around 1-2 cm (at most 0.08-0.10 m next to a
+  hole), with 10 points per cell up to 0.07 m on flat ground, 0.15 m on a 0.2 slope and
+  0.17-0.20 m next to a hole, with 6 points per cell up to 0.36 m next to a hole.
+  Scatter within 0.3 m above the ground (vegetation) lifts it: +0.13 to +0.15 m where no
+  ground is mapped under it, +0.03 m at twice the ground's density, +0.11 m at ten times.
+  A wall foot or vehicle side inside a cell with ground lifts the ground near it: about
+  0.10, 0.05, 0.04 m at 0.1, 0.3, 0.5 m from a wall, up to 0.12 m next to a vehicle with no
+  ground under it. A 0.15 m kerb inside a cell: about -0.04 m on the low side 0.25-0.5 m
+  from the step, -0.10 m at the step. Points up to `ground_layer_gap` below the ground pull
+  it down by up to 0.04 m. At the centre of a cell without a ground height the value
+  depends on the direction of approach (up to about 2 cm on sparse noisy ground).
+- `use_sensor_tilt` (optional, off by default): the cloud is rotated by the roll and
+  pitch of the static `base_frame → cloud frame` rotation before matching. With `R` the
+  rotation of that transform and `yaw` the yaw the model uses for it, the points are
+  multiplied by `Rz(-yaw) · R` (`Ry(pitch) · Rx(roll)` for the tf2 `getRPY` convention
+  `R = Rz(yaw) · Ry(pitch) · Rx(roll)`), and `yaw`, `x`, `y` go through the transform as
+  without the option, so the model's rotation is `R` again. The z of the transform is still not used. It does not handle the roll and
+  pitch of the robot body on a slope.
+
+Full 6-DoF is future work.
 
 ### 3.2 Motion model — odometry sample model
 `sample_motion_model_odometry` (Probabilistic Robotics §5.4). Given previous and
@@ -135,6 +193,30 @@ weight 0; if no particle is left, the weights become uniform.
   `max_particles`. Resample only when `N_eff < resample_threshold * N`. While resampling is
   skipped the weights carry over to the next correction; `resample_threshold = 0` never
   resamples, so the weights accumulate for the whole run.
+
+### 3.4a Update gate
+A scan or cloud runs one filter update (predict, correct, resample, estimate) only when
+the gate opens (`prism_loc/update_gate.hpp`, a ROS-free rule). In this order:
+1. A reseed forces an update.
+2. Odometry moved `update_min_d` or turned `update_min_a` since the last update (motion).
+3. Only when `update_min_period > 0` (default `0`, off): at least `update_min_period`
+   seconds of message-stamp time passed since the last update, and the robot moved at
+   least `0.05 × update_min_d` or turned at least `0.05 × update_min_a` (time).
+Between updates the pose follows odometry. The time rule has a "moved at all" condition:
+no timed update while odometry reports less than `0.05 × update_min_d` and less than
+`0.05 × update_min_a` of motion since the last update. Reason: a standing robot scores the
+same view again, and the motion model adds noise in proportion to motion, so with zero
+motion every repeated correct and resample only narrows the particle set (test
+`UpdateGateFilter` in `prism_loc`). The motion counts since the last update, not per scan:
+odometry that drifts while the robot stands (a gyro bias, lidar-odometry jitter) or a
+creeping robot accumulates it and does trigger timed updates on a nearly unchanged view,
+which narrows the particle set without new information. The elapsed time uses message
+stamps, never the wall clock. A stamp that goes back restarts the period; a repeated stamp
+gives zero elapsed time, so a stuck sim clock never triggers. Timed updates do not count
+toward `match_verify_updates` and `match_updates_since_reseed` (those count motion
+updates only); their match fraction still feeds the low-match check. With the option
+on, the node runs more updates per second, and each costs what it cost before. With `0`
+the gate is the motion rule alone, as before.
 
 ### 3.5 Pose & covariance estimate
 Weighted mean of `x,y`; circular weighted mean of `yaw`; weighted sample
