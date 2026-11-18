@@ -40,7 +40,13 @@
 // max_linear_window: the node's 50 m cap would make the search of this 300 m map not global, so
 // it is raised to cover the cropped map.
 //
-//   nclt_laser2d MAP_DIR QUERY_DIR OUT_PREFIX [--param key=value]...
+//   nclt_laser2d MAP_DIR QUERY_DIR OUT_PREFIX [--param key=value]... [--dump DUMP_PREFIX]
+//
+// --dump writes, for other filters that must see exactly the same inputs (the AMCL baseline,
+// INIT_PROTOCOL_AMCL.md), DUMP_PREFIX.pgm + DUMP_PREFIX.yaml (the 2D map in map_server format)
+// and DUMP_PREFIX_scans.bin (per scan: int64 utime, 3 double odometry x y yaw, 3 double ground
+// truth x y yaw (nan without), 720 float ranges, inf for an empty bin), and then exits without
+// running a filter.
 //
 // Writes OUT_PREFIX.csv: one row per scan with a ground truth (utime, estimate x y yaw, ground
 // truth x y yaw, planar error, updated, particles, n_eff; the estimate columns are nan and the
@@ -149,7 +155,9 @@ int main(int argc, char** argv) {
   }
   const std::string map_dir = argv[1], query_dir = argv[2], prefix = argv[3];
   Params prm;
+  std::string dump_prefix;
   for (int k = 4; k < argc; ++k) {
+    if (std::strcmp(argv[k], "--dump") == 0 && k + 1 < argc) { dump_prefix = argv[++k]; continue; }
     if (std::strcmp(argv[k], "--param") != 0 || k + 1 >= argc) { std::fprintf(stderr, "bad argument %s\n", argv[k]); return 2; }
     const std::string kv = argv[++k];
     const auto eq = kv.find('=');
@@ -220,6 +228,25 @@ int main(int argc, char** argv) {
     std::fprintf(stderr, "map: %zu cropped points, grid %dx%d at %.2f m, %zu occupied cells\n", pts.size() / 3,
                  grid.width, grid.height, grid.resolution, occ);
   }
+
+  if (!dump_prefix.empty()) {  // map_server format: row 0 of the image is the top (largest y)
+    std::FILE* pg = std::fopen((dump_prefix + ".pgm").c_str(), "wb");
+    if (!pg) { std::fprintf(stderr, "cannot write %s.pgm\n", dump_prefix.c_str()); return 2; }
+    std::fprintf(pg, "P5\n%d %d\n255\n", grid.width, grid.height);
+    std::vector<unsigned char> row(static_cast<size_t>(grid.width));
+    for (int r = 0; r < grid.height; ++r) {
+      const int gy = grid.height - 1 - r;
+      for (int c = 0; c < grid.width; ++c) row[static_cast<size_t>(c)] = grid.data[static_cast<size_t>(gy) * grid.width + c] > 50 ? 0 : 254;
+      std::fwrite(row.data(), 1, row.size(), pg);
+    }
+    std::fclose(pg);
+    std::FILE* ym = std::fopen((dump_prefix + ".yaml").c_str(), "w");
+    const std::string base = dump_prefix.substr(dump_prefix.find_last_of('/') + 1);
+    std::fprintf(ym, "image: %s.pgm\nmode: trinary\nresolution: %.4f\norigin: [%.4f, %.4f, 0.0]\nnegate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n",
+                 base.c_str(), grid.resolution, grid.origin_x, grid.origin_y);
+    std::fclose(ym);
+  }
+  std::FILE* dump = dump_prefix.empty() ? nullptr : std::fopen((dump_prefix + "_scans.bin").c_str(), "wb");
 
   LaserParams lp;
   lp.max_beams = prm.max_beams; lp.z_hit = prm.z_hit; lp.z_rand = prm.z_rand; lp.sigma_hit = prm.sigma_hit;
@@ -303,6 +330,14 @@ int main(int argc, char** argv) {
       if (r < scan.ranges[static_cast<size_t>(b)]) scan.ranges[static_cast<size_t>(b)] = static_cast<float>(r);
     }
     ++n_scans;
+    if (dump) {
+      const double nan = std::numeric_limits<double>::quiet_NaN();
+      const double rec[6] = {o.x, o.y, o.yaw, have_gt ? g.x : nan, have_gt ? g.y : nan, have_gt ? g.yaw : nan};
+      std::fwrite(&t, sizeof t, 1, dump);
+      std::fwrite(rec, sizeof rec, 1, dump);
+      std::fwrite(scan.ranges.data(), sizeof(float), scan.ranges.size(), dump);
+      continue;
+    }
 
     if (global && !filter_init) {  // LocalizationNode::runRelocalization
       RelocStatus st;
@@ -352,6 +387,7 @@ int main(int argc, char** argv) {
     }
   }
   std::fclose(out);
+  if (dump) { std::fclose(dump); std::fprintf(stderr, "dumped %ld scans\n", n_scans); return 0; }
   const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall0).count();
   std::FILE* js = std::fopen((prefix + ".json").c_str(), "w");
   std::fprintf(js, "{\"scans\": %ld, \"updates\": %ld, \"seed\": %d, \"level\": %d, \"start_s\": %g, \"duration_s\": %g, "
