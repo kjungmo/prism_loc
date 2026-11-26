@@ -9,7 +9,7 @@ shared middleware-free estimator cores, one standard `map → odom` contract.**
 [![License](https://img.shields.io/github/license/kjungmo/prism_loc?color=blue)](LICENSE)
 ![ROS 2 Humble](https://img.shields.io/badge/ROS_2-Humble-22314E?logo=ros&logoColor=white)
 [![Paper](https://img.shields.io/badge/Paper-PDF-b31b1b)](docs/paper/main.pdf)
-[![Preprint DOI](https://img.shields.io/badge/DOI-10.20944%2Fpreprints202610.0391.v1-blue)](https://doi.org/10.20944/preprints202610.0391.v1)
+[![Preprint DOI](https://img.shields.io/badge/DOI-10.20944%2Fpreprints202610.0391.v2-blue)](https://doi.org/10.20944/preprints202610.0391.v2)
 [![Sponsor](https://img.shields.io/github/sponsors/kjungmo?logo=githubsponsors&color=ea4aaa)](https://github.com/sponsors/kjungmo)
 
 [Overview](#overview) &nbsp;·&nbsp; [Paper](#-paper) &nbsp;·&nbsp;
@@ -30,6 +30,7 @@ already know.
 
 ## 📢 News
 
+- **2026-11-20** — Version 2 of the preprint was posted on Preprints.org (not peer reviewed): [doi:10.20944/preprints202610.0391.v2](https://doi.org/10.20944/preprints202610.0391.v2). Version 1 remains available at [doi:10.20944/preprints202610.0391.v1](https://doi.org/10.20944/preprints202610.0391.v1).
 - **2026-10** — Preprint posted on Preprints.org (version 1, not peer
   reviewed): [doi:10.20944/preprints202610.0391.v1](https://doi.org/10.20944/preprints202610.0391.v1).
 - **2026-07** — `v0.1` released: `laser2d`, `ndt3d`, and `fusion3d` backends,
@@ -134,7 +135,7 @@ PDF under [`docs/paper/`](docs/paper/)):
 
 > **PRISM-Loc: Three LiDAR Localization Backends Behind One ROS 2 Contract,
 > with Middleware-Free Estimator Cores** — Jungmo Kang.
-> [Preprint (Preprints.org, v1)](https://doi.org/10.20944/preprints202610.0391.v1) ·
+> [Preprint (Preprints.org, v2)](https://doi.org/10.20944/preprints202610.0391.v2) ·
 > [PDF](docs/paper/main.pdf) (repository draft)
 
 The paper describes commit cdb81bf; later commits add tests and the `/diagnostics`
@@ -155,9 +156,9 @@ If `prism_loc` is useful in your research, please cite it
              {ROS}~2 Contract, with Middleware-Free Estimator Cores},
   journal = {Preprints},
   year    = {2026},
-  doi     = {10.20944/preprints202610.0391.v1},
-  url     = {https://doi.org/10.20944/preprints202610.0391.v1},
-  note    = {Preprint, version 1, not peer reviewed. Source and code at
+  doi     = {10.20944/preprints202610.0391.v2},
+  url     = {https://doi.org/10.20944/preprints202610.0391.v2},
+  note    = {Preprint, version 2, not peer reviewed. Source and code at
              \url{https://github.com/kjungmo/prism_loc}},
 }
 ```
